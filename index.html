@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#b80808">
+  <meta name="description" content="CRAVING HEAVEN — Chicken, burgers, wraps, wings, strips, popcorn, fries and combos.">
+  <title>CRAVING HEAVEN | Chicken & Burgers</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header" id="top">
+    <div class="header-inner">
+      <a class="brand" href="#top" aria-label="CRAVING HEAVEN home">
+        <img src="images/logo.png" alt="CRAVING HEAVEN logo">
+      </a>
+
+      <div class="header-actions">
+        <span class="order-status"><span class="status-dot"></span> CALL TO ORDER</span>
+        <a class="call-header" href="tel:+917700929693">☎ CALL NOW</a>
+      </div>
+    </div>
+  </header>
+
+  <nav class="category-nav" id="categoryNav" aria-label="Menu categories"></nav>
+
+  <main>
+    <section class="hero-offers" aria-label="Offers and combos">
+      <div class="offers-header">
+        <div class="offers-copy">
+          <span class="eyebrow">CRAVING HEAVEN</span>
+          <h1>OFFERS <span>&</span> COMBOS</h1>
+          <p>BIG FLAVOUR. BETTER VALUE.</p>
+        </div>
+        <div class="slider-controls" aria-label="Offers controls">
+          <button id="slidePrev" type="button" aria-label="Previous offers">‹</button>
+          <button id="slideNext" type="button" aria-label="Next offers">›</button>
+        </div>
+      </div>
+      <div class="combo-slider" id="comboSlider"></div>
+    </section>
+
+    <section class="delivery-strip" aria-label="Delivery offer">
+      <div class="delivery-strip-icon">🚚</div>
+      <div>
+        <strong>FREE DELIVERY ON ORDERS ₹300+</strong>
+        <span>Enjoy your favourites without the delivery fee.</span>
+      </div>
+    </section>
+
+    <div class="image-disclaimer" role="note">
+      📸 Product images are for visual reference. Slight variations in appearance may occur in the actual product.
+    </div>
+
+    <div id="menuSections"></div>
+  </main>
+
+  <button class="floating-cart" id="cartButton" type="button" aria-label="Open cart">
+    <span class="cart-icon">🛒</span>
+    <span>CART</span>
+    <b id="cartCount">0</b>
+  </button>
+
+  <div class="cart-overlay" id="cartOverlay" aria-hidden="true">
+    <aside class="cart-panel" aria-label="Shopping cart">
+      <div class="cart-header">
+        <div>
+          <span class="cart-kicker">YOUR ORDER</span>
+          <h2>YOUR CART</h2>
+        </div>
+        <button class="cart-close" id="closeCart" type="button" aria-label="Close cart">×</button>
+      </div>
+
+      <div id="cartItems"></div>
+      <div class="cart-summary" id="cartSummary"></div>
+
+      <button class="clear-cart" id="clearCart" type="button">CLEAR CART</button>
+
+      <button class="place-call place-call-disabled" id="placeCall" type="button" disabled aria-disabled="true">
+        ORDER ONLINE — COMING SOON
+      </button>
+      <p class="call-note">
+        Online ordering is currently being improved. You will be able to place your order online soon.
+      </p>
+      <a class="cart-call-now" href="tel:+917700929693">☎ CALL NOW TO PLACE ORDER</a>
+    </aside>
+  </div>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <img src="images/logo.png" alt="CRAVING HEAVEN">
+        <p>MADE WITH QUALITY, SERVED WITH LOVE!</p>
+      </div>
+
+      <div class="footer-info">
+        <div class="footer-block">
+          <span class="footer-label">ADDRESS</span>
+          <p>Shop 10 Pearl Oasis Building Pathanwadi, Malad East, Mumbai – 400097</p>
+          
+        </div>
+
+        <div class="footer-block">
+          <span class="footer-label">DELIVERY AREAS</span>
+          <p>Pathanwadi • Kurar Village • Koknipada • Triveni Nagar • Sanjay Nagar • MHB Colony • Dindoshi • Laxman Nagar • Rani Sati Marg • Gokuldham • Tapovan</p>
+        </div>
+      </div>
+
+      <a class="footer-call" href="tel:+917700929693">☎ CALL NOW</a>
+    </div>
+  </footer>
+
+  <script src="menu.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
