@@ -14,6 +14,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const placeCall = document.getElementById("placeCall");
   const slidePrev = document.getElementById("slidePrev");
   const slideNext = document.getElementById("slideNext");
+  const shareOfferOverlay = document.getElementById("shareOfferOverlay");
+  const shareOfferClose = document.getElementById("shareOfferClose");
+  const shareOfferButton = document.getElementById("shareOfferButton");
+  const shareOfferImage = document.getElementById("shareOfferImage");
 
   let cart = [];
   let activeCategory = "";
@@ -323,6 +327,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const firstCategory = Object.keys(MENU_DATA)[0];
   if (firstCategory) setActiveCategory(firstCategory);
 
+  // Show the promotion on every fresh page visit. No localStorage/cookie is used,
+  // so closing it only closes it for the current page visit.
+  openShareOffer();
+
   let touchStartX = 0;
   comboSlider.addEventListener("touchstart", event => {
     touchStartX = event.changedTouches[0].screenX;
@@ -333,6 +341,127 @@ document.addEventListener("DOMContentLoaded", () => {
       comboSlider.scrollBy({ left: diff < 0 ? 250 : -250, behavior: "smooth" });
     }
   }, { passive: true });
+
+  // ====================== SHARE OFFER ======================
+  const SHARE_OFFER_MESSAGE = `🔥🍔 SHARE & GET A FREE CRUNCHY CHICKEN BURGER! 🍔🔥
+
+Hey! 👋 We’ve got a special offer for you from CRAVING HEAVEN ❤️
+
+🎁 SHARE OUR WEBSITE WITH 10 FAMILY & FRIENDS
+
+➡️ Visit our store & verify your shares
+➡️ Place an order of ₹149 or more
+➡️ 🎉 GET 1 CRUNCHY CHICKEN BURGER ABSOLUTELY FREE! 🍔
+
+📍 Visit: cravingheaven.com
+
+Terms & Conditions Apply:
+• Share with 10 family & friends
+• Visit store & verify
+• Minimum order value ₹149
+• One-time offer only`;
+
+  function closeShareOffer() {
+    shareOfferOverlay.classList.remove("active");
+    shareOfferOverlay.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("share-offer-open");
+  }
+
+ async function shareOffer() {
+  const websiteUrl = "https://cravingheaven.com/";
+
+  const message = `🔥🍔 SHARE & GET A FREE CRUNCHY CHICKEN BURGER! 🍔🔥
+
+Hey! 👋 We’ve got a special offer for you from CRAVING HEAVEN ❤️
+
+🎁 SHARE OUR WEBSITE WITH 10 FAMILY & FRIENDS
+
+➡️ Visit our store & verify your shares
+➡️ Place an order of ₹149 or more
+➡️ 🎉 GET 1 CRUNCHY CHICKEN BURGER ABSOLUTELY FREE! 🍔
+
+🌐 Visit our website:
+${websiteUrl}
+
+Terms & Conditions Apply:
+• Share with 10 family & friends
+• Visit store & verify
+• Minimum order value ₹149
+• One-time offer only`;
+
+  try {
+    // Get the flyer image from your website
+    const imageUrl = new URL(
+      shareOfferImage.getAttribute("src"),
+      document.baseURI
+    ).href;
+
+    const response = await fetch(imageUrl, {
+      cache: "no-cache"
+    });
+
+    if (!response.ok) {
+      throw new Error("Could not load offer image.");
+    }
+
+    const blob = await response.blob();
+
+    // Create an actual image file for sharing
+    const file = new File(
+      [blob],
+      "craving-heaven-free-burger-offer.png",
+      {
+        type: blob.type || "image/png"
+      }
+    );
+
+    // Check whether this phone/browser supports sharing files
+    if (
+      navigator.share &&
+      navigator.canShare &&
+      navigator.canShare({ files: [file] })
+    ) {
+      await navigator.share({
+        title: "CRAVING HEAVEN - FREE CRUNCHY CHICKEN BURGER",
+        text: message,
+        files: [file]
+      });
+
+      return;
+    }
+
+    // If image sharing is not supported
+    alert(
+      "Image sharing is not supported on this browser. Please open the website on your mobile phone and try again."
+    );
+
+  } catch (error) {
+
+    // Customer simply closed the share window
+    if (error && error.name === "AbortError") {
+      return;
+    }
+
+    console.error("Share error:", error);
+
+    alert(
+      "Unable to share the offer right now. Please try again."
+    );
+  }
+}
+
+  function openShareOffer() {
+    shareOfferOverlay.classList.add("active");
+    shareOfferOverlay.setAttribute("aria-hidden", "false");
+    document.body.classList.add("share-offer-open");
+    requestAnimationFrame(() => shareOfferClose.focus());
+  }
+
+  shareOfferClose.addEventListener("click", closeShareOffer);
+  shareOfferButton.addEventListener("click", shareOffer);
+  shareOfferOverlay.addEventListener("click", event => {
+    if (event.target === shareOfferOverlay) closeShareOffer();
+  });
 
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && cartOverlay.classList.contains("active")) {
