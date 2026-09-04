@@ -483,3 +483,199 @@ button:focus-visible, a:focus-visible { outline: 3px solid rgba(201,0,0,.30); ou
   color: #fff;
   transform: translateY(-1px);
 }
+/* ====================== SHARE OFFER POPUP ====================== */
+
+.share-offer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.share-offer-overlay.active {
+  display: flex;
+}
+
+.share-offer-modal {
+  position: relative;
+  width: min(520px, 100%);
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.35);
+  animation: shareOfferIn 0.28s ease;
+}
+
+@keyframes shareOfferIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.share-offer-image-wrap {
+  width: 100%;
+  line-height: 0;
+  background: #fff;
+}
+
+.share-offer-image-wrap img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 72vh;
+  object-fit: contain;
+}
+
+.share-offer-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+
+  width: 42px;
+  height: 42px;
+
+  border: none;
+  border-radius: 50%;
+
+  background: rgba(255, 255, 255, 0.94);
+  color: #222;
+
+  font-size: 28px;
+  line-height: 1;
+
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.2);
+
+  cursor: pointer;
+
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.share-offer-close:hover {
+  background: var(--red);
+  color: #fff;
+  transform: rotate(90deg);
+}
+
+.share-offer-actions {
+  padding: 18px 18px 20px;
+  text-align: center;
+}
+
+.share-offer-actions h2 {
+  margin: 0;
+  color: var(--red);
+  font-family: "Montserrat", sans-serif;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.share-offer-actions p {
+  margin: 7px auto 14px;
+  max-width: 420px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.share-offer-button {
+  width: 100%;
+  min-height: 50px;
+
+  border: none;
+  border-radius: 12px;
+
+  background: linear-gradient(135deg, var(--red), #e20b0b);
+  color: #fff;
+
+  font-family: "Montserrat", sans-serif;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.4px;
+
+  box-shadow: 0 9px 22px rgba(201, 0, 0, 0.22);
+
+  cursor: pointer;
+
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.share-offer-button:hover {
+  background: var(--red-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(201, 0, 0, 0.28);
+}
+
+.share-offer-button:active {
+  transform: translateY(0);
+}
+
+/* Prevent page scrolling while popup is open */
+body.share-offer-open {
+  overflow: hidden;
+}
+
+/* ====================== MOBILE SHARE OFFER ====================== */
+
+@media (max-width: 650px) {
+
+  .share-offer-overlay {
+    padding: 10px;
+  }
+
+  .share-offer-modal {
+    width: 100%;
+    max-height: calc(100vh - 20px);
+    border-radius: 18px;
+  }
+
+  .share-offer-image-wrap img {
+    max-height: 68vh;
+  }
+
+  .share-offer-close {
+    top: 9px;
+    right: 9px;
+    width: 38px;
+    height: 38px;
+    font-size: 25px;
+  }
+
+  .share-offer-actions {
+    padding: 14px 14px 16px;
+  }
+
+  .share-offer-actions h2 {
+    font-size: 17px;
+  }
+
+  .share-offer-actions p {
+    font-size: 10px;
+    margin-bottom: 11px;
+  }
+
+  .share-offer-button {
+    min-height: 47px;
+    font-size: 12px;
+  }
+}

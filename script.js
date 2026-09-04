@@ -383,9 +383,8 @@ Hey! 👋 We’ve got a special offer for you from CRAVING HEAVEN ❤️
 ${websiteUrl}
 
 Terms & Conditions Apply:
-• Share with 10 family & friends
-• Visit store & verify
-• Minimum order value ₹149
+• Share with 20 friends
+• Verify Share
 • One-time offer only`;
 
   try {
