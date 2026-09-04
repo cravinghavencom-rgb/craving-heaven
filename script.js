@@ -372,13 +372,15 @@ Terms & Conditions Apply:
 
 Hey! 👋 We’ve got a special offer for you from CRAVING HEAVEN ❤️
 
-🎁 SHARE OUR WEBSITE WITH 20 FAMILY & FRIENDS
+🌐 Check Our Online Menu:
+${websiteUrl}
+
+🎁 SHARE OUR ONLINE MENU WITH 20 FAMILY & FRIENDS
 
 ➡️ verify your shares
 ➡️ 🎉 GET 1 CRUNCHY CHICKEN BURGER ABSOLUTELY FREE! 🍔
 
-🌐 Visit our website:
-${websiteUrl}
+
 
 Terms & Conditions Apply:
 • Share with 20 friends
