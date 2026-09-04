@@ -347,18 +347,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
 Hey! 👋 We’ve got a special offer for you from CRAVING HEAVEN ❤️
 
-🎁 SHARE OUR WEBSITE WITH 10 FAMILY & FRIENDS
+🎁 SHARE OUR ONLINE MENU WITH 20 FRIENDS
 
-➡️ Visit our store & verify your shares
-➡️ Place an order of ₹149 or more
+➡️ verify your shares
 ➡️ 🎉 GET 1 CRUNCHY CHICKEN BURGER ABSOLUTELY FREE! 🍔
 
 📍 Visit: cravingheaven.com
 
 Terms & Conditions Apply:
-• Share with 10 family & friends
-• Visit store & verify
-• Minimum order value ₹149
+• Share with 20 Friends
+• verify share
 • One-time offer only`;
 
   function closeShareOffer() {
