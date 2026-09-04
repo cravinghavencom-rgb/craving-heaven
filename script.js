@@ -374,10 +374,9 @@ Terms & Conditions Apply:
 
 Hey! 👋 We’ve got a special offer for you from CRAVING HEAVEN ❤️
 
-🎁 SHARE OUR WEBSITE WITH 10 FAMILY & FRIENDS
+🎁 SHARE OUR WEBSITE WITH 20 FAMILY & FRIENDS
 
-➡️ Visit our store & verify your shares
-➡️ Place an order of ₹149 or more
+➡️ verify your shares
 ➡️ 🎉 GET 1 CRUNCHY CHICKEN BURGER ABSOLUTELY FREE! 🍔
 
 🌐 Visit our website:
