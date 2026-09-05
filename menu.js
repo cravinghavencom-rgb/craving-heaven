@@ -533,41 +533,34 @@ const MENU_DATA = {
 };
 
 const COMBO_SLIDES = [
-  {
-    "name": "PARTY COMBO",
-    "description": "2 CRUNCHY BURGERS + 2 REGULAR CHICKEN WRAPS +\n                    REGULAR CHICKEN POPCORN + FULL FRIES",
-    "price": 500,
-    "image": "images/combos/party-combo.png"
+   {
+    "name": "SHARE & GET A FREE BURGER",
+    "description": "SHARE OUR ONLINE MENU WITH 20 FAMILY & FRIENDS + GET 1 CRUNCHY CHICKEN BURGER FREE",
+    "price": 0,
+    "image": "images/combos/share-free-burger.png"
   },
   {
-    "name": "BURGER BOX",
-    "description": "CLASSIC CRUNCHY BURGER + FRIES + COLD DRINK",
-    "price": 130,
-    "image": "images/combos/burger-box.png"
+    "name": "SUNDAY CHICKEN FEAST",
+    "description": "ORDER ₹399 OR MORE + GET MEDIUM CHICKEN POPCORN FREE — VALID ONLY ON SUNDAY",
+    "price": 0,
+    "image": "images/combos/sunday-chicken-feast.png"
   },
-  {
-    "name": "WRAP BOX",
-    "description": "CRUNCHY CHICKEN WRAP + FRIES + COLD DRINK",
-    "price": 150,
-    "image": "images/combos/wrap-box.png"
+   {
+    "name": "BUY 3, GET 1 FREE",
+    "description": "BUY 3 CRUNCHY CHICKEN BURGERS + GET 1 CRUNCHY KING BURGER FREE — MONDAY • TUESDAY • WEDNESDAY",
+    "price": 0,
+    "image": "images/combos/buy-3-get-1-free.png"
   },
-  {
-    "name": "ULTIMATE CHICKEN FEAST",
-    "description": "1 CRUNCHY BURGER + 3 STRIPS + HALF FRIES + COLD DRINK",
-    "price": 200,
-    "image": "images/combos/ultimate-chicken-feast.png"
+    {
+    "name": "FAMILY FEAST BONUS",
+    "description": "ORDER ₹699 OR MORE + GET 3 CHICKEN STRIPS FREE",
+    "price": 0,
+    "image": "images/combos/family-feast-bonus.png"
   },
-  {
-    "name": "LOADED KING COMBO",
-    "description": "SPICY CHIPOTLE BBQ BOWL + REGULAR CHICKEN POPCORN + COLD DRINK",
-    "price": 210,
-    "image": "images/combos/loaded-king-combo.png"
+    {
+    "name": "WEEKEND FEAST DEAL",
+    "description": "ORDER ₹499 OR MORE + GET HALF PERI PERI SEASONING FRIES FREE — SATURDAY & SUNDAY",
+    "price": 0,
+    "image": "images/combos/weekend-feast-deal.png"
   },
-  {
-    "name": "DUO COMBO",
-    "description": "2 CRUNCHY BURGERS + FULL FRIES + 2 COLD DRINKS",
-    "price": 250,
-    "image": "images/combos/duo-combo.png"
-  },
-
 ];

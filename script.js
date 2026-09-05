@@ -1,7 +1,56 @@
 document.addEventListener("DOMContentLoaded", () => {
-  const PHONE = "+917700929693";
-  const FREE_DELIVERY_THRESHOLD = 300;
-  const DELIVERY_CHARGE = 30;
+const FREE_DELIVERY_THRESHOLD = 300;
+const DELIVERY_CHARGE = 30;
+
+// ====================== FREE OFFERS ======================
+
+const FREE_OFFERS = {
+  burger3: {
+    id: "burger3",
+    name: "BUY 3, GET 1 FREE",
+    requirement: "3 CRUNCHY CHICKEN BURGERS",
+    freeItem: "CH CRUNCHY KING BURGER",
+    freePrice: 0,
+    days: ["Monday", "Tuesday", "Wednesday"],
+    type: "burger-count",
+    requiredQty: 3
+  },
+
+  weekend: {
+    id: "weekend",
+    name: "WEEKEND FEAST DEAL",
+    requirement: "ORDER ₹499 OR MORE",
+    freeItem: "PERI PERI SEASONING FRIES - HALF",
+    freePrice: 0,
+    days: ["Saturday", "Sunday"],
+    type: "subtotal",
+    threshold: 499
+  },
+
+  family: {
+    id: "family",
+    name: "FAMILY FEAST BONUS",
+    requirement: "ORDER ₹699 OR MORE",
+    freeItem: "CLASSIC REGULAR STRIPS - 3 PCS",
+    freePrice: 0,
+    days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+    type: "subtotal",
+    threshold: 699
+  },
+
+  sunday: {
+    id: "sunday",
+    name: "SUNDAY CHICKEN FEAST",
+    requirement: "ORDER ₹399 OR MORE",
+    freeItem: "CRUNCHY CHICKEN POPCORN - MEDIUM",
+    freePrice: 0,
+    days: ["Sunday"],
+    type: "subtotal",
+    threshold: 399
+  }
+};
+
+let selectedFreeOfferId = null;
 
   const nav = document.getElementById("categoryNav");
   const sectionsRoot = document.getElementById("menuSections");
@@ -35,6 +84,14 @@ document.addEventListener("DOMContentLoaded", () => {
   function cartItem(name, price) {
     return cart.find(item => item.name === name && item.price === price);
   }
+  function isSundayInMumbai() { 
+  const sundayDay = new Intl.DateTimeFormat("en-IN", {
+    timeZone: "Asia/Kolkata",
+    weekday: "long"
+  }).format(new Date());
+
+  return sundayDay === "Sunday";
+}
 
   function setActiveCategory(id, scrollIntoView = false) {
     activeCategory = id;
@@ -153,69 +210,328 @@ document.addEventListener("DOMContentLoaded", () => {
             <h3>${esc(item.name)}</h3>
             <p>${esc(item.description)}</p>
             <div class="combo-row">
-              <strong class="combo-price">${money(price)}</strong>
+<strong class="combo-price">${item === COMBO_SLIDES[0] ? "FREE" : price === 0 ? "DEAL" : money(price)}</strong>
               ${inCart
-                ? `<div class="qty-control">
-                     <button type="button" data-action="minus" data-name="${esc(item.name)}" data-price="${price}" aria-label="Decrease ${esc(item.name)}">−</button>
-                     <span>${inCart.qty}</span>
-                     <button type="button" data-action="plus" data-name="${esc(item.name)}" data-price="${price}" aria-label="Increase ${esc(item.name)}">+</button>
-                   </div>`
-                : `<button type="button" class="add-mini" data-add="1" data-name="${esc(item.name)}" data-price="${price}">ADD +</button>`}
+  ? `<div class="qty-control">
+       <button type="button" data-action="minus" data-name="${esc(item.name)}" data-price="${price}" aria-label="Decrease ${esc(item.name)}">−</button>
+       <span>${inCart.qty}</span>
+       <button type="button" data-action="plus" data-name="${esc(item.name)}" data-price="${price}" aria-label="Increase ${esc(item.name)}">+</button>
+     </div>`
+  : item === COMBO_SLIDES[0]
+  ? `<button type="button" class="add-mini share-slider-button" data-share-offer="1">↗ SHARE NOW</button>`
+  : ""}
             </div>
           </div>
         </article>`;
     }).join("");
   }
+ function getMumbaiDay() {
+  return new Intl.DateTimeFormat("en-IN", {
+    timeZone: "Asia/Kolkata",
+    weekday: "long"
+  }).format(new Date());
+}
 
-  function renderCart() {
-    const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
-    const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
-    const delivery = subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_CHARGE;
-    const total = subtotal + delivery;
+function getPaidSubtotal() {
+  return cart.reduce((sum, item) => {
+    if (item.isFreeOffer) return sum;
+    return sum + item.price * item.qty;
+  }, 0);
+}
 
-    cartCountEl.textContent = totalQty;
-    clearCartButton.hidden = cart.length === 0;
+function getBurgerCount() {
+  return cart.reduce((count, item) => {
+    if (item.isFreeOffer) return count;
 
-    if (!cart.length) {
-      cartItemsEl.innerHTML = `
-        <div class="empty-cart-wrap">
-          <div class="empty-cart-icon">🛒</div>
-          <p class="empty-cart">YOUR CART IS EMPTY</p>
-          <span>Add something delicious to get started.</span>
-        </div>`;
-      cartSummaryEl.innerHTML = "";
-      return;
+    if (item.name === "CLASSIC CRUNCHY BURGER") {
+      return count + item.qty;
     }
 
-    cartItemsEl.innerHTML = cart.map((item, index) => {
-      const lineTotal = item.price * item.qty;
-      return `
-        <div class="cart-item">
-          <div class="cart-item-info">
-            <div class="cart-name">${esc(item.name)}</div>
-            <div class="cart-meta">${money(item.price)} × ${item.qty} = <strong>${money(lineTotal)}</strong></div>
-          </div>
-          <div class="cart-controls">
-            <button type="button" data-action="minus" data-cart-index="${index}" aria-label="Decrease item">−</button>
-            <span>${item.qty}</span>
-            <button type="button" data-action="plus" data-cart-index="${index}" aria-label="Increase item">+</button>
-          </div>
-        </div>`;
-    }).join("");
+    return count;
+  }, 0);
+}
 
-    const progress = subtotal < FREE_DELIVERY_THRESHOLD
-      ? `<div class="free-progress">🎉 Add <strong>${money(FREE_DELIVERY_THRESHOLD - subtotal)}</strong> more for <strong>FREE DELIVERY!</strong></div>`
-      : `<div class="free-progress free-progress-complete">🎉 <strong>FREE DELIVERY!</strong></div>`;
+function isOfferDay(offer) {
+  const today = getMumbaiDay();
+  return offer.days.includes(today);
+}
 
-    cartSummaryEl.innerHTML = `
-      ${progress}
-      <div class="sum-row"><span>ITEM TOTAL</span><strong>${money(subtotal)}</strong></div>
-      <div class="sum-row"><span>DELIVERY</span><strong class="${delivery === 0 ? "free" : ""}">${delivery === 0 ? "FREE" : money(delivery)}</strong></div>
-      <div class="sum-divider"></div>
-      <div class="sum-row sum-total"><span>TOTAL</span><strong>${money(total)}</strong></div>`;
+function isOfferQualified(offer, subtotal, burgerCount) {
+  if (!isOfferDay(offer)) return false;
+
+  if (offer.type === "subtotal") {
+    return subtotal >= offer.threshold;
   }
 
-  function render() {
+  if (offer.type === "burger-count") {
+    return burgerCount >= offer.requiredQty;
+  }
+
+  return false;
+}
+
+function removeSelectedFreeOffer() {
+  cart = cart.filter(item => !item.isFreeOffer);
+}
+
+function selectFreeOffer(offerId) {
+  const offer = FREE_OFFERS[offerId];
+
+  if (!offer) return;
+
+  const subtotal = getPaidSubtotal();
+  const burgerCount = getBurgerCount();
+
+  if (!isOfferQualified(offer, subtotal, burgerCount)) {
+    return;
+  }
+
+  // Remove any previously selected free offer.
+  removeSelectedFreeOffer();
+
+  // Add the newly selected free offer.
+  cart.push({
+    name: offer.freeItem,
+    price: offer.freePrice,
+    qty: 1,
+    isFreeOffer: true,
+    freeOfferId: offer.id
+  });
+
+  selectedFreeOfferId = offer.id;
+
+  render();
+}
+function renderCart() {
+  const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
+
+  const subtotal = getPaidSubtotal();
+  const burgerCount = getBurgerCount();
+  const today = getMumbaiDay();
+
+  const delivery = subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_CHARGE;
+  const total = subtotal + delivery;
+
+  cartCountEl.textContent = totalQty;
+  clearCartButton.hidden = cart.length === 0;
+
+  if (!cart.length) {
+    cartItemsEl.innerHTML = `
+      <div class="empty-cart-wrap">
+        <div class="empty-cart-icon">🛒</div>
+        <p class="empty-cart">YOUR CART IS EMPTY</p>
+        <span>Add something delicious to get started.</span>
+      </div>`;
+
+    cartSummaryEl.innerHTML = "";
+    return;
+  }
+
+  cartItemsEl.innerHTML = cart.map((item, index) => {
+    const lineTotal = item.price * item.qty;
+
+    if (item.isFreeOffer) {
+      return `
+        <div class="cart-item sunday-freebie">
+          <div class="cart-item-info">
+            <div class="cart-name">
+              🎁 ${esc(item.name)}
+            </div>
+
+            <div class="cart-meta">
+              <strong style="color: #16a34a;">
+                FREE — ₹0
+              </strong>
+            </div>
+          </div>
+
+          <div class="cart-free-label">
+            FREE
+          </div>
+        </div>`;
+    }
+
+    return `
+      <div class="cart-item">
+        <div class="cart-item-info">
+          <div class="cart-name">${esc(item.name)}</div>
+
+          <div class="cart-meta">
+            ${money(item.price)} × ${item.qty} =
+            <strong>${money(lineTotal)}</strong>
+          </div>
+        </div>
+
+        <div class="cart-controls">
+          <button
+            type="button"
+            data-action="minus"
+            data-cart-index="${index}"
+            aria-label="Decrease item"
+          >−</button>
+
+          <span>${item.qty}</span>
+
+          <button
+            type="button"
+            data-action="plus"
+            data-cart-index="${index}"
+            aria-label="Increase item"
+          >+</button>
+        </div>
+      </div>`;
+  }).join("");
+
+  // ====================== FREE OFFER SELECTOR ======================
+
+  const offerCards = Object.values(FREE_OFFERS)
+    .filter(offer => isOfferDay(offer))
+    .map(offer => {
+
+      const qualified = isOfferQualified(
+        offer,
+        subtotal,
+        burgerCount
+      );
+
+      const selected = selectedFreeOfferId === offer.id;
+
+      let statusText = "";
+      let buttonText = "";
+
+      if (qualified) {
+        statusText = `🎁 GET ${offer.freeItem} FREE`;
+
+        buttonText = selected
+          ? "✓ SELECTED"
+          : "ADD TO CART";
+      } else {
+
+        if (offer.type === "subtotal") {
+          const remaining = Math.max(
+            0,
+            offer.threshold - subtotal
+          );
+
+          statusText =
+            `🔒 Add <strong>${money(remaining)}</strong> more to GET ${offer.freeItem} FREE`;
+        }
+
+        if (offer.type === "burger-count") {
+          const remaining = Math.max(
+            0,
+            offer.requiredQty - burgerCount
+          );
+
+          statusText =
+            remaining === 1
+              ? `🔒 Add <strong>1 more CRUNCHY CHICKEN BURGER</strong> to GET ${offer.freeItem} FREE`
+              : `🔒 Add <strong>${remaining} CRUNCHY CHICKEN BURGERS</strong> to GET ${offer.freeItem} FREE`;
+        }
+
+        buttonText = "LOCKED";
+      }
+
+      return `
+        <div class="free-offer-card ${qualified ? "offer-qualified" : "offer-locked"} ${selected ? "offer-selected" : ""}">
+
+          <div class="free-offer-top">
+            <div>
+              <span class="free-offer-kicker">
+                ${qualified ? "🎁 OFFER AVAILABLE" : "🔒 OFFER LOCKED"}
+              </span>
+
+              <h3>${esc(offer.name)}</h3>
+
+              <p>${esc(offer.requirement)}</p>
+            </div>
+
+            ${selected
+              ? `<span class="free-offer-check">✓</span>`
+              : ""}
+          </div>
+
+          <div class="free-offer-reward">
+${esc(offer.freeItem)}
+          </div>
+
+          <div class="free-offer-status">
+            ${statusText}
+          </div>
+
+          ${qualified
+            ? `<button
+                type="button"
+                class="free-offer-button"
+                data-select-free-offer="${esc(offer.id)}"
+              >
+                ${buttonText}
+              </button>`
+            : `<button
+                type="button"
+                class="free-offer-button free-offer-button-locked"
+                disabled
+              >
+                ${buttonText}
+              </button>`
+          }
+
+        </div>`;
+    })
+    .join("");
+
+  const freeOfferSelector = `
+    <div class="free-offers-box">
+      <div class="free-offers-heading">
+        <span>🎁 SPECIAL OFFERS</span>
+        <strong>CHOOSE ANY 1</strong>
+        <p>Only one free offer can be selected per order.</p>
+      </div>
+
+      ${offerCards}
+    </div>
+  `;
+
+  // ====================== DELIVERY PROGRESS ======================
+
+  const deliveryProgress = subtotal < FREE_DELIVERY_THRESHOLD
+    ? `<div class="free-progress">
+        🎉 Add
+        <strong>${money(FREE_DELIVERY_THRESHOLD - subtotal)}</strong>
+        more for
+        <strong>FREE DELIVERY!</strong>
+      </div>`
+    : `<div class="free-progress free-progress-complete">
+        🎉 <strong>FREE DELIVERY!</strong>
+      </div>`;
+
+  cartSummaryEl.innerHTML = `
+    ${freeOfferSelector}
+
+    ${deliveryProgress}
+
+    <div class="sum-row">
+      <span>ITEM TOTAL</span>
+      <strong>${money(subtotal)}</strong>
+    </div>
+
+    <div class="sum-row">
+      <span>DELIVERY</span>
+      <strong class="${delivery === 0 ? "free" : ""}">
+        ${delivery === 0 ? "FREE" : money(delivery)}
+      </strong>
+    </div>
+
+    <div class="sum-divider"></div>
+
+    <div class="sum-row sum-total">
+      <span>TOTAL</span>
+      <strong>${money(total)}</strong>
+    </div>`;
+}
+
+ 
+ function render() {
     renderMenu();
     renderCombos();
     renderCart();
@@ -257,15 +573,36 @@ document.addEventListener("DOMContentLoaded", () => {
     setActiveCategory(link.dataset.category, true);
   });
 
-  document.addEventListener("click", event => {
-    const addButton = event.target.closest("[data-add]");
-    if (addButton) {
-      event.preventDefault();
-      changeItem(addButton.dataset.name, Number(addButton.dataset.price), 1);
-      return;
-    }
+document.addEventListener("click", event => {
+  const shareButton = event.target.closest("[data-share-offer]");
+  
+  if (shareButton) {
+    event.preventDefault();
+    shareOffer();
+    return;
+  }
+  
+    const freeOfferButton = event.target.closest("[data-select-free-offer]");
 
-    const quantityButton = event.target.closest("[data-action]");
+  if (freeOfferButton) {
+    event.preventDefault();
+
+    selectFreeOffer(
+      freeOfferButton.dataset.selectFreeOffer
+    );
+
+    return;
+  }
+  
+
+  const addButton = event.target.closest("[data-add]");
+  if (addButton) {
+    event.preventDefault();
+    changeItem(addButton.dataset.name, Number(addButton.dataset.price), 1);
+    return;
+  }
+
+  const quantityButton = event.target.closest("[data-action]");
     if (!quantityButton) return;
 
     const action = quantityButton.dataset.action;
