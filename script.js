@@ -466,4 +466,124 @@ Terms & Conditions Apply:
       closeCart();
     }
   });
+  
+  // ====================== STORE HOURS ======================
+
+// ====================== STORE HOURS ======================
+// ====================== STORE HOURS ======================
+
+function updateOpeningHours() {
+  const statusEl = document.getElementById("openingHoursStatus");
+  const dotEl = document.getElementById("openingHoursDot");
+
+  const cartStatusEl = document.getElementById("cartOpeningHoursStatus");
+  const cartDotEl = document.getElementById("cartOpeningHoursDot");
+
+  // Get current Mumbai time
+  const parts = new Intl.DateTimeFormat("en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(new Date());
+
+  const hour = Number(
+    parts.find(part => part.type === "hour")?.value || 0
+  );
+
+  const minute = Number(
+    parts.find(part => part.type === "minute")?.value || 0
+  );
+
+  const currentMinutes = hour * 60 + minute;
+
+  // Store timing
+  const openingMinutes = 12 * 60 + 30; // 12:30 PM
+  const closingMinutes = 23 * 60 + 45; // 11:45 PM
+
+  const isOpen =
+    currentMinutes >= openingMinutes &&
+    currentMinutes < closingMinutes;
+
+
+  // ================= MAIN STATUS =================
+
+  if (statusEl && dotEl) {
+
+    statusEl.textContent = isOpen
+      ? "OPEN NOW"
+      : "CLOSED NOW";
+
+    statusEl.classList.toggle("is-open", isOpen);
+    statusEl.classList.toggle("is-closed", !isOpen);
+
+    dotEl.classList.toggle("is-open", isOpen);
+    dotEl.classList.toggle("is-closed", !isOpen);
+  }
+
+
+  // ================= CART STATUS =================
+
+  if (cartStatusEl && cartDotEl) {
+
+    cartStatusEl.textContent = isOpen
+      ? "OPEN NOW"
+      : "CLOSED NOW";
+
+    cartStatusEl.classList.toggle("is-open", isOpen);
+    cartStatusEl.classList.toggle("is-closed", !isOpen);
+
+    cartDotEl.classList.toggle("is-open", isOpen);
+    cartDotEl.classList.toggle("is-closed", !isOpen);
+  }
+
+
+  // ================= CALL BUTTONS =================
+
+  const callButtons = document.querySelectorAll(
+    ".call-header, .cart-call-now, .footer-call"
+  );
+
+  callButtons.forEach(button => {
+
+    if (isOpen) {
+
+      // ENABLE CALL BUTTON
+      button.classList.remove("call-disabled");
+      button.setAttribute("aria-disabled", "false");
+      button.removeAttribute("tabindex");
+
+    } else {
+
+      // DISABLE CALL BUTTON
+      button.classList.add("call-disabled");
+      button.setAttribute("aria-disabled", "true");
+      button.setAttribute("tabindex", "-1");
+    }
+
+  });
+}
+
+
+// Run immediately
+updateOpeningHours();
+
+// Check every 30 seconds
+setInterval(updateOpeningHours, 30000);
+
+
+// Prevent disabled call buttons from calling
+document.addEventListener("click", function(event) {
+
+  const button = event.target.closest(
+    ".call-header.call-disabled, .cart-call-now.call-disabled, .footer-call.call-disabled"
+  );
+
+  if (button) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+});
+  
 });
