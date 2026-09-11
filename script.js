@@ -1,9 +1,1236 @@
 document.addEventListener("DOMContentLoaded", () => {
 const FREE_DELIVERY_THRESHOLD = 300;
 const DELIVERY_CHARGE = 30;
+const ONLINE_CHECKOUT_ENABLED = false;
+// =========================================================
+// FIREBASE PUSH NOTIFICATIONS
+// =========================================================
+
+const FCM_VAPID_KEY =
+  "BGjzTqS6rjlc-8MfakmsJTYx3VJoMJSayf6WnhkbjAQqvgUmptPscqTLFThnFPjbrLGU0xNVbhd7QiL4bjmeepY";
 
 // ====================== FREE OFFERS ======================
+  // =========================================================
+  // CUSTOMER PHONE LOGIN / FIREBASE OTP
+  // =========================================================
 
+  const customerLoginOverlay = document.getElementById("customerLoginOverlay");
+  const customerLoginClose = document.getElementById("customerLoginClose");
+
+  const phoneLoginStep = document.getElementById("phoneLoginStep");
+  const otpLoginStep = document.getElementById("otpLoginStep");
+
+  const customerPhone = document.getElementById("customerPhone");
+  const customerOtp = document.getElementById("customerOtp");
+
+  const sendOtpButton = document.getElementById("sendOtpButton");
+  const verifyOtpButton = document.getElementById("verifyOtpButton");
+  const resendOtpButton = document.getElementById("resendOtpButton");
+  const changePhoneButton = document.getElementById("changePhoneButton");
+
+  const customerLoginMessage =
+    document.getElementById("customerLoginMessage");
+
+  const otpLoginMessage =
+    document.getElementById("otpLoginMessage");
+
+  const placeOrderButton =
+    document.getElementById("placeCall");
+
+  let confirmationResult = null;
+  let recaptchaVerifier = null;
+  let customerLoggedIn = false;
+
+
+  // ---------------------------------------------------------
+  // FIREBASE AUTHENTICATION CHECK
+  // ---------------------------------------------------------
+
+  function firebaseAuthReady() {
+    return (
+      window.firebaseAuth &&
+      window.FirebaseAuthAPI &&
+      window.FirebaseAuthAPI.RecaptchaVerifier &&
+      window.FirebaseAuthAPI.signInWithPhoneNumber &&
+      window.FirebaseAuthAPI.onAuthStateChanged
+    );
+  }
+
+
+  // ---------------------------------------------------------
+  // CUSTOMER LOGIN POPUP
+  // ---------------------------------------------------------
+
+  function openCustomerLogin() {
+    if (!customerLoginOverlay) return;
+
+    customerLoginOverlay.classList.add("open");
+    customerLoginOverlay.setAttribute("aria-hidden", "false");
+
+    document.body.classList.add("customer-login-open");
+
+    resetCustomerLoginMessages();
+
+    phoneLoginStep.hidden = false;
+    otpLoginStep.hidden = true;
+
+    customerOtp.value = "";
+
+    setTimeout(() => {
+      customerPhone.focus();
+    }, 100);
+  }
+
+
+  function closeCustomerLogin() {
+    if (!customerLoginOverlay) return;
+
+    customerLoginOverlay.classList.remove("open");
+    customerLoginOverlay.setAttribute("aria-hidden", "true");
+
+    document.body.classList.remove("customer-login-open");
+  }
+
+
+  function resetCustomerLoginMessages() {
+    if (customerLoginMessage) {
+      customerLoginMessage.textContent = "";
+    }
+
+    if (otpLoginMessage) {
+      otpLoginMessage.textContent = "";
+    }
+  }
+
+
+  // ---------------------------------------------------------
+  // PHONE NUMBER VALIDATION
+  // ---------------------------------------------------------
+
+  function getCustomerPhoneNumber() {
+    const rawPhone = customerPhone.value.replace(/\D/g, "");
+
+    if (!/^[6-9]\d{9}$/.test(rawPhone)) {
+      throw new Error(
+        "Please enter a valid 10-digit Indian mobile number."
+      );
+    }
+
+    return `+91${rawPhone}`;
+  }
+
+
+  // ---------------------------------------------------------
+  // CREATE FIREBASE reCAPTCHA
+  // ---------------------------------------------------------
+
+  function createRecaptcha() {
+    if (!firebaseAuthReady()) {
+      throw new Error(
+        "Firebase Authentication is not ready. Please refresh the page and try again."
+      );
+    }
+
+    if (recaptchaVerifier) {
+      return recaptchaVerifier;
+    }
+
+recaptchaVerifier =
+  new window.FirebaseAuthAPI.RecaptchaVerifier(
+    window.firebaseAuth,
+    "recaptcha-container",
+    {
+      size: "invisible"
+    }
+  );
+
+    return recaptchaVerifier;
+  }
+
+
+  // ---------------------------------------------------------
+  // SEND OTP
+  // ---------------------------------------------------------
+
+  async function sendCustomerOtp() {
+    resetCustomerLoginMessages();
+
+    let phoneNumber;
+
+    try {
+      phoneNumber = getCustomerPhoneNumber();
+    } catch (error) {
+      customerLoginMessage.textContent = error.message;
+      customerPhone.focus();
+      return;
+    }
+
+    if (!firebaseAuthReady()) {
+      customerLoginMessage.textContent =
+        "Login service is not ready. Please refresh the page and try again.";
+      return;
+    }
+
+    sendOtpButton.disabled = true;
+    sendOtpButton.textContent = "SENDING OTP...";
+
+    try {
+      const verifier = createRecaptcha();
+
+      confirmationResult =
+        await window.FirebaseAuthAPI.signInWithPhoneNumber(
+          window.firebaseAuth,
+          phoneNumber,
+          verifier
+        );
+
+      phoneLoginStep.hidden = true;
+      otpLoginStep.hidden = false;
+
+      otpLoginMessage.textContent =
+        `OTP sent to +91 ${phoneNumber.slice(-10)}.`;
+
+      customerOtp.value = "";
+
+      setTimeout(() => {
+        customerOtp.focus();
+      }, 100);
+
+    } catch (error) {
+      console.error("Firebase OTP error:", error);
+
+      customerLoginMessage.textContent =
+        getFirebaseAuthErrorMessage(error);
+
+      resetRecaptcha();
+
+    } finally {
+      sendOtpButton.disabled = false;
+      sendOtpButton.textContent = "SEND OTP";
+    }
+  }
+
+
+  // ---------------------------------------------------------
+  // VERIFY OTP
+  // ---------------------------------------------------------
+
+  async function verifyCustomerOtp() {
+    resetCustomerLoginMessages();
+
+    const otp = customerOtp.value.replace(/\D/g, "");
+
+    if (!/^\d{6}$/.test(otp)) {
+      otpLoginMessage.textContent =
+        "Please enter the 6-digit OTP.";
+      customerOtp.focus();
+      return;
+    }
+
+    if (!confirmationResult) {
+      otpLoginMessage.textContent =
+        "Please request a new OTP.";
+      return;
+    }
+
+    verifyOtpButton.disabled = true;
+    verifyOtpButton.textContent = "VERIFYING...";
+
+    try {
+      await confirmationResult.confirm(otp);
+
+      customerLoggedIn = true;
+
+      otpLoginMessage.textContent =
+        "Mobile number verified successfully.";
+
+      updatePlaceOrderButton();
+
+      setTimeout(() => {
+        closeCustomerLogin();
+      }, 700);
+
+    } catch (error) {
+      console.error("OTP verification error:", error);
+
+      otpLoginMessage.textContent =
+        getFirebaseAuthErrorMessage(error);
+
+    } finally {
+      verifyOtpButton.disabled = false;
+      verifyOtpButton.textContent = "VERIFY OTP";
+    }
+  }
+
+
+  // ---------------------------------------------------------
+  // RESEND OTP
+  // ---------------------------------------------------------
+
+  async function resendCustomerOtp() {
+    confirmationResult = null;
+
+    resetRecaptcha();
+
+    phoneLoginStep.hidden = false;
+    otpLoginStep.hidden = true;
+
+    await sendCustomerOtp();
+  }
+
+
+  // ---------------------------------------------------------
+  // CHANGE MOBILE NUMBER
+  // ---------------------------------------------------------
+
+  function changeCustomerPhone() {
+    confirmationResult = null;
+
+    resetRecaptcha();
+
+    customerOtp.value = "";
+
+    resetCustomerLoginMessages();
+
+    phoneLoginStep.hidden = false;
+    otpLoginStep.hidden = true;
+
+    setTimeout(() => {
+      customerPhone.focus();
+    }, 100);
+  }
+
+
+  // ---------------------------------------------------------
+  // RESET reCAPTCHA
+  // ---------------------------------------------------------
+
+  function resetRecaptcha() {
+    if (recaptchaVerifier) {
+      try {
+        recaptchaVerifier.clear();
+      } catch (error) {
+        console.warn("Could not clear reCAPTCHA:", error);
+      }
+
+      recaptchaVerifier = null;
+    }
+
+    const recaptchaContainer =
+      document.getElementById("recaptcha-container");
+
+    if (recaptchaContainer) {
+      recaptchaContainer.innerHTML = "";
+    }
+  }
+
+
+  // ---------------------------------------------------------
+  // FIREBASE ERROR MESSAGES
+  // ---------------------------------------------------------
+
+  function getFirebaseAuthErrorMessage(error) {
+    if (!error) {
+      return "Something went wrong. Please try again.";
+    }
+
+    switch (error.code) {
+      case "auth/invalid-phone-number":
+        return "Please enter a valid Indian mobile number.";
+
+      case "auth/invalid-verification-code":
+        return "Incorrect OTP. Please check the OTP and try again.";
+
+      case "auth/code-expired":
+        return "This OTP has expired. Please request a new OTP.";
+
+      case "auth/too-many-requests":
+        return "Too many attempts. Please wait and try again later.";
+
+      case "auth/quota-exceeded":
+        return "SMS limit reached. Please try again later.";
+
+      case "auth/billing-not-enabled":
+        return "Phone verification requires Firebase billing to be enabled.";
+
+      case "auth/operation-not-allowed":
+        return "Phone login is not enabled in Firebase Authentication.";
+
+      case "auth/captcha-check-failed":
+        return "Security verification failed. Please refresh and try again.";
+
+      case "auth/network-request-failed":
+        return "Network error. Please check your internet connection.";
+
+      case "auth/user-disabled":
+        return "This account has been disabled.";
+
+      default:
+        return error.message ||
+          "Unable to send or verify OTP. Please try again.";
+    }
+  }
+
+
+  // ---------------------------------------------------------
+  // PLACE ORDER BUTTON
+  // ---------------------------------------------------------
+
+  function updatePlaceOrderButton() {
+  if (!placeOrderButton) return;
+
+  // ONLINE CHECKOUT DISABLED
+  if (!ONLINE_CHECKOUT_ENABLED) {
+
+    placeOrderButton.textContent = "ONLINE ORDERING UNAVAILABLE";
+
+    placeOrderButton.classList.add(
+      "place-call-disabled"
+    );
+
+    placeOrderButton.disabled = true;
+
+    placeOrderButton.setAttribute(
+      "aria-disabled",
+      "true"
+    );
+
+    return;
+  }
+
+  // ONLINE CHECKOUT ENABLED
+  placeOrderButton.classList.remove(
+    "place-call-disabled"
+  );
+
+  placeOrderButton.disabled = false;
+
+  placeOrderButton.removeAttribute(
+    "aria-disabled"
+  );
+
+  if (customerLoggedIn) {
+    placeOrderButton.textContent =
+      "CONTINUE TO CHECKOUT";
+  } else {
+    placeOrderButton.textContent =
+      "LOGIN TO PLACE ORDER";
+  }
+}
+
+
+function handlePlaceOrderClick() {
+
+  if (!cart.length) {
+
+    alert(
+      "YOUR CART IS EMPTY. Please add something to your order."
+    );
+
+    return;
+  }
+
+  if (!customerLoggedIn) {
+
+    openCustomerLogin();
+
+    return;
+  }
+
+  openCheckout();
+}
+
+
+  // ---------------------------------------------------------
+  // FIREBASE LOGIN STATE
+  // ---------------------------------------------------------
+
+  function setupCustomerAuthListener() {
+    if (!firebaseAuthReady()) {
+      console.error("Firebase Authentication API is unavailable.");
+      return;
+    }
+
+    window.FirebaseAuthAPI.onAuthStateChanged(
+      window.firebaseAuth,
+      user => {
+        customerLoggedIn = !!user;
+
+        updatePlaceOrderButton();
+
+        if (user) {
+          console.log(
+            "Customer logged in:",
+            user.phoneNumber || user.uid
+          );
+        } else {
+          console.log("No customer is currently logged in.");
+        }
+      }
+    );
+  }
+
+
+  // ---------------------------------------------------------
+  // EVENT LISTENERS
+  // ---------------------------------------------------------
+
+  if (sendOtpButton) {
+    sendOtpButton.addEventListener(
+      "click",
+      sendCustomerOtp
+    );
+  }
+
+  if (verifyOtpButton) {
+    verifyOtpButton.addEventListener(
+      "click",
+      verifyCustomerOtp
+    );
+  }
+
+  if (resendOtpButton) {
+    resendOtpButton.addEventListener(
+      "click",
+      resendCustomerOtp
+    );
+  }
+
+  if (changePhoneButton) {
+    changePhoneButton.addEventListener(
+      "click",
+      changeCustomerPhone
+    );
+  }
+
+  if (customerLoginClose) {
+    customerLoginClose.addEventListener(
+      "click",
+      closeCustomerLogin
+    );
+  }
+
+  if (customerLoginOverlay) {
+    customerLoginOverlay.addEventListener(
+      "click",
+      event => {
+        if (event.target === customerLoginOverlay) {
+          closeCustomerLogin();
+        }
+      }
+    );
+  }
+
+  if (placeOrderButton) {
+    placeOrderButton.addEventListener(
+      "click",
+      handlePlaceOrderClick
+    );
+  }
+
+  if (customerPhone) {
+    customerPhone.addEventListener(
+      "input",
+      () => {
+        customerPhone.value =
+          customerPhone.value.replace(/\D/g, "").slice(0, 10);
+      }
+    );
+
+    customerPhone.addEventListener(
+      "keydown",
+      event => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          sendCustomerOtp();
+        }
+      }
+    );
+  }
+
+  if (customerOtp) {
+    customerOtp.addEventListener(
+      "input",
+      () => {
+        customerOtp.value =
+          customerOtp.value.replace(/\D/g, "").slice(0, 6);
+      }
+    );
+
+    customerOtp.addEventListener(
+      "keydown",
+      event => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          verifyCustomerOtp();
+        }
+      }
+    );
+  }
+
+  document.addEventListener(
+    "keydown",
+    event => {
+      if (
+        event.key === "Escape" &&
+        customerLoginOverlay &&
+        customerLoginOverlay.classList.contains("open")
+      ) {
+        closeCustomerLogin();
+      }
+    }
+  );
+
+  // Start Firebase customer authentication listener.
+  setupCustomerAuthListener();
+
+  // Set initial Place Order button state.
+  updatePlaceOrderButton();
+
+
+// =========================================================
+// CHECKOUT
+// =========================================================
+
+const checkoutOverlay =
+  document.getElementById("checkoutOverlay");
+
+const checkoutClose =
+  document.getElementById("checkoutClose");
+
+const checkoutForm =
+  document.getElementById("checkoutForm");
+
+const checkoutName =
+  document.getElementById("checkoutName");
+
+const checkoutAddress =
+  document.getElementById("checkoutAddress");
+
+const checkoutLandmark =
+  document.getElementById("checkoutLandmark");
+
+const checkoutArea =
+  document.getElementById("checkoutArea");
+
+const checkoutOrderSummary =
+  document.getElementById("checkoutOrderSummary");
+
+const checkoutSubmit =
+  document.getElementById("checkoutSubmit");
+
+const checkoutMessage =
+  document.getElementById("checkoutMessage");
+
+// =========================================================
+// ORDER SUCCESS
+// =========================================================
+
+const orderSuccessOverlay =
+  document.getElementById("orderSuccessOverlay");
+
+const orderSuccessClose =
+  document.getElementById("orderSuccessClose");
+
+const orderSuccessId =
+  document.getElementById("orderSuccessId");
+
+
+function openOrderSuccess(orderId) {
+
+  if (!orderSuccessOverlay) return;
+
+  if (orderSuccessId) {
+    orderSuccessId.textContent =
+      `#${orderId}`;
+  }
+
+  orderSuccessOverlay.classList.add("open");
+
+  orderSuccessOverlay.setAttribute(
+    "aria-hidden",
+    "false"
+  );
+
+  document.body.classList.add(
+    "order-success-open"
+  );
+}
+
+
+function closeOrderSuccess() {
+
+  if (!orderSuccessOverlay) return;
+
+  orderSuccessOverlay.classList.remove("open");
+
+  orderSuccessOverlay.setAttribute(
+    "aria-hidden",
+    "true"
+  );
+
+  document.body.classList.remove(
+    "order-success-open"
+  );
+}
+
+
+if (orderSuccessClose) {
+
+  orderSuccessClose.addEventListener(
+    "click",
+    closeOrderSuccess
+  );
+}
+
+
+if (orderSuccessOverlay) {
+
+  orderSuccessOverlay.addEventListener(
+    "click",
+    event => {
+
+      if (
+        event.target === orderSuccessOverlay
+      ) {
+
+        closeOrderSuccess();
+
+      }
+
+    }
+  );
+}
+
+
+function getCheckoutTotal() {
+
+  const subtotal = getPaidSubtotal();
+
+  const delivery =
+    subtotal >= FREE_DELIVERY_THRESHOLD
+      ? 0
+      : DELIVERY_CHARGE;
+
+  return subtotal + delivery;
+}
+
+
+function renderCheckoutSummary() {
+
+  if (!checkoutOrderSummary) return;
+
+  const subtotal = getPaidSubtotal();
+
+  const delivery =
+    subtotal >= FREE_DELIVERY_THRESHOLD
+      ? 0
+      : DELIVERY_CHARGE;
+
+  const total =
+    subtotal + delivery;
+
+
+  const itemsHtml = cart
+    .map(item => {
+
+      if (item.isFreeOffer) {
+
+        return `
+          <div class="checkout-summary-item">
+            <span>
+              🎁 ${esc(item.name)}
+            </span>
+
+            <strong>FREE</strong>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="checkout-summary-item">
+
+          <span>
+            ${esc(item.name)}
+            × ${item.qty}
+          </span>
+
+          <strong>
+            ${money(item.price * item.qty)}
+          </strong>
+
+        </div>
+      `;
+    })
+    .join("");
+
+
+  checkoutOrderSummary.innerHTML = `
+
+    ${itemsHtml}
+
+    <div class="checkout-summary-item">
+      <span>ITEM TOTAL</span>
+      <strong>${money(subtotal)}</strong>
+    </div>
+
+    <div class="checkout-summary-item">
+      <span>DELIVERY</span>
+
+      <strong class="${delivery === 0 ? "free" : ""}">
+        ${delivery === 0 ? "FREE" : money(delivery)}
+      </strong>
+    </div>
+
+    <div class="checkout-summary-total">
+
+      <span>TOTAL</span>
+
+      <strong>
+        ${money(total)}
+      </strong>
+
+    </div>
+  `;
+}
+
+
+function openCheckout() {
+
+  if (!ONLINE_CHECKOUT_ENABLED) {
+
+    alert(
+      "ONLINE CHECKOUT IS CURRENTLY UNAVAILABLE.\n\n" +
+      "Please call CRAVING HEAVEN to place your order."
+    );
+
+    return;
+  }
+  if (!cart.length) {
+
+    alert(
+      "YOUR CART IS EMPTY. Please add something to your order."
+    );
+
+    return;
+  }
+
+
+  if (!customerLoggedIn) {
+
+    openCustomerLogin();
+
+    return;
+  }
+
+
+  renderCheckoutSummary();
+
+  checkoutMessage.textContent = "";
+
+  checkoutOverlay.classList.add("open");
+
+  checkoutOverlay.setAttribute(
+    "aria-hidden",
+    "false"
+  );
+
+  document.body.classList.add(
+    "checkout-open"
+  );
+
+
+  setTimeout(() => {
+
+    checkoutName.focus();
+
+  }, 100);
+}
+
+
+function closeCheckout() {
+
+  checkoutOverlay.classList.remove("open");
+
+  checkoutOverlay.setAttribute(
+    "aria-hidden",
+    "true"
+  );
+
+  document.body.classList.remove(
+    "checkout-open"
+  );
+}
+
+
+function validateCheckoutForm() {
+
+  const name =
+    checkoutName.value.trim();
+
+  const address =
+    checkoutAddress.value.trim();
+
+  const area =
+    checkoutArea.value;
+
+
+  if (name.length < 2) {
+
+    checkoutMessage.textContent =
+      "Please enter your name.";
+
+    checkoutName.focus();
+
+    return false;
+  }
+
+
+  if (address.length < 8) {
+
+    checkoutMessage.textContent =
+      "Please enter your complete delivery address.";
+
+    checkoutAddress.focus();
+
+    return false;
+  }
+
+
+  if (!area) {
+
+    checkoutMessage.textContent =
+      "Please select your area.";
+
+    checkoutArea.focus();
+
+    return false;
+  }
+
+
+  return true;
+}
+
+
+function buildOrderMessage(orderId = "") {
+
+  const user =
+    window.firebaseAuth?.currentUser;
+
+  const mobile =
+    user?.phoneNumber ||
+    "Verified mobile";
+
+
+  const subtotal =
+    getPaidSubtotal();
+
+  const delivery =
+    subtotal >= FREE_DELIVERY_THRESHOLD
+      ? 0
+      : DELIVERY_CHARGE;
+
+  const total =
+    subtotal + delivery;
+
+
+  const itemsText =
+    cart
+      .map(item => {
+
+        if (item.isFreeOffer) {
+
+          return `🎁 ${item.name} × ${item.qty} — FREE`;
+        }
+
+        return `• ${item.name} × ${item.qty} — ${money(item.price * item.qty)}`;
+
+      })
+      .join("\n");
+
+
+  return `🍗 *CRAVING HEAVEN — NEW ORDER*
+
+🆔 Order ID: ${orderId || "Pending"}
+
+👤 Customer: ${checkoutName.value.trim()}
+
+📱 Mobile: ${mobile}
+
+📍 Area: ${checkoutArea.value}
+
+🏠 Address:
+${checkoutAddress.value.trim()}
+
+${checkoutLandmark.value.trim()
+    ? `📌 Landmark: ${checkoutLandmark.value.trim()}\n`
+    : ""}
+
+🍔 *ORDER ITEMS*
+
+${itemsText}
+
+💰 Item Total: ${money(subtotal)}
+
+🚚 Delivery: ${
+    delivery === 0
+      ? "FREE"
+      : money(delivery)
+  }
+
+💵 *TOTAL: ${money(total)}*
+
+💳 Payment: Pay on Delivery
+
+━━━━━━━━━━━━━━━━━━
+CRAVING HEAVEN
+Pathanwadi, Malad East
+━━━━━━━━━━━━━━━━━━`;
+}
+
+
+async function continueToOrder() {
+	
+	
+	  if (!ONLINE_CHECKOUT_ENABLED) {
+
+    checkoutMessage.textContent =
+      "Online checkout is currently unavailable.";
+
+    return;
+  }
+
+  checkoutMessage.textContent = "";
+
+  if (!validateCheckoutForm()) {
+    return;
+  }
+
+
+  checkoutSubmit.disabled = true;
+
+  checkoutSubmit.textContent =
+    "CREATING ORDER...";
+
+
+  const user =
+    window.firebaseAuth?.currentUser;
+
+
+  if (!user) {
+
+    checkoutMessage.textContent =
+      "Your login session has expired. Please login again.";
+
+    checkoutSubmit.disabled = false;
+
+    checkoutSubmit.textContent =
+      "PLACE ORDER";
+
+    return;
+  }
+
+
+  const subtotal =
+    getPaidSubtotal();
+
+  const delivery =
+    subtotal >= FREE_DELIVERY_THRESHOLD
+      ? 0
+      : DELIVERY_CHARGE;
+
+  const total =
+    subtotal + delivery;
+
+
+  try {
+
+    const orderData = {
+
+      customerName:
+        checkoutName.value.trim(),
+
+      mobile:
+        user.phoneNumber || "",
+
+      address:
+        checkoutAddress.value.trim(),
+
+      landmark:
+        checkoutLandmark.value.trim(),
+
+      area:
+        checkoutArea.value,
+
+      paymentMethod:
+        "Pay on Delivery",
+
+      items:
+        cart.map(item => ({
+          name: item.name,
+          price: item.price,
+          qty: item.qty,
+          isFreeOffer:
+            !!item.isFreeOffer
+        })),
+
+      subtotal,
+      deliveryCharge: delivery,
+      total,
+
+      status: "new",
+
+      source: "website",
+
+      createdAt:
+        window.FirebaseFirestoreAPI.serverTimestamp()
+    };
+
+
+    const orderRef =
+      await window.FirebaseFirestoreAPI.addDoc(
+        window.FirebaseFirestoreAPI.collection(
+          window.firebaseDB,
+          "orders"
+        ),
+        orderData
+      );
+
+
+    const orderId =
+      orderRef.id;
+
+
+    const message =
+      buildOrderMessage(orderId);
+
+
+    const whatsappUrl =
+      `https://wa.me/917700929693?text=${
+        encodeURIComponent(message)
+      }`;
+
+
+// Open WhatsApp with the order details.
+window.open(
+  whatsappUrl,
+  "_blank"
+);
+
+// Update checkout button.
+checkoutSubmit.textContent =
+  "ORDER SENT ✓";
+
+// Close checkout first.
+closeCheckout();
+
+// Clear the cart after successful order.
+cart = [];
+selectedFreeOfferId = null;
+render();
+
+// Show order confirmation.
+openOrderSuccess(orderId);
+
+// Reset checkout button for the next order.
+setTimeout(() => {
+
+  checkoutSubmit.disabled = false;
+
+  checkoutSubmit.textContent =
+    "PLACE ORDER";
+
+}, 500);
+
+
+  } catch (error) {
+
+    console.error(
+      "Order creation failed:",
+      error
+    );
+
+
+    checkoutMessage.textContent =
+      "Unable to create your order. Please try again or call us.";
+
+
+    checkoutSubmit.disabled = false;
+
+    checkoutSubmit.textContent =
+      "PLACE ORDER";
+  }
+}
+
+
+// ================= CHECKOUT EVENTS =================
+
+if (checkoutClose) {
+
+  checkoutClose.addEventListener(
+    "click",
+    closeCheckout
+  );
+}
+
+
+if (checkoutOverlay) {
+
+  checkoutOverlay.addEventListener(
+    "click",
+    event => {
+
+      if (
+        event.target === checkoutOverlay
+      ) {
+
+        closeCheckout();
+
+      }
+
+    }
+  );
+}
+
+
+if (checkoutForm) {
+
+  checkoutForm.addEventListener(
+    "submit",
+    event => {
+
+      event.preventDefault();
+
+      continueToOrder();
+
+    }
+  );
+}
+
+
+document.addEventListener(
+  "keydown",
+  event => {
+
+    if (
+      event.key === "Escape" &&
+      checkoutOverlay &&
+      checkoutOverlay.classList.contains("open")
+    ) {
+
+      closeCheckout();
+
+    }
+
+  }
+);
+
+
+
+  // =========================================================
+  // END CUSTOMER PHONE LOGIN / FIREBASE OTP
+  // =========================================================
+  
 const FREE_OFFERS = {
   burger3: {
     id: "burger3",
@@ -63,10 +1290,7 @@ let selectedFreeOfferId = null;
   const placeCall = document.getElementById("placeCall");
   const slidePrev = document.getElementById("slidePrev");
   const slideNext = document.getElementById("slideNext");
-  const shareOfferOverlay = document.getElementById("shareOfferOverlay");
-  const shareOfferClose = document.getElementById("shareOfferClose");
-  const shareOfferButton = document.getElementById("shareOfferButton");
-  const shareOfferImage = document.getElementById("shareOfferImage");
+  
 
   let cart = [];
   let activeCategory = "";
@@ -210,15 +1434,13 @@ let selectedFreeOfferId = null;
             <h3>${esc(item.name)}</h3>
             <p>${esc(item.description)}</p>
             <div class="combo-row">
-<strong class="combo-price">${item === COMBO_SLIDES[0] ? "FREE" : price === 0 ? "DEAL" : money(price)}</strong>
-              ${inCart
+<strong class="combo-price">${price === 0 ? "DEAL" : money(price)}</strong>
+           ${inCart
   ? `<div class="qty-control">
        <button type="button" data-action="minus" data-name="${esc(item.name)}" data-price="${price}" aria-label="Decrease ${esc(item.name)}">−</button>
        <span>${inCart.qty}</span>
        <button type="button" data-action="plus" data-name="${esc(item.name)}" data-price="${price}" aria-label="Increase ${esc(item.name)}">+</button>
      </div>`
-  : item === COMBO_SLIDES[0]
-  ? `<button type="button" class="add-mini share-slider-button" data-share-offer="1">↗ SHARE NOW</button>`
   : ""}
             </div>
           </div>
@@ -559,11 +1781,17 @@ ${esc(offer.freeItem)}
     document.body.classList.add("cart-open");
   }
 
-  function closeCart() {
-    cartOverlay.classList.remove("active");
-    cartOverlay.setAttribute("aria-hidden", "true");
-    document.body.classList.remove("cart-open");
+function closeCart() {
+  // Move focus outside the hidden cart before hiding it
+  if (document.activeElement && cartOverlay.contains(document.activeElement)) {
+    document.activeElement.blur();
   }
+
+  cartOverlay.classList.remove("active");
+  cartOverlay.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("cart-open");
+}
+
 
   nav.addEventListener("click", event => {
     const link = event.target.closest("a[data-category]");
@@ -573,16 +1801,11 @@ ${esc(offer.freeItem)}
     setActiveCategory(link.dataset.category, true);
   });
 
+
 document.addEventListener("click", event => {
-  const shareButton = event.target.closest("[data-share-offer]");
-  
-  if (shareButton) {
-    event.preventDefault();
-    shareOffer();
-    return;
-  }
-  
-    const freeOfferButton = event.target.closest("[data-select-free-offer]");
+
+  const freeOfferButton =
+    event.target.closest("[data-select-free-offer]");
 
   if (freeOfferButton) {
     event.preventDefault();
@@ -593,36 +1816,61 @@ document.addEventListener("click", event => {
 
     return;
   }
-  
 
-  const addButton = event.target.closest("[data-add]");
+  const addButton =
+    event.target.closest("[data-add]");
+
   if (addButton) {
     event.preventDefault();
-    changeItem(addButton.dataset.name, Number(addButton.dataset.price), 1);
+
+    changeItem(
+      addButton.dataset.name,
+      Number(addButton.dataset.price),
+      1
+    );
+
     return;
   }
 
-  const quantityButton = event.target.closest("[data-action]");
-    if (!quantityButton) return;
+  const quantityButton =
+    event.target.closest("[data-action]");
 
-    const action = quantityButton.dataset.action;
-    const delta = action === "plus" ? 1 : -1;
+  if (!quantityButton) return;
 
-    if (quantityButton.dataset.cartIndex !== undefined) {
-      const index = Number(quantityButton.dataset.cartIndex);
-      if (!cart[index]) return;
-      cart[index].qty += delta;
-      if (cart[index].qty <= 0) cart.splice(index, 1);
-      render();
-      return;
+  const action =
+    quantityButton.dataset.action;
+
+  const delta =
+    action === "plus" ? 1 : -1;
+
+  if (
+    quantityButton.dataset.cartIndex !==
+    undefined
+  ) {
+    const index =
+      Number(quantityButton.dataset.cartIndex);
+
+    if (!cart[index]) return;
+
+    cart[index].qty += delta;
+
+    if (cart[index].qty <= 0) {
+      cart.splice(index, 1);
     }
 
-    changeItem(
-      quantityButton.dataset.name,
-      Number(quantityButton.dataset.price),
-      delta
-    );
-  });
+    render();
+
+    return;
+  }
+
+  changeItem(
+    quantityButton.dataset.name,
+    Number(quantityButton.dataset.price),
+    delta
+  );
+});
+
+
 
   document.getElementById("cartButton").addEventListener("click", openCart);
   document.getElementById("closeCart").addEventListener("click", closeCart);
@@ -666,7 +1914,6 @@ document.addEventListener("click", event => {
 
   // Show the promotion on every fresh page visit. No localStorage/cookie is used,
   // so closing it only closes it for the current page visit.
-  openShareOffer();
 
   let touchStartX = 0;
   comboSlider.addEventListener("touchstart", event => {
@@ -679,130 +1926,345 @@ document.addEventListener("click", event => {
     }
   }, { passive: true });
 
-  // ====================== SHARE OFFER ======================
-  const SHARE_OFFER_MESSAGE = `🔥🍔 SHARE & GET A FREE CRUNCHY CHICKEN BURGER! 🍔🔥
+  
+  // =========================================================
+// CRAVING HEAVEN — PUSH OFFER NOTIFICATIONS
+// =========================================================
 
-Hey! 👋 We’ve got a special offer for you from CRAVING HEAVEN ❤️
+const pushOfferBox =
+  document.getElementById("pushOfferBox");
 
-🎁 SHARE OUR ONLINE MENU WITH 20 FRIENDS
+const enableOfferNotifications =
+  document.getElementById("enableOfferNotifications");
 
-➡️ verify your shares
-➡️ 🎉 GET 1 CRUNCHY CHICKEN BURGER ABSOLUTELY FREE! 🍔
 
-📍 Visit: cravingheaven.com
+// ---------------------------------------------------------
+// HIDE NOTIFICATION BOX
+// ---------------------------------------------------------
 
-Terms & Conditions Apply:
-• Share with 20 Friends
-• verify share
-• One-time offer only`;
+function hidePushOfferBox() {
 
-  function closeShareOffer() {
-    shareOfferOverlay.classList.remove("active");
-    shareOfferOverlay.setAttribute("aria-hidden", "true");
-    document.body.classList.remove("share-offer-open");
+  if (!pushOfferBox) return;
+
+  pushOfferBox.style.display = "none";
+
+}
+
+
+// ---------------------------------------------------------
+// SAVE FCM TOKEN
+// ---------------------------------------------------------
+
+async function saveFCMToken(token) {
+  if (!token) {
+    throw new Error(
+      "Firebase did not return a notification token."
+    );
   }
 
- async function shareOffer() {
-  const websiteUrl = "https://cravingheaven.com/";
-
-  const message = `🔥🍔 SHARE & GET A FREE CRUNCHY CHICKEN BURGER! 🍔🔥
-
-Hey! 👋 We’ve got a special offer for you from CRAVING HEAVEN ❤️
-
-🌐 Check Our Online Menu:
-${websiteUrl}
-
-🎁 SHARE OUR ONLINE MENU WITH 20 FAMILY & FRIENDS
-
-➡️ verify your shares
-➡️ 🎉 GET 1 CRUNCHY CHICKEN BURGER ABSOLUTELY FREE! 🍔
-
-
-
-Terms & Conditions Apply:
-• Share with 20 friends
-• Verify Share
-• One-time offer only`;
-
-  try {
-    // Get the flyer image from your website
-    const imageUrl = new URL(
-      shareOfferImage.getAttribute("src"),
-      document.baseURI
-    ).href;
-
-    const response = await fetch(imageUrl, {
-      cache: "no-cache"
-    });
-
-    if (!response.ok) {
-      throw new Error("Could not load offer image.");
-    }
-
-    const blob = await response.blob();
-
-    // Create an actual image file for sharing
-    const file = new File(
-      [blob],
-      "craving-heaven-free-burger-offer.png",
-      {
-        type: blob.type || "image/png"
-      }
+  const tokenRef =
+    window.FirebaseFirestoreAPI.doc(
+      window.firebaseDB,
+      "notificationTokens",
+      token
     );
 
-    // Check whether this phone/browser supports sharing files
-    if (
-      navigator.share &&
-      navigator.canShare &&
-      navigator.canShare({ files: [file] })
-    ) {
-      await navigator.share({
-        title: "CRAVING HEAVEN - FREE CRUNCHY CHICKEN BURGER",
-        text: message,
-        files: [file]
-      });
-
-      return;
+  await window.FirebaseFirestoreAPI.setDoc(
+    tokenRef,
+    {
+      token: token,
+      createdAt:
+        window.FirebaseFirestoreAPI.serverTimestamp(),
+      userAgent:
+        navigator.userAgent,
+      platform:
+        navigator.platform,
+      source:
+        "website"
+    },
+    {
+      merge: true
     }
+  );
 
-    // If image sharing is not supported
-    alert(
-      "Image sharing is not supported on this browser. Please open the website on your mobile phone and try again."
+  console.log(
+    "FCM token saved without creating duplicate entry."
+  );
+}
+
+function showNotificationBlockedState() {
+
+  if (enableOfferNotifications) {
+
+    enableOfferNotifications.disabled = false;
+
+    enableOfferNotifications.classList.add(
+      "blocked"
     );
 
-  } catch (error) {
+    enableOfferNotifications.textContent =
+      "⚙️ HOW TO ENABLE";
+  }
 
-    // Customer simply closed the share window
-    if (error && error.name === "AbortError") {
-      return;
-    }
 
-    console.error("Share error:", error);
-
-    alert(
-      "Unable to share the offer right now. Please try again."
+  const offerText =
+    pushOfferBox?.querySelector(
+      ".push-offer-content p"
     );
+
+  if (offerText) {
+
+    offerText.textContent =
+      "Notifications are blocked. Enable them in your browser settings to receive our offers.";
   }
 }
 
-  function openShareOffer() {
-    shareOfferOverlay.classList.add("active");
-    shareOfferOverlay.setAttribute("aria-hidden", "false");
-    document.body.classList.add("share-offer-open");
-    requestAnimationFrame(() => shareOfferClose.focus());
+
+function resetNotificationOfferButton() {
+
+  if (!enableOfferNotifications) return;
+
+  enableOfferNotifications.disabled = false;
+
+  enableOfferNotifications.classList.remove(
+    "blocked"
+  );
+
+  enableOfferNotifications.textContent =
+    "🔥 GET OFFERS";
+}
+
+
+// ---------------------------------------------------------
+// ACTIVATE NOTIFICATIONS
+// ---------------------------------------------------------
+async function enableCustomerOfferNotifications() {
+
+  if (
+    !window.firebaseMessaging ||
+    !window.FirebaseMessagingAPI
+  ) {
+    console.error(
+      "Firebase Messaging is not ready."
+    );
+    return false;
   }
 
-  shareOfferClose.addEventListener("click", closeShareOffer);
-  shareOfferButton.addEventListener("click", shareOffer);
-  shareOfferOverlay.addEventListener("click", event => {
-    if (event.target === shareOfferOverlay) closeShareOffer();
-  });
+  if (!("Notification" in window)) {
+    console.log(
+      "Notifications are not supported."
+    );
+    return false;
+  }
 
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && cartOverlay.classList.contains("active")) {
-      closeCart();
+
+  // =====================================================
+  // CHECK CURRENT PERMISSION
+  // =====================================================
+
+  let permission =
+    Notification.permission;
+
+
+  // =====================================================
+  // BLOCKED
+  // =====================================================
+
+  if (permission === "denied") {
+
+    console.log(
+      "Notifications are blocked by the browser."
+    );
+
+    showNotificationBlockedState();
+
+    return false;
+  }
+
+
+  // =====================================================
+  // NOT DECIDED YET
+  // =====================================================
+
+  if (permission === "default") {
+
+    if (enableOfferNotifications) {
+
+      enableOfferNotifications.disabled = true;
+
+      enableOfferNotifications.textContent =
+        "ENABLING...";
     }
-  });
+
+
+    permission =
+      await Notification.requestPermission();
+
+
+    // Customer clicked BLOCK
+    if (permission === "denied") {
+
+      console.log(
+        "Notification permission: denied"
+      );
+
+      showNotificationBlockedState();
+
+      return false;
+    }
+
+
+    // Customer closed/did not allow
+    if (permission !== "granted") {
+
+      resetNotificationOfferButton();
+
+      console.log(
+        "Notification permission:",
+        permission
+      );
+
+      return false;
+    }
+  }
+
+
+  // =====================================================
+  // GRANTED
+  // =====================================================
+
+  if (permission === "granted") {
+
+    try {
+
+      if (enableOfferNotifications) {
+
+        enableOfferNotifications.disabled = true;
+
+        enableOfferNotifications.textContent =
+          "ENABLING...";
+      }
+
+
+      const serviceWorkerRegistration =
+        await navigator.serviceWorker.register(
+          "/firebase-messaging-sw.js"
+        );
+
+
+      const token =
+        await window.FirebaseMessagingAPI.getToken(
+          window.firebaseMessaging,
+          {
+            vapidKey: FCM_VAPID_KEY,
+            serviceWorkerRegistration
+          }
+        );
+
+
+      console.log(
+        "CRAVING HEAVEN FCM Token:",
+        token
+      );
+
+
+      await saveFCMToken(token);
+
+
+      console.log(
+        "CRAVING HEAVEN notifications enabled."
+      );
+
+
+      if (enableOfferNotifications) {
+
+        enableOfferNotifications.classList.remove(
+          "blocked"
+        );
+      }
+
+
+      hidePushOfferBox();
+
+      return true;
+
+    } catch (error) {
+
+      console.error(
+        "Push notification error:",
+        error
+      );
+
+      resetNotificationOfferButton();
+
+      return false;
+    }
+  }
+
+
+  return false;
+}
+
+// ---------------------------------------------------------
+// AUTOMATICALLY SHOW NOTIFICATION OFFER BOX
+// ---------------------------------------------------------
+
+setTimeout(() => {
+
+  if (!pushOfferBox) return;
+
+  // If notifications are already enabled,
+  // silently refresh/save the FCM token.
+  if (
+    "Notification" in window &&
+    Notification.permission === "granted"
+  ) {
+    enableCustomerOfferNotifications();
+    return;
+  }
+
+  // Show the offer box for customers who
+  // have not enabled notifications yet.
+  pushOfferBox.style.display = "flex";
+
+}, 1200);
+
+
+
+// ---------------------------------------------------------
+// FALLBACK BUTTON
+// ---------------------------------------------------------
+
+if (enableOfferNotifications) {
+
+  enableOfferNotifications.addEventListener(
+    "click",
+    async () => {
+
+      if (
+        "Notification" in window &&
+        Notification.permission === "denied"
+      ) {
+
+        showNotificationBlockedState();
+
+        alert(
+          "Notifications are blocked for CRAVING HEAVEN.\n\n" +
+          "Click the 🔒 icon near the website address → " +
+          "Site settings → Notifications → Allow.\n\n" +
+          "Then reload the website."
+        );
+
+        return;
+      }
+
+
+      await enableCustomerOfferNotifications();
+
+    }
+  );
+}
+  
   
   // ====================== STORE HOURS ======================
 

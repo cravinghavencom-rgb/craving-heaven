@@ -533,12 +533,6 @@ const MENU_DATA = {
 };
 
 const COMBO_SLIDES = [
-   {
-    "name": "SHARE & GET A FREE BURGER",
-    "description": "SHARE OUR ONLINE MENU WITH 20 FAMILY & FRIENDS + GET 1 CRUNCHY CHICKEN BURGER FREE",
-    "price": 0,
-    "image": "images/combos/share-free-burger.png"
-  },
   {
     "name": "SUNDAY CHICKEN FEAST",
     "description": "ORDER ₹399 OR MORE + GET MEDIUM CHICKEN POPCORN FREE — VALID ONLY ON SUNDAY",
