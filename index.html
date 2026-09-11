@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#b80808">
+  <meta name="description" content="CRAVING HEAVEN — Chicken, burgers, wraps, wings, strips, popcorn, fries and combos.">
+  <title>CRAVING HEAVEN | Chicken & Burgers</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header" id="top">
+    <div class="header-inner">
+      <a class="brand" href="#top" aria-label="CRAVING HEAVEN home">
+        <img src="images/logo.png" alt="CRAVING HEAVEN logo">
+      </a>
+
+      <div class="header-actions">
+        <span class="order-status"><span class="status-dot"></span> CALL TO ORDER</span>
+        <a class="call-header" href="tel:+917700929693" aria-label="Call CRAVING HEAVEN">
+  ☎ CALL NOW
+</a>
+      </div>
+    </div>
+  </header>
+
+  <nav class="category-nav" id="categoryNav" aria-label="Menu categories"></nav>
+  
+<div class="opening-hours">
+  <span class="opening-hours-icon">🕐</span>
+  <span class="opening-hours-label">STORE HOURS:</span>
+  <strong>12:30 PM – 11:45 PM</strong>
+  <span class="opening-hours-dot" id="openingHoursDot"></span>
+  <span class="opening-hours-label" id="openingHoursStatus">CLOSED NOW</span>
+</div>
+
+<div class="push-offer-box" id="pushOfferBox">
+  <div class="push-offer-icon">🔔</div>
+
+  <div class="push-offer-content">
+    <h3>Never Miss a CRAVING HEAVEN Offer!</h3>
+    <p>Get notified about new offers, discounts & special deals.</p>
+  </div>
+
+  <button id="enableOfferNotifications">
+    🔔 GET OFFERS
+  </button>
+</div>
+
+
+  <main>
+    <section class="hero-offers" aria-label="Offers and combos">
+      <div class="offers-header">
+        <div class="offers-copy">
+          <span class="eyebrow">CRAVING HEAVEN</span>
+          <h1>OFFERS <span>&</span> COMBOS</h1>
+          <p>BIG FLAVOUR. BETTER VALUE.</p>
+        </div>
+        <div class="slider-controls" aria-label="Offers controls">
+          <button id="slidePrev" type="button" aria-label="Previous offers">‹</button>
+          <button id="slideNext" type="button" aria-label="Next offers">›</button>
+        </div>
+      </div>
+      <div class="combo-slider" id="comboSlider"></div>
+    </section>
+
+    <section class="delivery-strip" aria-label="Delivery offer">
+      <div class="delivery-strip-icon">🚚</div>
+      <div>
+        <strong>FREE DELIVERY ON ORDERS ₹300+</strong>
+        <span>Enjoy your favourites without the delivery fee.</span>
+      </div>
+    </section>
+
+    <div class="image-disclaimer" role="note">
+      📸 Product images are for visual reference. Slight variations in appearance may occur in the actual product.
+    </div>
+
+    <div id="menuSections"></div>
+  </main>
+
+  <!-- SHARE & GET FREE BURGER OFFER -->
+
+  <button class="floating-cart" id="cartButton" type="button" aria-label="Open cart">
+    <span class="cart-icon">🛒</span>
+    <span>CART</span>
+    <b id="cartCount">0</b>
+  </button>
+
+  <div class="cart-overlay" id="cartOverlay" aria-hidden="true">
+    <aside class="cart-panel" aria-label="Shopping cart">
+      <div class="cart-header">
+        <div>
+          <span class="cart-kicker">YOUR ORDER</span>
+          <h2>YOUR CART</h2>
+        </div>
+        <button class="cart-close" id="closeCart" type="button" aria-label="Close cart">×</button>
+      </div>
+<div class="cart-opening-hours">
+  <span class="cart-hours-icon">🕐</span>
+  <span class="cart-hours-label">STORE HOURS:</span>
+  <strong>12:30 PM – 11:45 PM</strong>
+  <span class="cart-hours-dot" id="cartOpeningHoursDot"></span>
+  <span class="cart-hours-status" id="cartOpeningHoursStatus">CLOSED NOW</span>
+</div>
+
+      <div id="cartItems"></div>
+      <div class="cart-summary" id="cartSummary"></div>
+
+      <button class="clear-cart" id="clearCart" type="button">CLEAR CART</button>
+
+      <button class="place-call" id="placeCall" type="button">
+  PLACE ORDER
+</button>
+
+<p class="call-note" id="placeOrderNote">
+  Login with your mobile number to continue with your order.
+</p>
+     <a class="cart-call-now" href="tel:+917700929693" aria-label="Call CRAVING HEAVEN to place order">
+  ☎ CALL NOW TO PLACE ORDER
+</a>
+    </aside>
+  </div>
+
+  <!-- CUSTOMER PHONE LOGIN -->
+  <div class="customer-login-overlay" id="customerLoginOverlay" aria-hidden="true">
+    <section class="customer-login-modal" role="dialog" aria-modal="true" aria-labelledby="customerLoginTitle">
+
+      <button
+        class="customer-login-close"
+        id="customerLoginClose"
+        type="button"
+        aria-label="Close login"
+      >
+        ×
+      </button>
+
+      <div class="customer-login-header">
+        <span class="customer-login-kicker">CRAVING HEAVEN</span>
+        <h2 id="customerLoginTitle">LOGIN TO ORDER</h2>
+        <p id="customerLoginSubtitle">
+          Enter your mobile number to continue.
+        </p>
+      </div>
+
+      <!-- PHONE STEP -->
+      <div id="phoneLoginStep">
+
+        <label class="customer-login-label" for="customerPhone">
+          MOBILE NUMBER
+        </label>
+
+        <div class="customer-phone-input">
+          <span>+91</span>
+          <input
+            id="customerPhone"
+            type="tel"
+            inputmode="numeric"
+            autocomplete="tel"
+            maxlength="10"
+            placeholder="Enter mobile number"
+            aria-label="Mobile number"
+          >
+        </div>
+
+        <button
+          class="customer-login-button"
+          id="sendOtpButton"
+          type="button"
+        >
+          SEND OTP
+        </button>
+
+        <div id="recaptcha-container"></div>
+
+        <p class="customer-login-message" id="customerLoginMessage"></p>
+
+        <p class="customer-login-terms">
+          By continuing, you agree to receive an SMS OTP for verification.
+        </p>
+
+      </div>
+
+      <!-- OTP STEP -->
+      <div id="otpLoginStep" hidden>
+
+        <label class="customer-login-label" for="customerOtp">
+          ENTER OTP
+        </label>
+
+        <input
+          class="customer-otp-input"
+          id="customerOtp"
+          type="tel"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          maxlength="6"
+          placeholder="Enter 6-digit OTP"
+          aria-label="OTP"
+        >
+
+        <button
+          class="customer-login-button"
+          id="verifyOtpButton"
+          type="button"
+        >
+          VERIFY OTP
+        </button>
+
+        <button
+          class="customer-resend-button"
+          id="resendOtpButton"
+          type="button"
+        >
+          RESEND OTP
+        </button>
+
+        <p class="customer-login-message" id="otpLoginMessage"></p>
+
+        <button
+          class="customer-change-number"
+          id="changePhoneButton"
+          type="button"
+        >
+          CHANGE MOBILE NUMBER
+        </button>
+
+      </div>
+
+    </section>
+  </div>
+
+<!-- ====================== CHECKOUT ====================== -->
+
+<div class="checkout-overlay" id="checkoutOverlay" aria-hidden="true">
+
+  <section
+    class="checkout-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="checkoutTitle"
+  >
+
+    <button
+      class="checkout-close"
+      id="checkoutClose"
+      type="button"
+      aria-label="Close checkout"
+    >
+      ×
+    </button>
+
+    <div class="checkout-header">
+      <span class="checkout-kicker">CRAVING HEAVEN</span>
+
+      <h2 id="checkoutTitle">
+        DELIVERY DETAILS
+      </h2>
+
+      <p>
+        Enter your details to place your order.
+      </p>
+    </div>
+
+    <form id="checkoutForm">
+
+      <div class="checkout-field">
+
+        <label for="checkoutName">
+          YOUR NAME
+        </label>
+
+        <input
+          id="checkoutName"
+          type="text"
+          autocomplete="name"
+          placeholder="Enter your name"
+          required
+        >
+
+      </div>
+
+
+      <div class="checkout-field">
+
+        <label for="checkoutAddress">
+          DELIVERY ADDRESS
+        </label>
+
+        <textarea
+          id="checkoutAddress"
+          rows="3"
+          autocomplete="street-address"
+          placeholder="Enter your complete delivery address"
+          required
+        ></textarea>
+
+      </div>
+
+
+      <div class="checkout-field">
+
+        <label for="checkoutLandmark">
+          LANDMARK
+          <span>OPTIONAL</span>
+        </label>
+
+        <input
+          id="checkoutLandmark"
+          type="text"
+          placeholder="Nearby landmark"
+        >
+
+      </div>
+
+
+      <div class="checkout-field">
+
+        <label for="checkoutArea">
+          AREA
+        </label>
+
+        <select id="checkoutArea" required>
+
+          <option value="">
+            Select your area
+          </option>
+
+          <option value="Pathanwadi">
+            Pathanwadi
+          </option>
+
+          <option value="Kurar Village">
+            Kurar Village
+          </option>
+
+          <option value="Koknipada">
+            Koknipada
+          </option>
+
+          <option value="Triveni Nagar">
+            Triveni Nagar
+          </option>
+
+          <option value="Sanjay Nagar">
+            Sanjay Nagar
+          </option>
+
+          <option value="MHB Colony">
+            MHB Colony
+          </option>
+
+          <option value="Dindoshi">
+            Dindoshi
+          </option>
+
+          <option value="Laxman Nagar">
+            Laxman Nagar
+          </option>
+
+          <option value="Rani Sati Marg">
+            Rani Sati Marg
+          </option>
+
+          <option value="Gokuldham">
+            Gokuldham
+          </option>
+
+          <option value="Tapovan">
+            Tapovan
+          </option>
+
+        </select>
+
+      </div>
+
+
+      <div class="checkout-payment">
+
+        <span class="checkout-payment-label">
+          PAYMENT METHOD
+        </span>
+
+        <div class="checkout-payment-option">
+
+          <span>💵</span>
+
+          <div>
+            <strong>PAY ON DELIVERY</strong>
+            <small>Cash / UPI on delivery</small>
+          </div>
+
+          <input
+            type="radio"
+            name="paymentMethod"
+            value="Pay on Delivery"
+            checked
+          >
+
+        </div>
+
+      </div>
+
+
+      <div class="checkout-summary">
+
+        <div class="checkout-summary-title">
+          ORDER SUMMARY
+        </div>
+
+        <div id="checkoutOrderSummary"></div>
+
+      </div>
+
+
+      <button
+        class="checkout-submit"
+        id="checkoutSubmit"
+        type="submit"
+      >
+        PLACE ORDER
+      </button>
+
+      <p
+        class="checkout-message"
+        id="checkoutMessage"
+      ></p>
+
+    </form>
+
+  </section>
+
+</div>
+
+<!-- ORDER CONFIRMATION -->
+<div
+  class="order-success-overlay"
+  id="orderSuccessOverlay"
+  aria-hidden="true"
+>
+  <section
+    class="order-success-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="orderSuccessTitle"
+  >
+
+    <div class="order-success-icon">
+      ✓
+    </div>
+
+    <span class="order-success-kicker">
+      CRAVING HEAVEN
+    </span>
+
+    <h2 id="orderSuccessTitle">
+      ORDER PLACED!
+    </h2>
+
+    <p class="order-success-text">
+      Thank you for ordering with us.
+      Your order has been received successfully.
+    </p>
+
+    <div class="order-success-id">
+      <span>ORDER ID</span>
+      <strong id="orderSuccessId">#CH-0000</strong>
+    </div>
+
+    <p class="order-success-note">
+      📱 Your order details have also been sent to WhatsApp.
+    </p>
+
+    <button
+      type="button"
+      class="order-success-close"
+      id="orderSuccessClose"
+    >
+      DONE
+    </button>
+
+  </section>
+</div>
+<!-- END ORDER CONFIRMATION -->
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <img src="images/logo.png" alt="CRAVING HEAVEN">
+        <p>MADE WITH QUALITY, SERVED WITH LOVE!</p>
+      </div>
+
+      <div class="footer-info">
+        <div class="footer-block">
+          <span class="footer-label">ADDRESS</span>
+          <p>Shop 10 Pearl Oasis Building Pathanwadi, Malad East, Mumbai – 400097</p>
+          
+        </div>
+
+        <div class="footer-block">
+          <span class="footer-label">DELIVERY AREAS</span>
+          <p>Pathanwadi • Kurar Village • Koknipada • Triveni Nagar • Sanjay Nagar • MHB Colony • Dindoshi • Laxman Nagar • Rani Sati Marg • Gokuldham • Tapovan</p>
+        </div>
+      </div>
+
+      <a class="footer-call" href="tel:+917700929693" aria-label="Call CRAVING HEAVEN">
+  ☎ CALL NOW
+</a>
+    </div>
+  </footer>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+
+  import {
+    getAuth,
+    RecaptchaVerifier,
+    signInWithPhoneNumber,
+    onAuthStateChanged
+  } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
+
+import {
+  getFirestore,
+  collection,
+  doc,
+  setDoc,
+  addDoc,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+
+	import {
+  getMessaging,
+  getToken,
+  onMessage
+} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-messaging.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDVYYv3TMRKWktXA33jOGjniz43hDfRVe4",
+    authDomain: "craving-heaven-e2e94.firebaseapp.com",
+    projectId: "craving-heaven-e2e94",
+    storageBucket: "craving-heaven-e2e94.firebasestorage.app",
+    messagingSenderId: "20081214048",
+    appId: "1:20081214048:web:cae67b0874111ab653905",
+    measurementId: "G-GD2EPFLYPZ"
+  };
+
+  const firebaseApp = initializeApp(firebaseConfig);
+const firebaseAuth = getAuth(firebaseApp);
+const firebaseDB = getFirestore(firebaseApp);
+const firebaseMessaging =
+  getMessaging(firebaseApp);
+
+window.firebaseApp = firebaseApp;
+window.firebaseAuth = firebaseAuth;
+window.firebaseDB = firebaseDB;
+
+window.FirebaseAuthAPI = {
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  onAuthStateChanged
+};
+
+window.FirebaseFirestoreAPI = {
+  collection,
+  doc,
+  setDoc,
+  addDoc,
+  serverTimestamp
+};
+
+window.FirebaseMessagingAPI = {
+  getMessaging,
+  getToken,
+  onMessage
+};
+
+window.firebaseMessaging = firebaseMessaging;
+
+</script>
+
+<script src="menu.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
