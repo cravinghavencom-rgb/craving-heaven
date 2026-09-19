@@ -1046,6 +1046,8 @@ async function continueToOrder() {
   try {
 
     const orderData = {
+		uid:
+    user.uid,
 
       customerName:
         checkoutName.value.trim(),
