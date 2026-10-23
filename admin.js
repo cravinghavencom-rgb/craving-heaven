@@ -110,7 +110,7 @@ function filteredCustomers() {
 function renderCustomers() {
   const rows = filteredCustomers();
   $("customerRows").innerHTML = rows.length ? rows.map(customer => `<button class="customer-row" type="button" data-customer-uid="${escapeHtml(customer.uid)}" data-customer-mobile="${escapeHtml(customer.mobile)}"><strong>${escapeHtml(customer.name)}</strong><span>${escapeHtml(customer.mobile)} · ${customer.orders} orders · ${money(customer.spend)}</span></button>`).join("") : '<p class="empty-cell">No customers found in recent orders.</p>';
-  $("customerRows").querySelectorAll("[data-customer-mobile]").forEach(button => button.addEventListener("click", () => loadCustomerDetails(button.dataset.customerUid, button.dataset.customerMobile)));
+  $("customerRows").querySelectorAll("[data-customer-mobile]").forEach(button => button.addEventListener("click", () => loadCustomerDetails(button.dataset.customerUid, mobileDigits(button.dataset.customerMobile))));
 }
 $("customerSearch").addEventListener("input", renderCustomers);
 $("refreshCustomers").addEventListener("click", loadCustomers);
