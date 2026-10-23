@@ -458,10 +458,21 @@ exports.adminGetCustomerDetails = onCall({ region: REGION }, async request => {
   const orders = [...orderMap.values()].sort((a, b) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt));
   const profile = profileSnapshot?.exists ? profileSnapshot.data() : {};
   const loyalty = loyaltySnapshot?.exists ? loyaltySnapshot.data() : {};
+  const savedAddresses = Array.isArray(profile.addresses) ? profile.addresses : [];
+  const savedAddressKeys = new Set(savedAddresses.map(address => [address.address, address.landmark, address.area].map(value => String(value || "").trim().toLowerCase()).join("|")));
+  const orderAddresses = orders.filter(order => order.orderType !== "pickup" && String(order.address || "").trim()).map(order => ({
+    orderId: order.id,
+    createdAt: order.createdAt,
+    label: String(order.addressLabel || "").slice(0, 30),
+    address: String(order.address || "").slice(0, 300),
+    landmark: String(order.landmark || "").slice(0, 100),
+    area: String(order.area || "").slice(0, 80)
+  })).filter(address => !savedAddressKeys.has([address.address, address.landmark, address.area].map(value => String(value || "").trim().toLowerCase()).join("|")));
   return {
     found: Boolean(user || orders.length), mobile,
     name: String(profile.name || user?.displayName || orders.find(order => order.customerName)?.customerName || "Customer").slice(0, 80),
-    addresses: safeFirestoreData(profile.addresses || []),
+    addresses: safeFirestoreData(savedAddresses),
+    orderAddresses: safeFirestoreData(orderAddresses),
     points: Math.max(0, Number(loyalty.points || 0)),
     completedOrders: Math.max(0, Number(loyalty.completedOrders || 0)),
     availableRewards: safeFirestoreData(loyalty.availableRewards || []),
@@ -491,12 +502,16 @@ function mumbaiRange(range, now = new Date()) {
 function summarizeSales(orders) {
   const summary = { total: { sales: 0, orders: 0 }, online: { sales: 0, orders: 0 }, walkIn: { sales: 0, orders: 0 } };
   const items = new Map();
+  const locations = new Map();
   const weekdays = new Map(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map(day => [day, { sales: 0, orders: 0 }]));
   for (const order of orders) {
     if (["cancelled", "canceled"].includes(String(order.status || "").toLowerCase())) continue;
     const amount = Math.max(0, Number(order.total || 0));
     const channel = order.source === "walk-in" ? summary.walkIn : summary.online;
     summary.total.sales += amount; summary.total.orders += 1; channel.sales += amount; channel.orders += 1;
+    const location = order.source === "walk-in" ? "Walk-in / Counter" : order.orderType === "pickup" ? "Store pickup" : String(order.area || "").trim() || "Area not recorded";
+    const locationRow = locations.get(location) || { location, sales: 0, orders: 0 };
+    locationRow.sales += amount; locationRow.orders += 1; locations.set(location, locationRow);
     const weekday = order.createdAt?.toDate ? new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", weekday: "long" }).format(order.createdAt.toDate()) : "";
     if (weekdays.has(weekday)) { weekdays.get(weekday).sales += amount; weekdays.get(weekday).orders += 1; }
     for (const line of Array.isArray(order.items) ? order.items : []) {
@@ -508,7 +523,7 @@ function summarizeSales(orders) {
       items.set(name, row);
     }
   }
-  return { summary, items: [...items.values()].sort((a, b) => b.quantity - a.quantity), weekdays: [...weekdays.entries()].map(([day, values]) => ({ day, ...values })) };
+  return { summary, items: [...items.values()].sort((a, b) => b.quantity - a.quantity), locations: [...locations.values()].sort((a, b) => b.sales - a.sales), weekdays: [...weekdays.entries()].map(([day, values]) => ({ day, ...values })) };
 }
 
 exports.adminGetSalesAnalytics = onCall({ region: REGION }, async request => {
@@ -585,11 +600,13 @@ exports.createOrder = onCall({ region: REGION }, async request => {
   }
   const customerName = typeof data.customerName === "string" ? data.customerName.trim() : "";
   const address = orderType === "delivery" && typeof data.address === "string" ? data.address.trim() : "";
+  const addressLabel = orderType === "delivery" && typeof data.addressLabel === "string" ? data.addressLabel.trim() : "";
+  const addressId = orderType === "delivery" && typeof data.addressId === "string" ? data.addressId.trim() : "";
   const landmark = orderType === "delivery" && typeof data.landmark === "string" ? data.landmark.trim() : "";
   const area = orderType === "delivery" && typeof data.area === "string" ? data.area.trim() : "";
   const requestId = typeof data.requestId === "string" ? data.requestId : "";
-  if (customerName.length < 2 || customerName.length > 80 || (orderType === "delivery" && (address.length < 8 || address.length > 300 || landmark.length > 100 || !DELIVERY_AREAS.has(area)))) {
-    throw new HttpsError("invalid-argument", "Enter a valid name, full address, landmark, and supported delivery area.");
+  if (customerName.length < 2 || customerName.length > 80 || (orderType === "delivery" && (address.length < 8 || address.length > 300 || addressLabel.length < 1 || addressLabel.length > 30 || /[\u0000-\u001f\u007f]/.test(addressLabel) || !/^[A-Za-z0-9_-]{1,80}$/.test(addressId) || landmark.length > 100 || !DELIVERY_AREAS.has(area)))) {
+    throw new HttpsError("invalid-argument", "Enter your full address, choose a Home, Work, or Other label, and select a supported delivery area.");
   }
   if (!/^[a-zA-Z0-9_-]{16,80}$/.test(requestId)) {
     throw new HttpsError("invalid-argument", "Order reference is missing. Please retry checkout.");
@@ -605,6 +622,7 @@ exports.createOrder = onCall({ region: REGION }, async request => {
   const { pricedItems, subtotal, eligibleSubtotal, regularPointSubtotal, comboPointSubtotal, freeOffer } = validateAndPriceItems(data.items, businessConfig.menu, businessConfig.combos);
   const uid = request.auth.uid;
   const accountRef = db.collection("loyaltyAccounts").doc(uid);
+  const profileRef = db.collection("customerProfiles").doc(uid);
   const requestRef = db.collection("orderRequests").doc(`${uid}_${requestId}`);
   const orderRef = db.collection("orders").doc();
   const orderingStatusRef = ORDERING_STATUS_REF();
@@ -625,8 +643,12 @@ exports.createOrder = onCall({ region: REGION }, async request => {
       throw new HttpsError("failed-precondition", "High order volume: online ordering is temporarily paused. Please try again shortly.");
     }
 
-    const accountSnapshot = await transaction.get(accountRef);
+    const [accountSnapshot, profileSnapshot] = await Promise.all([
+      transaction.get(accountRef),
+      orderType === "delivery" ? transaction.get(profileRef) : Promise.resolve(null)
+    ]);
     const account = accountSnapshot.exists ? accountSnapshot.data() : {};
+    const profile = profileSnapshot?.exists ? profileSnapshot.data() : {};
     const balance = Math.max(0, Number(account.points || 0));
     const availableRewards = Array.isArray(account.availableRewards) ? account.availableRewards : [];
     const loyaltyRewardTicketId = typeof data.loyaltyRewardId === "string" ? data.loyaltyRewardId : "";
@@ -702,11 +724,37 @@ exports.createOrder = onCall({ region: REGION }, async request => {
     const pointsToAward = (pointsMultiplier === 2 ? basePoints + Math.min(basePoints, Number(loyaltyReward.maxBonusPoints || 0)) : basePoints) + pointsBonus;
     const remainingRewards = loyaltyRewardTicketId ? availableRewards.filter(reward => reward.ticketId !== loyaltyRewardTicketId && !( !reward.ticketId && reward.id === loyaltyRewardTicketId)) : availableRewards;
 
+    let addressSaved = false;
+    if (orderType === "delivery") {
+      const addresses = Array.isArray(profile.addresses) ? [...profile.addresses] : [];
+      const addressKey = [address, landmark, area].map(value => String(value || "").trim().toLowerCase()).join("|");
+      let addressIndex = addresses.findIndex(item => item?.id === addressId);
+      if (addressIndex < 0) addressIndex = addresses.findIndex(item => [item?.address, item?.landmark, item?.area].map(value => String(value || "").trim().toLowerCase()).join("|") === addressKey);
+      const canSaveAddress = addressIndex >= 0 || addresses.length < 10;
+      const nextAddress = {
+        id: addressIndex >= 0 ? String(addresses[addressIndex].id || addressId) : addressId,
+        label: addressLabel,
+        name: customerName,
+        address,
+        landmark,
+        area,
+        isDefault: addressIndex >= 0 ? addresses[addressIndex].isDefault === true : addresses.length === 0
+      };
+      if (addressIndex >= 0) addresses[addressIndex] = nextAddress;
+      else if (canSaveAddress) addresses.push(nextAddress);
+      if (canSaveAddress) {
+        if (nextAddress.isDefault) addresses.forEach((item, index) => { item.isDefault = index === (addressIndex >= 0 ? addressIndex : addresses.length - 1); });
+        transaction.set(profileRef, { name: customerName, addresses, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        addressSaved = true;
+      }
+    }
+
     transaction.create(orderRef, {
       uid,
       customerName,
       mobile: request.auth.token.phone_number,
       address,
+      addressLabel,
       landmark,
       area,
       paymentMethod,
@@ -739,7 +787,7 @@ exports.createOrder = onCall({ region: REGION }, async request => {
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
     }
-    const response = { orderId: orderRef.id, subtotal, discountAmount: totalDiscount, deliveryCharge, total, pointsRedeemed: requestedPoints, items: pricedItems };
+    const response = { orderId: orderRef.id, subtotal, discountAmount: totalDiscount, deliveryCharge, total, pointsRedeemed: requestedPoints, addressSaved, items: pricedItems };
     transaction.create(requestRef, { uid, orderId: orderRef.id, response, createdAt: FieldValue.serverTimestamp() });
     return response;
   });
@@ -757,6 +805,7 @@ exports.staffListOrders = onCall({ region: REGION }, async request => {
         customerName: String(order.customerName || "Customer"),
         mobile: String(order.mobile || ""),
         address: String(order.address || ""),
+        addressLabel: String(order.addressLabel || ""),
         landmark: String(order.landmark || ""),
         area: String(order.area || ""),
         items: Array.isArray(order.items) ? order.items : [],

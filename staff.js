@@ -397,7 +397,7 @@ function renderOrders() {
     const customer = order.mobile ? `${order.customerName} · ${order.mobile}` : order.customerName;
     const destination = order.orderType === "pickup"
       ? "Pickup at CRAVING HEAVEN · Shop 10, Pearl Oasis Building, Pathanwadi, Malad East, Mumbai – 400097"
-      : [order.address, order.landmark, order.area].filter(Boolean).join(", ");
+      : [order.addressLabel, order.address, order.landmark, order.area].filter(Boolean).join(", ");
     const isWalkIn = order.source === "walk-in";
     const isPickup = order.orderType === "pickup";
     const loyaltyNote = order.loyaltyLinked ? `${Number(order.pointsToAward || 0)} Craving Points after ${isWalkIn || isPickup ? "completion" : "delivery"} · reward progress tracked` : "";
@@ -435,7 +435,7 @@ function printableInvoice(order) {
   const customer = order.customerName || "Walk-in customer";
   const address = order.orderType === "pickup"
     ? "Pickup at CRAVING HEAVEN, Shop 10, Pearl Oasis Building, Pathanwadi, Malad East, Mumbai – 400097"
-    : [order.address, order.landmark, order.area].filter(Boolean).join(", ");
+    : [order.addressLabel, order.address, order.landmark, order.area].filter(Boolean).join(", ");
   const orderMode = order.orderType === "walk-in" ? "Walk-in" : order.orderType === "pickup" ? "Online pickup" : "Online delivery";
   const completionLabel = order.orderType === "walk-in" || order.orderType === "pickup" ? "completion" : "delivery";
   const discount = Number(order.discountAmount || 0);

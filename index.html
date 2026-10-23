@@ -7,7 +7,7 @@
   <meta name="description" content="CRAVING HEAVEN — Chicken, burgers, wraps, wings, strips, popcorn, fries and combos.">
   <title>CRAVING HEAVEN | Chicken & Burgers</title>
   <link rel="icon" type="image/png" href="images/logo.png">
-  <link rel="stylesheet" href="style.css?v=20261021-first-order-flyer-final4">
+  <link rel="stylesheet" href="style.css?v=20261023-checkout-address-label">
   <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-GD2EPLFYZP">
 </script>
@@ -362,7 +362,18 @@
 
       <div id="savedAddressPickerWrap" class="checkout-field" hidden>
         <label for="checkoutSavedAddress">USE A SAVED ADDRESS</label>
-        <select id="checkoutSavedAddress"><option value="">Choose an address</option></select>
+        <select id="checkoutSavedAddress"><option value="">Enter a new address</option></select>
+      </div>
+
+      <div class="checkout-field">
+        <label for="checkoutAddressLabel">SAVE THIS ADDRESS AS</label>
+        <select id="checkoutAddressLabel" required>
+          <option value="">Choose a label</option>
+          <option value="Home">Home</option>
+          <option value="Work">Work</option>
+          <option value="Other">Other</option>
+        </select>
+        <small class="checkout-address-note">We’ll save this address to your account for your next order.</small>
       </div>
 
       <div class="checkout-field">
@@ -702,6 +713,6 @@ window.firebaseMessaging = firebaseMessaging;
 
 <script src="rewards-config.js?v=20261021-first-order-gift"></script>
 <script src="menu.js"></script>
-<script src="script.js?v=20261021-first-order-flyer-final5"></script>
+<script src="script.js?v=20261023-checkout-address-label"></script>
 </body>
 </html>

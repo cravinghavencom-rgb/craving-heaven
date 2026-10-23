@@ -692,12 +692,16 @@ function handlePlaceOrderClick() {
   function prefillCheckoutFromDefaultAddress() {
     if (checkoutSavedAddress) {
       const addresses = currentCustomerProfile.addresses || [];
-      checkoutSavedAddress.innerHTML = `<option value="">Choose an address</option>${addresses.map(item => `<option value="${esc(item.id)}">${esc(item.label || "Address")} — ${esc(item.area || "")}</option>`).join("")}`;
+      checkoutSavedAddress.innerHTML = `<option value="">Enter a new address</option>${addresses.map(item => `<option value="${esc(item.id)}">${esc(item.label || "Address")} — ${esc(item.area || "")}</option>`).join("")}`;
       if (savedAddressPickerWrap) savedAddressPickerWrap.hidden = !addresses.length;
     }
     const chosen = (currentCustomerProfile.addresses || []).find(item => item.isDefault) || currentCustomerProfile.addresses?.[0];
     if (!chosen) return;
     if (checkoutSavedAddress) checkoutSavedAddress.value = chosen.id;
+    if (checkoutAddressLabel && chosen.label) {
+      if (![...checkoutAddressLabel.options].some(option => option.value === chosen.label)) checkoutAddressLabel.add(new Option(chosen.label, chosen.label));
+      checkoutAddressLabel.value = chosen.label;
+    }
     if (checkoutName && !checkoutName.value) checkoutName.value = chosen.name || "";
     if (checkoutAddress && !checkoutAddress.value) checkoutAddress.value = chosen.address || "";
     if (checkoutLandmark && !checkoutLandmark.value) checkoutLandmark.value = chosen.landmark || "";
@@ -950,6 +954,7 @@ const checkoutLandmark =
 const checkoutArea =
   document.getElementById("checkoutArea");
 const checkoutSavedAddress = document.getElementById("checkoutSavedAddress");
+const checkoutAddressLabel = document.getElementById("checkoutAddressLabel");
 const savedAddressPickerWrap = document.getElementById("savedAddressPickerWrap");
 const deliveryDetailsFields = document.getElementById("deliveryDetailsFields");
 const pickupInfo = document.getElementById("pickupInfo");
@@ -982,7 +987,7 @@ const orderSuccessId =
 const orderSuccessNote = document.getElementById("orderSuccessNote");
 
 
-function openOrderSuccess(orderId, orderType = "delivery") {
+function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false, addressLabel = "") {
 
   if (!orderSuccessOverlay) return;
 
@@ -993,7 +998,7 @@ function openOrderSuccess(orderId, orderType = "delivery") {
   if (orderSuccessNote) {
     orderSuccessNote.textContent = orderType === "pickup"
       ? "Pickup at Shop 10, Pearl Oasis Building, Pathanwadi, Malad East. Pay at the store and track readiness from Your Orders."
-      : "Track your order anytime from the Orders screen.";
+      : `${addressSaved ? `Your ${addressLabel || "delivery"} address is saved to your account. ` : ""}Track your order anytime from the Orders screen.`;
   }
 
   orderSuccessOverlay.classList.add("open");
@@ -1084,6 +1089,7 @@ function updateCheckoutFulfillmentUI() {
   if (pickupInfo) pickupInfo.hidden = !pickup;
   if (checkoutAddress) checkoutAddress.required = !pickup;
   if (checkoutArea) checkoutArea.required = !pickup;
+  if (checkoutAddressLabel) checkoutAddressLabel.required = !pickup;
   if (checkoutTitle) checkoutTitle.textContent = pickup ? "PICKUP ORDER" : "DELIVERY DETAILS";
   if (checkoutPaymentTitle) checkoutPaymentTitle.textContent = pickup ? "PAY ON PICKUP" : "PAY ON DELIVERY";
   if (checkoutPaymentNote) checkoutPaymentNote.textContent = pickup ? "Cash / UPI when you collect at the store" : "Cash / UPI on delivery";
@@ -1317,6 +1323,12 @@ function validateCheckoutForm() {
     return false;
   }
 
+  if (!pickup && !checkoutAddressLabel.value) {
+    checkoutMessage.textContent = "Choose whether this address is Home, Work, or Other.";
+    checkoutAddressLabel.focus();
+    return false;
+  }
+
 
   return true;
 }
@@ -1359,6 +1371,8 @@ async function continueToOrder() {
       customerName: checkoutName.value.trim(),
       orderType: pickup ? "pickup" : "delivery",
       address: pickup ? "" : checkoutAddress.value.trim(),
+      addressId: pickup ? "" : (checkoutSavedAddress?.value || (crypto.randomUUID ? crypto.randomUUID() : `addr_${Date.now()}_${Math.random().toString(36).slice(2)}`)),
+      addressLabel: pickup ? "" : checkoutAddressLabel.value,
       landmark: pickup ? "" : checkoutLandmark.value.trim(),
       area: pickup ? "" : checkoutArea.value,
       paymentMethod: pickup ? "Pay on Pickup" : "Pay on Delivery",
@@ -1391,7 +1405,7 @@ async function continueToOrder() {
     closeCheckout();
     closeCart();
     render();
-    openOrderSuccess(order.orderId, pickup ? "pickup" : "delivery");
+    openOrderSuccess(order.orderId, pickup ? "pickup" : "delivery", order.addressSaved === true, checkoutAddressLabel?.value || "");
     refreshAccountScreens(window.firebaseAuth?.currentUser || null);
   } catch (error) {
     console.error("Order creation failed:", error);
@@ -2452,7 +2466,16 @@ document.addEventListener("click", event => {
   }
   checkoutSavedAddress?.addEventListener("change", () => {
     const chosen = (currentCustomerProfile.addresses || []).find(item => item.id === checkoutSavedAddress.value);
-    if (!chosen) return;
+    if (!chosen) {
+      checkoutAddressLabel.value = "";
+      checkoutName.value = currentCustomerProfile.name || "";
+      checkoutAddress.value = "";
+      checkoutLandmark.value = "";
+      checkoutArea.value = "";
+      return;
+    }
+    if (chosen.label && ![...checkoutAddressLabel.options].some(option => option.value === chosen.label)) checkoutAddressLabel.add(new Option(chosen.label, chosen.label));
+    checkoutAddressLabel.value = chosen.label || "";
     checkoutName.value = chosen.name || "";
     checkoutAddress.value = chosen.address || "";
     checkoutLandmark.value = chosen.landmark || "";

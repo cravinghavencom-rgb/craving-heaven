@@ -90,6 +90,8 @@ async function loadAnalytics() {
     $("metricWalkinSales").textContent = money(data.summary.walkIn.sales); $("metricWalkinOrders").textContent = `${data.summary.walkIn.orders} orders`;
     const rows = data.items.slice(0, 50);
     $("itemSalesRows").innerHTML = rows.length ? rows.map(row => `<tr><td>${escapeHtml(row.name)}</td><td>${Number(row.quantity)}</td><td>${money(row.listedValue)}</td></tr>`).join("") : '<tr><td colspan="3" class="empty-cell">No sales for this period yet.</td></tr>';
+    const locations = data.locations || [];
+    $("locationSalesRows").innerHTML = locations.length ? locations.map(row => `<tr><td>${escapeHtml(row.location)}</td><td>${Number(row.orders)}</td><td>${money(row.sales)}</td></tr>`).join("") : '<tr><td colspan="3" class="empty-cell">No sales for this period yet.</td></tr>';
     const weekdays = data.weekdays || [], max = Math.max(1, ...weekdays.map(row => Number(row.sales)));
     $("weekdayChart").innerHTML = weekdays.map(row => `<div class="weekday-row"><span>${escapeHtml(row.day)}</span><div class="weekday-track"><div class="weekday-fill" style="width:${Math.max(0, Math.min(100, Number(row.sales) / max * 100))}%"></div></div><strong>${money(row.sales)}</strong></div>`).join("");
     message($("analyticsMessage"), `${data.range === "today" ? "Today" : data.range === "week" ? "This week" : "This month"} · ${data.startDate} to ${data.endDate}${data.truncated ? " · Showing the most recent 20,000 orders" : ""}`, "success");
@@ -119,9 +121,20 @@ async function loadCustomerDetails(uid, mobile) {
   const panel = $("customerDetails"); panel.innerHTML = '<p class="empty-cell">Loading customer account…</p>';
   try {
     const detail = await call("adminGetCustomerDetails", { uid, mobile });
+    const addressCard = (address, fallbackLabel) => {
+      if (typeof address === "string") return `<article class="customer-address"><strong>${escapeHtml(fallbackLabel)}</strong><p>${escapeHtml(address)}</p></article>`;
+      const label = address.label || fallbackLabel;
+      const contact = address.name ? `<br>${escapeHtml(address.name)}` : "";
+      const addressText = [address.address, address.landmark ? `Near ${address.landmark}` : "", address.area].filter(Boolean).map(escapeHtml).join("<br>");
+      const orderRef = address.orderId ? `<small>From order #${escapeHtml(String(address.orderId).slice(-7).toUpperCase())}${address.createdAt ? ` · ${dateText(address.createdAt)}` : ""}</small>` : "";
+      return `<article class="customer-address"><strong>${escapeHtml(label)}</strong>${orderRef}<p>${contact}${addressText ? `<br>${addressText}` : ""}</p></article>`;
+    };
+    const savedAddressCards = (detail.addresses || []).filter(Boolean).map((address, index) => addressCard(address, `Saved address ${index + 1}`)).join("");
+    const pastAddressCards = (detail.orderAddresses || []).map((address, index) => addressCard(address, `Delivery destination ${index + 1}`)).join("");
     panel.innerHTML = `<div class="detail-top"><div><span class="eyebrow">CUSTOMER ACCOUNT</span><h3>${escapeHtml(detail.name)}</h3><p>${escapeHtml(detail.mobile || mobile)}</p></div><a class="button button-quiet" target="_blank" rel="noopener" href="https://wa.me/91${escapeHtml(mobileDigits(detail.mobile || mobile))}">Open WhatsApp</a></div>
       <div class="detail-stats"><span class="detail-chip">✦ ${Number(detail.points || 0)} Craving Points</span><span class="detail-chip">${Number(detail.completedOrders || 0)} completed orders</span><span class="detail-chip">${(detail.availableRewards || []).length} available rewards</span></div>
-      <h3>Saved addresses</h3><p class="muted">${detail.addresses?.length ? detail.addresses.map(address => escapeHtml(typeof address === "string" ? address : [address.label,address.address,address.area].filter(Boolean).join(" · "))).join("<br>") : "No saved addresses"}</p>
+      <h3>Saved addresses</h3><div class="customer-address-list">${savedAddressCards || '<p class="muted">No saved addresses yet.</p>'}</div>
+      ${pastAddressCards ? `<h3>Other delivery destinations from orders</h3><div class="customer-address-list">${pastAddressCards}</div>` : ""}
       <h3>Order history ${detail.historyLimited ? "(recent 1,000)" : ""}</h3><div class="order-history">${detail.orders.length ? detail.orders.map(order => `<article class="history-order"><strong>Order #${escapeHtml(String(order.id).slice(-7).toUpperCase())} · ${escapeHtml(order.status || "new")} · ${money(order.total)}</strong><p>${dateText(order.createdAt)} · ${escapeHtml(order.source === "walk-in" ? "Walk-in" : (order.orderType || "delivery"))}<br>${escapeHtml((order.items || []).map(item => `${item.name} × ${item.qty}`).join(" · "))}</p></article>`).join("") : "<p class='empty-cell'>No order history found.</p>"}</div>`;
   } catch (error) { panel.innerHTML = `<p class="message error">${escapeHtml(friendlyError(error))}</p><form id="customerLookupForm" class="lookup-form"><input id="customerLookupMobile" inputmode="tel" placeholder="10-digit mobile number"><button class="button button-primary" type="submit">Look up</button></form>`; $("customerLookupForm").addEventListener("submit", event => { event.preventDefault(); loadCustomerDetails("", $("customerLookupMobile").value); }); }
 }

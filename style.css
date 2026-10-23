@@ -2513,3 +2513,5 @@ body { background:#fbf7f1; color:var(--premium-ink); }
 .first-visit-flyer-foot { margin-top: 10px; color: #9a8170; font-size: 9px; }
 @keyframes first-visit-flyer-in { from { opacity: 0; transform: translate(-50%, -47%) scale(.97); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 @media (max-width: 480px) { .first-visit-flyer { padding: 24px 20px 18px; border-radius: 25px; } .first-visit-flyer-art { width: min(300px, 100%); border-radius: 19px; margin-bottom: 12px; } .first-visit-flyer-art img { width: min(180px, 100%); } .first-visit-flyer > p { font-size: 14px; } }
+
+.checkout-address-note{display:block;margin-top:6px;color:#766d68;font-size:12px;line-height:1.4}
