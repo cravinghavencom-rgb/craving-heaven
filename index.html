@@ -6,7 +6,8 @@
   <meta name="theme-color" content="#b80808">
   <meta name="description" content="CRAVING HEAVEN — Chicken, burgers, wraps, wings, strips, popcorn, fries and combos.">
   <title>CRAVING HEAVEN | Chicken & Burgers</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/png" href="images/logo.png">
+  <link rel="stylesheet" href="style.css?v=20261021-first-order-flyer-final4">
   <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-GD2EPLFYZP">
 </script>
@@ -22,59 +23,67 @@
 <body>
   <header class="site-header" id="top">
     <div class="header-inner">
-      <a class="brand" href="#top" aria-label="CRAVING HEAVEN home">
+      <a class="brand" href="#top" data-screen="home" aria-label="CRAVING HEAVEN home">
         <img src="images/logo.png" alt="CRAVING HEAVEN logo">
       </a>
 
-      <div class="header-actions">
-        <span class="order-status"><span class="status-dot"></span> CALL TO ORDER</span>
-        <a class="call-header" href="tel:+917700929693" aria-label="Call CRAVING HEAVEN">
-  ☎ CALL NOW
-</a>
-      </div>
     </div>
   </header>
 
   <nav class="category-nav" id="categoryNav" aria-label="Menu categories"></nav>
   
 <div class="opening-hours">
-  <span class="opening-hours-icon">🕐</span>
-  <span class="opening-hours-label">STORE HOURS:</span>
-  <strong>12:30 PM – 11:45 PM</strong>
   <span class="opening-hours-dot" id="openingHoursDot"></span>
-  <span class="opening-hours-label" id="openingHoursStatus">CLOSED NOW</span>
+  <span class="opening-hours-label" id="openingHoursStatus" aria-live="polite">CLOSED</span>
 </div>
+<p id="onlineOrderNotice" class="order-availability-note" role="status" hidden></p>
 
-<div class="push-offer-box" id="pushOfferBox">
-  <div class="push-offer-icon">🔔</div>
-
-  <div class="push-offer-content">
-    <h3>Never Miss a CRAVING HEAVEN Offer!</h3>
-    <p>Get notified about new offers, discounts & special deals.</p>
-  </div>
-
-  <button id="enableOfferNotifications">
-    🔔 GET OFFERS
-  </button>
-</div>
-
+  <dialog class="first-visit-flyer" id="firstVisitFlyer" aria-labelledby="firstVisitFlyerTitle">
+    <button class="first-visit-flyer-close" type="button" aria-label="Close welcome offer" data-close-first-visit>×</button>
+    <div class="first-visit-flyer-art"><img src="images/burgers/classic-crunchy-burger.png" alt="Classic Crunchy Chicken Burger"><i aria-hidden="true">✦</i><b aria-hidden="true">✦</b></div>
+    <span class="first-visit-flyer-kicker">A LITTLE SOMETHING FOR YOUR FIRST ORDER</span>
+    <h2 id="firstVisitFlyerTitle">Your first order just got crunchier!</h2>
+    <p>Place your first online order to claim this welcome treat.</p>
+    <div class="first-visit-flyer-rule"><span>YOUR FIRST-ORDER GIFT</span><strong>Classic Crunchy Burger · FREE</strong></div>
+    <button class="first-visit-flyer-cta" type="button" data-first-visit-menu>EXPLORE THE MENU <span aria-hidden="true">→</span></button>
+    <span class="first-visit-flyer-foot">FIRST ONLINE ORDER ONLY</span>
+  </dialog>
 
   <main>
-    <section class="hero-offers" aria-label="Offers and combos">
-      <div class="offers-header">
-        <div class="offers-copy">
-          <span class="eyebrow">CRAVING HEAVEN</span>
-          <h1>OFFERS <span>&</span> COMBOS</h1>
-          <p>BIG FLAVOUR. BETTER VALUE.</p>
-        </div>
-        <div class="slider-controls" aria-label="Offers controls">
-          <button id="slidePrev" type="button" aria-label="Previous offers">‹</button>
-          <button id="slideNext" type="button" aria-label="Next offers">›</button>
-        </div>
+    <section id="screen-home" class="app-screen is-active" data-app-screen="home" aria-label="Home, offers and combos">
+      <div class="home-dashboard-cards" aria-label="Explore CRAVING HEAVEN">
+        <div id="homeComboCard"></div>
+        <article class="home-dashboard-card home-card-rewards">
+          <span class="home-card-icon" aria-hidden="true">✦</span>
+          <strong>CRAVING POINTS</strong>
+          <small><b id="homeLoyaltyPointsBalance">Sign in</b> <span id="homeLoyaltySummary">to see your points.</span></small>
+          <button type="button" class="home-card-action" data-screen="rewards">VIEW REWARDS <b aria-hidden="true">→</b></button>
+        </article>
+        <article class="home-dashboard-card home-card-menu">
+          <span class="home-card-icon" aria-hidden="true">☰</span>
+          <strong>VIEW COMPLETE MENU</strong>
+          <small>Browse all food and add your favourites to cart</small>
+          <button type="button" class="home-card-action" data-screen="menu">EXPLORE MENU <b aria-hidden="true">→</b></button>
+        </article>
       </div>
-      <div class="combo-slider" id="comboSlider"></div>
+      <div class="push-offer-box" id="pushOfferBox" data-app-screen="home">
+        <div class="push-offer-icon">🔔</div>
+        <div class="push-offer-content">
+          <h3>Never Miss a CRAVING HEAVEN Offer!</h3>
+          <p>Get notified about new offers, discounts & special deals.</p>
+        </div>
+        <button id="enableOfferNotifications">🔔 GET OFFERS</button>
+      </div>
     </section>
 
+    <section id="screen-offers" class="app-screen account-screen" data-app-screen="offers" aria-labelledby="comboMenuTitle" hidden>
+      <section class="combo-menu-section" id="comboMenu" aria-labelledby="comboMenuTitle">
+        <div class="section-heading"><span class="section-kicker">MORE FLAVOUR · MORE VALUE</span><h2 id="comboMenuTitle">COMBO MENU</h2><p>COMPLETE MEALS AT A BETTER PRICE.</p></div>
+        <div class="combo-menu-grid" id="comboMenuGrid"></div>
+      </section>
+    </section>
+
+    <section id="screen-menu" class="app-screen" data-app-screen="menu" aria-label="Food menu" hidden>
     <section class="delivery-strip" aria-label="Delivery offer">
       <div class="delivery-strip-icon">🚚</div>
       <div>
@@ -83,12 +92,74 @@
       </div>
     </section>
 
+    <section class="menu-discovery" aria-label="Find food in the menu">
+      <div class="menu-discovery-copy"><span class="section-kicker">MADE FRESH FOR YOUR CRAVINGS</span><h1>Find your favourite</h1><p>Search dishes or browse by category.</p></div>
+      <label class="menu-search-field"><span aria-hidden="true">⌕</span><input id="customerMenuSearch" type="search" placeholder="Search burgers, wings, fries…" autocomplete="off" aria-label="Search menu items"><button id="clearCustomerMenuSearch" type="button" aria-label="Clear menu search" hidden>×</button></label>
+      <p id="customerMenuSearchStatus" class="menu-search-status" aria-live="polite"></p>
+    </section>
+
     <div class="image-disclaimer" role="note">
       📸 Product images are for visual reference. Slight variations in appearance may occur in the actual product.
     </div>
 
     <div id="menuSections"></div>
+    </section>
+
+    <section id="screen-orders" class="app-screen account-screen" data-app-screen="orders" aria-labelledby="ordersTitle" hidden>
+      <div class="account-heading"><span class="section-kicker">YOUR CRAVING HEAVEN</span><h1 id="ordersTitle">Your Orders</h1><p>Track your recent orders and see what you enjoyed.</p></div>
+      <div id="ordersContent" class="account-card"><div class="account-loading">Sign in to view your order history.</div></div>
+    </section>
+
+    <section id="screen-rewards" class="app-screen account-screen" data-app-screen="rewards" aria-labelledby="rewardsTitle" hidden>
+      <div class="account-heading"><span class="section-kicker">MEMBER BENEFITS</span><h1 id="rewardsTitle">Craving Points & Rewards</h1><p>Your Craving Points and member rewards.</p></div>
+      <section class="loyalty-card" aria-labelledby="loyaltyTitle">
+        <div class="loyalty-card-top"><span class="loyalty-mark">✦</span><div><span class="loyalty-kicker">CRAVING HEAVEN</span><h2 id="loyaltyTitle">Craving Points</h2></div></div>
+        <p class="loyalty-copy">Use your Craving Points on eligible regular-menu items.</p>
+        <div class="loyalty-points"><strong id="loyaltyPointsBalance">0</strong><span>CRAVING POINTS BALANCE</span></div>
+        <div class="loyalty-value-line"><span>Craving Points value · 100 = ₹10</span><strong id="loyaltyPointsValue">₹0</strong></div>
+      </section>
+      <section class="rewards-rules" aria-label="Craving Points rules">
+        <article><span>₹10</span><p>Earn 1 Craving Point per ₹10 spent on regular menu items after delivery or pickup completion.</p></article>
+        <article><span>½ rate</span><p>Combos earn 1 Craving Point per ₹20. Points can’t be used on combo items; eligible regular items in a mixed order can still use points.</p></article>
+        <article><span>100 pts</span><p>100 Craving Points = ₹10 off. Use up to 1,000 (₹100) per order.</p></article>
+        <article><span>Never</span><p>Craving Points do not expire. Only one offer or reward can be used per order.</p></article>
+      </section>
+      <section class="rewards-journey" aria-labelledby="rewardsJourneyTitle">
+        <div class="rewards-journey-heading"><div><span class="section-kicker">YOUR ORDER JOURNEY</span><h2 id="rewardsJourneyTitle">Your next rewards</h2></div><span class="rewards-order-count" id="rewardOrderCount">0 completed orders</span></div>
+        <p class="rewards-journey-note">Rewards unlock after completed delivery or pickup orders. Free food rewards are valid for 7 days.</p>
+        <div id="rewardsJourneyCards" class="rewards-journey-cards"><div class="rewards-login-hint">Sign in to see your next rewards.</div></div>
+      </section>
+    </section>
+
+    <section id="screen-profile" class="app-screen account-screen" data-app-screen="profile" aria-labelledby="profileTitle" hidden>
+      <div class="account-heading"><span class="section-kicker">YOUR ACCOUNT</span><h1 id="profileTitle">Profile</h1><p>Manage your account and discover member rewards.</p></div>
+      <div id="profileContent" class="profile-content"></div>
+      <section class="address-book" aria-labelledby="addressBookTitle">
+        <div class="address-book-heading"><div><span class="section-kicker">DELIVERY DETAILS</span><h2 id="addressBookTitle">Saved Addresses</h2></div><button type="button" class="account-secondary-button" id="addAddressButton">LOGIN TO ADD ADDRESS</button></div>
+        <div id="savedAddresses" class="saved-addresses"></div>
+        <form id="addressForm" class="address-form" hidden>
+          <input type="hidden" id="addressId">
+          <label>ADDRESS LABEL<input id="addressLabel" maxlength="30" placeholder="Home, Work, etc." required></label>
+          <label>CONTACT NAME<input id="addressContactName" maxlength="80" autocomplete="name" required></label>
+          <label>FULL ADDRESS<textarea id="addressLine" rows="3" maxlength="300" placeholder="Flat, building, street" required></textarea></label>
+          <label>LANDMARK <span>OPTIONAL</span><input id="addressLandmark" maxlength="100" placeholder="Nearby landmark"></label>
+          <label>DELIVERY AREA<select id="addressArea" required><option value="">Select your area</option></select></label>
+          <label class="address-default-check"><input id="addressDefault" type="checkbox"> Set as default address</label>
+          <p id="addressMessage" class="address-message" role="status"></p>
+          <div class="address-form-actions"><button type="button" id="cancelAddressButton" class="account-secondary-button">CANCEL</button><button type="submit" class="account-primary-button">SAVE ADDRESS</button></div>
+        </form>
+      </section>
+    </section>
   </main>
+
+  <nav class="customer-bottom-nav" aria-label="Customer sections">
+    <button type="button" class="customer-nav-button is-active" data-screen="home" aria-current="page"><span aria-hidden="true">⌂</span><small>Home</small></button>
+    <button type="button" class="customer-nav-button" data-screen="menu"><span aria-hidden="true">☰</span><small>Menu</small></button>
+    <button type="button" class="customer-nav-button" data-screen="offers"><span aria-hidden="true">✦</span><small>Combos</small></button>
+    <button type="button" class="customer-nav-button" data-screen="rewards"><span aria-hidden="true">★</span><small>Rewards</small></button>
+    <button type="button" class="customer-nav-button" data-screen="orders"><span aria-hidden="true">▤</span><small>Orders</small></button>
+    <button type="button" class="customer-nav-button" data-screen="profile"><span aria-hidden="true">●</span><small>Profile</small></button>
+  </nav>
 
   <!-- SHARE & GET FREE BURGER OFFER -->
 
@@ -108,28 +179,23 @@
         <button class="cart-close" id="closeCart" type="button" aria-label="Close cart">×</button>
       </div>
 <div class="cart-opening-hours">
-  <span class="cart-hours-icon">🕐</span>
-  <span class="cart-hours-label">STORE HOURS:</span>
-  <strong>12:30 PM – 11:45 PM</strong>
   <span class="cart-hours-dot" id="cartOpeningHoursDot"></span>
-  <span class="cart-hours-status" id="cartOpeningHoursStatus">CLOSED NOW</span>
+  <span class="cart-hours-status" id="cartOpeningHoursStatus" aria-live="polite">CLOSED</span>
 </div>
+<p id="cartOrderAvailabilityNotice" class="order-availability-note cart-availability-note" role="status" hidden></p>
 
       <div id="cartItems"></div>
       <div class="cart-summary" id="cartSummary"></div>
 
       <button class="clear-cart" id="clearCart" type="button">CLEAR CART</button>
 
-      <button class="place-call" id="placeCall" type="button">
+      <button class="place-order-button" id="placeOrderButton" type="button">
   PLACE ORDER
 </button>
 
 <p class="call-note" id="placeOrderNote">
   Login with your mobile number to continue with your order.
 </p>
-     <a class="cart-call-now" href="tel:+917700929693" aria-label="Call CRAVING HEAVEN to place order">
-  ☎ CALL NOW TO PLACE ORDER
-</a>
     </aside>
   </div>
 
@@ -275,22 +341,29 @@
 
     <form id="checkoutForm">
 
-      <div class="checkout-field">
+      <fieldset class="checkout-fulfillment">
+        <legend>HOW WOULD YOU LIKE TO GET YOUR ORDER?</legend>
+        <label><input type="radio" name="fulfillmentType" value="delivery" checked> <span><strong>Delivery</strong><small>Bring it to your address</small></span></label>
+        <label><input type="radio" name="fulfillmentType" value="pickup"> <span><strong>Pickup</strong><small>Collect from our store</small></span></label>
+      </fieldset>
 
-        <label for="checkoutName">
-          YOUR NAME
-        </label>
-
-        <input
-          id="checkoutName"
-          type="text"
-          autocomplete="name"
-          placeholder="Enter your name"
-          required
-        >
-
+      <div id="pickupInfo" class="pickup-info" hidden>
+        <strong>Pick up your order at CRAVING HEAVEN</strong>
+        <span>Shop 10, Pearl Oasis Building, Pathanwadi, Malad East, Mumbai – 400097</span>
+        <small>We’ll notify you here when your order is ready. Pay at the store when you collect it.</small>
       </div>
 
+      <div class="checkout-field">
+        <label for="checkoutName">YOUR NAME</label>
+        <input id="checkoutName" type="text" maxlength="80" autocomplete="name" placeholder="Enter your name" required>
+      </div>
+
+      <div id="deliveryDetailsFields">
+
+      <div id="savedAddressPickerWrap" class="checkout-field" hidden>
+        <label for="checkoutSavedAddress">USE A SAVED ADDRESS</label>
+        <select id="checkoutSavedAddress"><option value="">Choose an address</option></select>
+      </div>
 
       <div class="checkout-field">
 
@@ -301,6 +374,7 @@
         <textarea
           id="checkoutAddress"
           rows="3"
+          maxlength="300"
           autocomplete="street-address"
           placeholder="Enter your complete delivery address"
           required
@@ -319,6 +393,7 @@
         <input
           id="checkoutLandmark"
           type="text"
+          maxlength="100"
           placeholder="Nearby landmark"
         >
 
@@ -385,6 +460,8 @@
 
       </div>
 
+      </div>
+
 
       <div class="checkout-payment">
 
@@ -397,8 +474,8 @@
           <span>💵</span>
 
           <div>
-            <strong>PAY ON DELIVERY</strong>
-            <small>Cash / UPI on delivery</small>
+          <strong id="checkoutPaymentTitle">PAY ON DELIVERY</strong>
+            <small id="checkoutPaymentNote">Cash / UPI on delivery</small>
           </div>
 
           <input
@@ -478,8 +555,8 @@
       <strong id="orderSuccessId">#CH-0000</strong>
     </div>
 
-    <p class="order-success-note">
-      📱 Your order details have also been sent to WhatsApp.
+    <p class="order-success-note" id="orderSuccessNote">
+      Track your order anytime from the Orders screen.
     </p>
 
     <button
@@ -514,30 +591,38 @@
         </div>
       </div>
 
-      <a class="footer-call" href="tel:+917700929693" aria-label="Call CRAVING HEAVEN">
-  ☎ CALL NOW
-</a>
     </div>
   </footer>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+  import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app-check.js";
 
   import {
     getAuth,
     RecaptchaVerifier,
     signInWithPhoneNumber,
-    onAuthStateChanged
+    onAuthStateChanged,
+    setPersistence,
+    connectAuthEmulator,
+    browserLocalPersistence
   } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 
 import {
   getFirestore,
+  connectFirestoreEmulator,
   collection,
   doc,
   setDoc,
   addDoc,
-  serverTimestamp
+    serverTimestamp,
+    getDocs,
+    getDoc,
+    query,
+    where
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+  import { getFunctions, connectFunctionsEmulator, httpsCallable } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-functions.js";
+  import { signOut } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 
 	import {
   getMessaging,
@@ -545,10 +630,17 @@ import {
   onMessage
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-messaging.js";
 
+  const emulatorHost = window.location.hostname;
+  const isLoopbackHost = ["localhost", "127.0.0.1"].includes(emulatorHost);
+  const isPrivateLanHost = /^10\./.test(emulatorHost)
+    || /^192\.168\./.test(emulatorHost)
+    || /^172\.(1[6-9]|2\d|3[01])\./.test(emulatorHost);
+  const useLocalFirebaseEmulators = isLoopbackHost
+    || (new URLSearchParams(window.location.search).get("emulator") === "1" && isPrivateLanHost);
   const firebaseConfig = {
     apiKey: "AIzaSyDVYYv3TMRKWktXA33jOGjniz43hDfRVe4",
     authDomain: "craving-heaven-e2e94.firebaseapp.com",
-    projectId: "craving-heaven-e2e94",
+    projectId: useLocalFirebaseEmulators ? "demo-craving-heaven-local" : "craving-heaven-e2e94",
     storageBucket: "craving-heaven-e2e94.firebasestorage.app",
     messagingSenderId: "20081214048",
     appId: "1:20081214048:web:cae67b0874111ab653905",
@@ -556,19 +648,32 @@ import {
   };
 
   const firebaseApp = initializeApp(firebaseConfig);
+  // Use App Check on the live site. Keep local emulator testing independent of
+  // production attestation so local and LAN test sessions continue to work.
+  const firebaseAppCheck = useLocalFirebaseEmulators ? null : initializeAppCheck(firebaseApp, {
+    provider: new ReCaptchaEnterpriseProvider("6LdBasMtAAAAAJE5V6ZDZefojEfJx9vfDFowfIjU"),
+    isTokenAutoRefreshEnabled: true
+  });
 const firebaseAuth = getAuth(firebaseApp);
+if (useLocalFirebaseEmulators) connectAuthEmulator(firebaseAuth, `http://${emulatorHost}:9400`, { disableWarnings: true });
+const firebaseAuthPersistenceReady = setPersistence(firebaseAuth, browserLocalPersistence);
 const firebaseDB = getFirestore(firebaseApp);
-const firebaseMessaging =
-  getMessaging(firebaseApp);
+if (useLocalFirebaseEmulators) connectFirestoreEmulator(firebaseDB, emulatorHost, 9401);
+const firebaseFunctions = getFunctions(firebaseApp, "asia-south1");
+if (useLocalFirebaseEmulators) connectFunctionsEmulator(firebaseFunctions, emulatorHost, 9402);
+const firebaseMessaging = useLocalFirebaseEmulators ? null : getMessaging(firebaseApp);
 
 window.firebaseApp = firebaseApp;
 window.firebaseAuth = firebaseAuth;
+window.firebaseAuthPersistenceReady = firebaseAuthPersistenceReady;
 window.firebaseDB = firebaseDB;
+window.firebaseFunctions = firebaseFunctions;
 
 window.FirebaseAuthAPI = {
   RecaptchaVerifier,
   signInWithPhoneNumber,
-  onAuthStateChanged
+  onAuthStateChanged,
+  signOut
 };
 
 window.FirebaseFirestoreAPI = {
@@ -576,8 +681,14 @@ window.FirebaseFirestoreAPI = {
   doc,
   setDoc,
   addDoc,
-  serverTimestamp
+  serverTimestamp,
+  getDocs,
+  getDoc,
+  query,
+  where
 };
+
+window.FirebaseFunctionsAPI = { httpsCallable };
 
 window.FirebaseMessagingAPI = {
   getMessaging,
@@ -589,7 +700,8 @@ window.firebaseMessaging = firebaseMessaging;
 
 </script>
 
+<script src="rewards-config.js?v=20261021-first-order-gift"></script>
 <script src="menu.js"></script>
-<script src="script.js"></script>
+<script src="script.js?v=20261021-first-order-flyer-final5"></script>
 </body>
 </html>

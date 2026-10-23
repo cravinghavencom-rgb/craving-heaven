@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedInAs(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    match /customerProfiles/{uid} {
+      allow read: if signedInAs(uid);
+      allow create, update: if signedInAs(uid)
+        && request.resource.data.keys().hasOnly(['name', 'addresses', 'updatedAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.addresses is list
+        && request.resource.data.addresses.size() <= 10;
+      allow delete: if false;
+    }
+
+    match /orders/{orderId} {
+      allow get, list: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
+    match /loyaltyAccounts/{uid} {
+      allow get: if signedInAs(uid);
+      allow list, create, update, delete: if false;
+
+      match /entries/{entryId} {
+        allow read: if signedInAs(uid);
+        allow write: if false;
+      }
+    }
+
+    match /notificationTokens/{tokenId} {
+      allow create, update: if request.resource.data.keys().hasOnly([
+          'token', 'createdAt', 'userAgent', 'platform', 'source'
+        ])
+        && request.resource.data.token == tokenId
+        && request.resource.data.source == 'website'
+        && request.resource.data.userAgent is string
+        && request.resource.data.userAgent.size() <= 512
+        && request.resource.data.platform is string
+        && request.resource.data.platform.size() <= 120;
+      allow read, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

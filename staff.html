@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#a90d12">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Staff Desk | CRAVING HEAVEN</title>
+  <link rel="icon" type="image/png" href="images/logo.png">
+  <link rel="stylesheet" href="staff.css">
+</head>
+<body>
+  <header class="staff-header"><a class="brand" href="/"><img src="images/logo.png" alt=""><span>CRAVING HEAVEN<small>STAFF DESK</small></span></a><button id="logoutButton" class="quiet-button" hidden>Log out</button></header>
+  <main class="staff-main">
+    <section id="loginPanel" class="panel login-panel">
+      <p class="eyebrow">TEAM ACCESS</p><h1>Sign in to Staff Desk</h1><p class="muted">Use your staff mobile number. Staff access must be enabled by an administrator.</p>
+      <form id="phoneForm"><label for="phoneInput">MOBILE NUMBER</label><div class="phone-row"><span>+91</span><input id="phoneInput" inputmode="numeric" autocomplete="tel-national" maxlength="10" placeholder="10-digit number" required><button class="primary-button" type="submit" id="sendOtpButton">Send OTP</button></div></form>
+      <form id="otpForm" hidden><label for="otpInput">VERIFICATION CODE</label><div class="phone-row"><input id="otpInput" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" required><button class="primary-button" type="submit" id="verifyOtpButton">Verify</button></div><p id="localOtpHint" class="local-otp-hint" hidden>Local testing: SMS codes are shown by the Auth Emulator. Open the code list and use the “code” value for this phone number.</p><a id="localOtpLink" class="local-otp-link" target="_blank" rel="noopener" hidden>View local test OTP</a><button type="button" class="text-button" id="changeNumberButton">Use another number</button></form>
+      <p id="authMessage" class="message" role="status"></p><div id="recaptcha-container"></div>
+    </section>
+
+    <section id="deskPanel" hidden>
+      <div class="desk-heading"><div><p class="eyebrow">ORDERS</p><h1>Staff Desk</h1><p class="muted">Signed in as <span id="staffPhone"></span></p></div><div class="desk-heading-actions"><button id="orderSoundButton" class="quiet-button order-sound-button" type="button" aria-pressed="false">🔔 Enable order sound</button><button id="refreshButton" class="quiet-button">Refresh data</button></div></div>
+      <div class="tabs" role="tablist"><button class="tab active" data-tab="online">Online orders <span id="onlineCount">0</span></button><button class="tab" data-tab="walkin">Walk-in orders <span id="walkinCount">0</span></button><button class="tab" data-tab="sales">Sales Today</button><button class="tab" data-tab="availability">Online status</button><button class="tab tab-new" data-tab="new">＋ New walk-in order</button></div>
+      <div id="ordersPanel" class="panel"><p id="newOrderAlert" class="new-order-alert" role="alert" aria-live="assertive" hidden></p><div class="orders-toolbar"><div><p class="eyebrow">ORDER INBOX</p><h2>Recent orders</h2></div><label class="order-search"><span class="sr-only">Search recent orders</span><input id="orderSearch" type="search" placeholder="Search name, phone or item"></label></div><div class="status-filters" role="group" aria-label="Filter orders by status"><button type="button" class="status-filter active" data-status-filter="all">All</button><button type="button" class="status-filter" data-status-filter="new">New</button><button type="button" class="status-filter" data-status-filter="preparing">Preparing</button><button type="button" class="status-filter" data-status-filter="ready">Ready</button><button type="button" class="status-filter" data-status-filter="completed">Completed</button></div><p id="orderStatusMessage" class="message" role="status"></p><div id="ordersList" class="orders-list"><p class="muted">Loading orders…</p></div></div>
+      <section id="salesPanel" class="panel sales-panel" hidden><div class="orders-toolbar"><div><p class="eyebrow">DAILY SUMMARY</p><h2>Sales Today <span id="salesDate"></span></h2></div><span class="sales-timezone">Mumbai time</span></div><p id="salesStatus" class="sales-caption" role="status">Loading today’s orders…</p><div class="sales-cards"><article class="sales-card sales-card-total"><span>Total sales</span><strong id="todayTotalSales">₹0</strong><small id="todayTotalOrders">0 orders</small></article><article class="sales-card"><span>Online orders</span><strong id="todayOnlineSales">₹0</strong><small id="todayOnlineOrders">0 orders</small></article><article class="sales-card"><span>Walk-in orders</span><strong id="todayWalkInSales">₹0</strong><small id="todayWalkInOrders">0 orders</small></article></div><p class="sales-footnote">Shows order totals for orders placed today; cancelled orders are excluded. Pending payments are included in sales totals.</p></section>
+      <section id="availabilityPanel" class="panel availability-panel" hidden aria-labelledby="availabilityTitle">
+        <p class="eyebrow">CUSTOMER ORDERING</p><h2 id="availabilityTitle">Online ordering status</h2>
+        <p id="staffAvailabilitySummary" class="availability-summary" aria-live="polite">Checking current status…</p>
+        <p id="staffAvailabilityMessage" class="muted">Online orders follow the store schedule. You can pause them during busy periods; walk-in orders will remain available.</p>
+        <div class="availability-actions"><button id="pauseOnlineOrdersButton" class="pause-orders-button" type="button">Pause online orders for rush</button><button id="resumeOnlineOrdersButton" class="resume-orders-button" type="button" hidden>Resume online orders</button><button id="refreshAvailabilityButton" class="quiet-button" type="button">Refresh status</button></div>
+        <p id="availabilityActionMessage" class="message" role="status"></p>
+      </section>
+      <section id="newOrderPanel" class="panel" hidden>
+        <div class="section-heading"><div><p class="eyebrow">COUNTER ORDER</p><h2>New walk-in order</h2></div></div>
+        <div class="order-builder-grid">
+          <div class="builder-menu">
+            <div class="customer-fields"><label>Customer name<input id="walkinName" maxlength="80" placeholder="Walk-in customer" value="Walk-in customer"></label><label>Mobile number <span class="muted">(optional)</span><input id="walkinMobile" inputmode="tel" maxlength="16" placeholder="10-digit number"><small id="walkinLoyaltyHint" class="field-hint">Enter a customer's registered mobile number to look up their profile and Craving Points.</small></label></div>
+            <div class="menu-picker-heading"><div><p class="eyebrow">QUICK ADD</p><h3>Choose from menu</h3></div><span class="menu-count" id="menuCount"></span></div>
+            <div class="menu-filters"><label><span class="sr-only">Filter menu category</span><select id="menuCategory"></select></label><label class="menu-search"><span class="sr-only">Search menu items</span><input id="menuSearch" type="search" placeholder="Search dishes or combos"></label></div>
+            <div id="menuResults" class="menu-results" aria-live="polite"></div>
+          </div>
+          <aside class="current-check">
+            <div class="check-heading"><div><p class="eyebrow">CURRENT CHECK</p><h3>Walk-in order</h3></div><span id="cartItemCount" class="cart-count">0 items</span></div>
+            <div id="walkinCart" class="walkin-cart"><p class="muted">Choose a dish to start this order.</p></div>
+            <section id="walkinBenefits" class="walkin-benefits" hidden>
+              <div class="benefit-heading"><div><p class="eyebrow">CUSTOMER BENEFITS</p><h4>Use points or a reward</h4></div></div>
+              <label>Craving Points<select id="walkinRedeemPoints"><option value="0">Don't use points</option></select></label>
+              <label>Royal Rewards<select id="walkinReward"><option value="">Don't use a reward</option></select></label>
+              <p id="walkinBenefitHint" class="benefit-hint">One benefit per order. Combo orders cannot use points.</p>
+            </section>
+            <details class="loyalty-staff-guide">
+              <summary>Staff guide: explain Craving Points &amp; rewards</summary>
+              <ul>
+                <li><strong>Earn points:</strong> 1 point per ₹10 on regular menu food; combos earn half-rate (1 point per ₹20). Extras and dips do not earn points.</li>
+                <li><strong>When points arrive:</strong> after an online order is marked Delivered or a walk-in order is marked Completed. Points do not expire.</li>
+                <li><strong>Redeem points:</strong> 100 points = ₹10 off, in 100-point steps; up to 1,000 points (₹100) per order. In a mixed order, points discount eligible regular items only; combo and extra items remain full price.</li>
+                <li><strong>Use one benefit:</strong> use one offer, reward, or points redemption per order. Do not combine benefits.</li>
+                <li><strong>Milestone rewards:</strong> every completed order moves the customer forward. If a reward has a spend requirement, only eligible regular menu food counts; combos and extras do not. Free-item rewards expire after 7 days.</li>
+                <li><strong>Free delivery reward:</strong> redeem on a website delivery order; it cannot be applied to a walk-in order.</li>
+                <li><strong>First-order gift:</strong> the first online order gets one free Classic Crunchy Burger with any paid regular-menu item. Combos or extras alone do not qualify; ₹30 delivery applies below ₹300.</li>
+              </ul>
+            </details>
+            <div class="payment-fields"><label>Payment method<select id="paymentMethod"><option>Cash</option><option>UPI</option></select></label><label>Payment status<select id="paymentStatus"><option value="paid">Paid</option><option value="pending">Pending</option></select></label></div>
+            <div id="walkinDiscountRow" class="walkin-discount-row" hidden><span id="walkinDiscountLabel">Benefit</span><strong id="walkinDiscountAmount">−₹0</strong></div>
+            <div class="order-total"><span>Order total</span><strong id="walkinTotal">₹0</strong></div>
+            <button id="saveWalkinButton" class="primary-button full-button" disabled>Create walk-in order</button><p id="orderMessage" class="message" role="status"></p>
+          </aside>
+        </div>
+      </section>
+    </section>
+  </main>
+  <section id="invoice" class="invoice" aria-label="Order invoice"></section>
+
+  <script src="menu.js"></script>
+  <script type="module" src="staff.js"></script>
+</body>
+</html>

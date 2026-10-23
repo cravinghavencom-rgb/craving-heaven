@@ -1,7 +1,11 @@
 document.addEventListener("DOMContentLoaded", () => {
+const REWARDS_CONFIG = window.CRAVING_REWARDS || { journey: [], rewardById: {} };
+const REWARD_EXCLUDED_NAMES = new Set((MENU_DATA.extras?.items || []).map(item => item.name));
 const FREE_DELIVERY_THRESHOLD = 300;
 const DELIVERY_CHARGE = 30;
-const ONLINE_CHECKOUT_ENABLED = false;
+const ONLINE_CHECKOUT_ENABLED = true;
+let orderAvailability = { isOpen: false, paused: false, acceptingOnlineOrders: false };
+let orderAvailabilityReady = false;
 // =========================================================
 // FIREBASE PUSH NOTIFICATIONS
 // =========================================================
@@ -34,8 +38,7 @@ const FCM_VAPID_KEY =
   const otpLoginMessage =
     document.getElementById("otpLoginMessage");
 
-  const placeOrderButton =
-    document.getElementById("placeCall");
+  const placeOrderButton = document.getElementById("placeOrderButton");
 
   let confirmationResult = null;
   let recaptchaVerifier = null;
@@ -84,6 +87,10 @@ const FCM_VAPID_KEY =
 
   function closeCustomerLogin() {
     if (!customerLoginOverlay) return;
+
+    if (customerLoginOverlay.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
 
     customerLoginOverlay.classList.remove("open");
     customerLoginOverlay.setAttribute("aria-hidden", "true");
@@ -175,6 +182,7 @@ recaptchaVerifier =
     sendOtpButton.textContent = "SENDING OTP...";
 
     try {
+      await window.firebaseAuthPersistenceReady;
       const verifier = createRecaptcha();
 
       confirmationResult =
@@ -338,6 +346,9 @@ recaptchaVerifier =
       case "auth/invalid-phone-number":
         return "Please enter a valid Indian mobile number.";
 
+      case "auth/missing-phone-number":
+        return "Enter your mobile number to receive an OTP.";
+
       case "auth/invalid-verification-code":
         return "Incorrect OTP. Please check the OTP and try again.";
 
@@ -358,6 +369,9 @@ recaptchaVerifier =
 
       case "auth/captcha-check-failed":
         return "Security verification failed. Please refresh and try again.";
+
+      case "auth/invalid-app-credential":
+        return "Security verification expired. Please request a new OTP.";
 
       case "auth/network-request-failed":
         return "Network error. Please check your internet connection.";
@@ -385,7 +399,7 @@ recaptchaVerifier =
     placeOrderButton.textContent = "ONLINE ORDERING UNAVAILABLE";
 
     placeOrderButton.classList.add(
-      "place-call-disabled"
+      "place-order-disabled"
     );
 
     placeOrderButton.disabled = true;
@@ -398,9 +412,21 @@ recaptchaVerifier =
     return;
   }
 
+  if (!orderAvailabilityReady || !orderAvailability.acceptingOnlineOrders) {
+    placeOrderButton.classList.add("place-order-disabled");
+    placeOrderButton.disabled = true;
+    placeOrderButton.setAttribute("aria-disabled", "true");
+    placeOrderButton.textContent = !orderAvailabilityReady
+      ? "CHECKING ORDER STATUS"
+      : orderAvailability.paused
+        ? "ONLINE ORDERS PAUSED"
+        : "ONLINE ORDERS CLOSED";
+    return;
+  }
+
   // ONLINE CHECKOUT ENABLED
   placeOrderButton.classList.remove(
-    "place-call-disabled"
+    "place-order-disabled"
   );
 
   placeOrderButton.disabled = false;
@@ -457,6 +483,7 @@ function handlePlaceOrderClick() {
         customerLoggedIn = !!user;
 
         updatePlaceOrderButton();
+        refreshAccountScreens(user);
 
         if (user) {
           console.log(
@@ -470,6 +497,280 @@ function handlePlaceOrderClick() {
     );
   }
 
+
+  function setAppScreen(screenName) {
+    document.querySelectorAll("[data-app-screen]").forEach(section => {
+      section.hidden = section.dataset.appScreen !== screenName;
+    });
+    document.querySelectorAll(".app-screen").forEach(section => {
+      section.classList.toggle("is-active", section.id === `screen-${screenName}`);
+    });
+    customerBottomNav?.querySelectorAll("[data-screen]").forEach(button => {
+      const active = button.dataset.screen === screenName;
+      button.classList.toggle("is-active", active);
+      if (active) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+    });
+    if (categoryNavigation) categoryNavigation.hidden = screenName !== "menu";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (screenName === "orders" || screenName === "profile" || screenName === "rewards") refreshAccountScreens(window.firebaseAuth?.currentUser || null);
+  }
+
+  function accountSignInCard(message) {
+    return `<div class="account-empty"><div class="account-empty-icon">♙</div><h2>Sign in to continue</h2><p>${esc(message)}</p><button type="button" class="account-primary-button" data-account-login>LOGIN WITH MOBILE</button></div>`;
+  }
+
+  function renderRewardsJourney(account = currentLoyaltyAccount, signedIn = !!window.firebaseAuth?.currentUser) {
+    const root = document.getElementById("rewardsJourneyCards");
+    const count = document.getElementById("rewardOrderCount");
+    if (!root || !count) return;
+    if (!signedIn) {
+      count.textContent = "Sign in to track";
+      root.innerHTML = `<div class="rewards-login-hint">Sign in to see your Craving Points and next rewards.<br><button type="button" class="account-primary-button" data-account-login>LOG IN</button></div>`;
+      return;
+    }
+    const completed = Math.max(0, Number(account.completedOrders || 0));
+    count.textContent = `${completed} completed ${completed === 1 ? "order" : "orders"}`;
+    const available = (Array.isArray(account.availableRewards) ? account.availableRewards : []).filter(item => {
+      if (!item.expiresAt) return true;
+      const expiry = item.expiresAt?.toDate ? item.expiresAt.toDate() : new Date(item.expiresAt);
+      return !Number.isNaN(expiry.getTime()) && expiry.getTime() > Date.now();
+    });
+    const cycleOrder = completed === 0 ? 0 : ((completed - 1) % 30) + 1;
+    // At the cycle boundary the next milestone belongs to the new cycle.
+    // Order 31 is a reset step, then order 32 can unlock the cycle's order-2 reward.
+    const previewOrder = cycleOrder === 30 ? 0 : cycleOrder;
+    const availableIds = new Set(available.map(item => item.id));
+    const upcoming = REWARDS_CONFIG.journey.filter(item => item.id && item.order > previewOrder && !availableIds.has(item.id)).slice(0, 2);
+    const cards = [
+      ...available.slice(0, 1).map(reward => {
+        const definition = REWARDS_CONFIG.rewardById[reward.id] || reward;
+        const expiry = reward.expiresAt ? (reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt)) : null;
+        const expires = expiry && !Number.isNaN(expiry.getTime()) ? `Use by ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" }).format(expiry)}` : "Ready to use";
+        return `<article class="journey-card journey-card-ready"><span class="journey-card-status">✦ READY TO USE</span><strong>${esc(definition.title || reward.title)}</strong><p>${esc(definition.detail || reward.detail || "Use this reward on your next order")}</p><small>${esc(expires)}</small><button type="button" class="journey-use-button" data-use-reward="${esc(reward.ticketId || reward.id)}">USE IN CART</button></article>`;
+      }),
+      ...upcoming.slice(0, Math.max(0, 2 - Math.min(available.length, 1))).map(item => `<article class="journey-card journey-card-locked"><span class="journey-card-status">🔒 ORDER ${item.order}</span><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p></article>`)
+    ];
+    root.innerHTML = cards.length ? cards.join("") : `<div class="rewards-login-hint">You’ve reached the end of this reward journey. Keep ordering to begin the next round.</div>`;
+  }
+
+  function setAddressFormVisible(visible) {
+    if (!addressForm) return;
+    addressForm.hidden = !visible;
+    if (visible) addressForm.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function renderSavedAddresses() {
+    if (!savedAddresses) return;
+    const addresses = Array.isArray(currentCustomerProfile.addresses) ? currentCustomerProfile.addresses : [];
+    if (!window.firebaseAuth?.currentUser) {
+      savedAddresses.innerHTML = `<div class="address-empty">Log in to save delivery addresses.</div>`;
+      return;
+    }
+    if (!addresses.length) {
+      savedAddresses.innerHTML = `<div class="address-empty">No saved addresses yet. Add one to make checkout quicker.</div>`;
+      return;
+    }
+    savedAddresses.innerHTML = addresses.map(address => `
+      <article class="saved-address-card">
+        <header><strong>${esc(address.label || "Address")}</strong>${address.isDefault ? '<span class="saved-address-default">Default</span>' : ""}</header>
+        <p><strong>${esc(address.name || "")}</strong><br>${esc(address.address || "")}${address.landmark ? `<br>Near ${esc(address.landmark)}` : ""}<br>${esc(address.area || "")}</p>
+        <footer>
+          <button type="button" data-edit-address="${esc(address.id)}">EDIT</button>
+          ${address.isDefault ? "" : `<button type="button" data-default-address="${esc(address.id)}">SET DEFAULT</button>`}
+          <button type="button" data-delete-address="${esc(address.id)}">DELETE</button>
+        </footer>
+      </article>`).join("");
+  }
+
+  async function saveCustomerProfile(nextProfile) {
+    const user = window.firebaseAuth?.currentUser;
+    if (!user) throw new Error("Please log in to save your address.");
+    const api = window.FirebaseFirestoreAPI;
+    await api.setDoc(api.doc(window.firebaseDB, "customerProfiles", user.uid), {
+      name: String(nextProfile.name || "").trim(),
+      addresses: Array.isArray(nextProfile.addresses) ? nextProfile.addresses : [],
+      updatedAt: api.serverTimestamp()
+    }, { merge: true });
+    currentCustomerProfile = { ...currentCustomerProfile, ...nextProfile };
+    renderSavedAddresses();
+  }
+
+  async function submitAddressForm(event) {
+    event.preventDefault();
+    if (addressMessage) addressMessage.textContent = "";
+    const id = document.getElementById("addressId").value.trim();
+    const label = document.getElementById("addressLabel").value.trim();
+    const name = document.getElementById("addressContactName").value.trim();
+    const address = document.getElementById("addressLine").value.trim();
+    const landmark = document.getElementById("addressLandmark").value.trim();
+    const area = addressArea.value;
+    const isDefault = document.getElementById("addressDefault").checked;
+    if (name.length < 2 || address.length < 8 || !area) {
+      addressMessage.textContent = "Enter a contact name, full address, and delivery area.";
+      return;
+    }
+    const addresses = [...(currentCustomerProfile.addresses || [])];
+    const addressId = id || (crypto.randomUUID ? crypto.randomUUID() : `addr-${Date.now()}`);
+    const nextAddress = { id: addressId, label: label || "Address", name, address, landmark, area, isDefault: isDefault || addresses.length === 0 };
+    const existingIndex = addresses.findIndex(item => item.id === addressId);
+    if (existingIndex < 0 && addresses.length >= 10) {
+      addressMessage.textContent = "You can save up to 10 addresses.";
+      return;
+    }
+    if (nextAddress.isDefault) addresses.forEach(item => { item.isDefault = false; });
+    if (existingIndex < 0) addresses.push(nextAddress);
+    else addresses[existingIndex] = nextAddress;
+    const submitButton = addressForm.querySelector('[type="submit"]');
+    submitButton.disabled = true;
+    submitButton.textContent = "SAVING…";
+    try {
+      await saveCustomerProfile({ ...currentCustomerProfile, name, addresses });
+      addressForm.reset();
+      document.getElementById("addressId").value = "";
+      setAddressFormVisible(false);
+      prefillCheckoutFromDefaultAddress();
+    } catch (error) {
+      console.error("Could not save delivery address:", error);
+      addressMessage.textContent = "Could not save this address. Please try again.";
+    } finally {
+      submitButton.disabled = false;
+      submitButton.textContent = "SAVE ADDRESS";
+    }
+  }
+
+  function editAddress(addressId) {
+    const address = currentCustomerProfile.addresses.find(item => item.id === addressId);
+    if (!address) return;
+    document.getElementById("addressId").value = address.id;
+    document.getElementById("addressLabel").value = address.label || "";
+    document.getElementById("addressContactName").value = address.name || "";
+    document.getElementById("addressLine").value = address.address || "";
+    document.getElementById("addressLandmark").value = address.landmark || "";
+    addressArea.value = address.area || "";
+    document.getElementById("addressDefault").checked = !!address.isDefault;
+    if (addressMessage) addressMessage.textContent = "";
+    setAddressFormVisible(true);
+  }
+
+  function prefillCheckoutFromDefaultAddress() {
+    if (checkoutSavedAddress) {
+      const addresses = currentCustomerProfile.addresses || [];
+      checkoutSavedAddress.innerHTML = `<option value="">Choose an address</option>${addresses.map(item => `<option value="${esc(item.id)}">${esc(item.label || "Address")} — ${esc(item.area || "")}</option>`).join("")}`;
+      if (savedAddressPickerWrap) savedAddressPickerWrap.hidden = !addresses.length;
+    }
+    const chosen = (currentCustomerProfile.addresses || []).find(item => item.isDefault) || currentCustomerProfile.addresses?.[0];
+    if (!chosen) return;
+    if (checkoutSavedAddress) checkoutSavedAddress.value = chosen.id;
+    if (checkoutName && !checkoutName.value) checkoutName.value = chosen.name || "";
+    if (checkoutAddress && !checkoutAddress.value) checkoutAddress.value = chosen.address || "";
+    if (checkoutLandmark && !checkoutLandmark.value) checkoutLandmark.value = chosen.landmark || "";
+    if (checkoutArea && chosen.area) checkoutArea.value = chosen.area;
+  }
+
+  function orderHistoryDate(value) {
+    const date = value?.toDate ? value.toDate() : value ? new Date(value) : null;
+    if (!date || Number.isNaN(date.getTime())) return "Recent order";
+    return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(date);
+  }
+
+  async function refreshAccountScreens(user) {
+    const refreshId = ++accountRefreshToken;
+    if (!ordersContent || !profileContent) return;
+    const addAddressButton = document.getElementById("addAddressButton");
+    if (!user) {
+      if (addAddressButton) addAddressButton.textContent = "LOGIN TO ADD ADDRESS";
+      currentCustomerProfile = { addresses: [] };
+      ordersContent.innerHTML = accountSignInCard("Log in with your mobile number to see orders placed with this account.");
+      profileContent.innerHTML = `<div class="profile-account-card"><div class="profile-avatar">♙</div><div><span>WELCOME TO</span><strong>CRAVING HEAVEN</strong><p>Sign in to view your profile.</p></div><button type="button" class="account-primary-button" data-account-login>LOGIN</button></div>`;
+      renderSavedAddresses();
+      const pointsBalance = document.getElementById("loyaltyPointsBalance");
+      if (pointsBalance) pointsBalance.textContent = "—";
+      const pointsValue = document.getElementById("loyaltyPointsValue");
+      if (pointsValue) pointsValue.textContent = "—";
+      const homePointsBalance = document.getElementById("homeLoyaltyPointsBalance");
+      if (homePointsBalance) homePointsBalance.textContent = "Sign in";
+      const homePointsSummary = document.getElementById("homeLoyaltySummary");
+      if (homePointsSummary) homePointsSummary.textContent = "to see your points.";
+      currentLoyaltyAccount = { points: 0, completedOrders: 0, availableRewards: [] };
+      customerHasOrderedOnline = false;
+      renderRewardsJourney(currentLoyaltyAccount, false);
+      if (cartOverlay?.classList.contains("open")) renderCart();
+      return;
+    }
+
+    if (addAddressButton) addAddressButton.textContent = "+ ADD ADDRESS";
+    const phone = user.phoneNumber || "Mobile number verified";
+    const homePointsBalance = document.getElementById("homeLoyaltyPointsBalance");
+    const homePointsSummary = document.getElementById("homeLoyaltySummary");
+    if (homePointsBalance) homePointsBalance.textContent = "Loading…";
+    if (homePointsSummary) homePointsSummary.textContent = "your Craving Points.";
+    profileContent.innerHTML = `<div class="profile-account-card"><div class="profile-avatar">${esc(phone.slice(-2))}</div><div><span>LOGGED IN AS</span><strong>${esc(phone)}</strong><p>Your account is ready.</p></div><button type="button" class="account-secondary-button" data-account-logout>LOG OUT</button></div>`;
+    if (savedAddresses) savedAddresses.innerHTML = `<div class="account-loading">Loading saved addresses…</div>`;
+    ordersContent.innerHTML = `<div class="account-loading">Loading your orders…</div>`;
+    const firestoreApi = window.FirebaseFirestoreAPI;
+    if (!window.firebaseDB || !firestoreApi?.getDocs || !firestoreApi?.getDoc || !firestoreApi?.query || !firestoreApi?.where) {
+      if (homePointsBalance) homePointsBalance.textContent = "—";
+      if (homePointsSummary) homePointsSummary.textContent = "points are temporarily unavailable.";
+      ordersContent.innerHTML = `<div class="account-empty"><p>Order history is temporarily unavailable. Please try again later.</p></div>`;
+      return;
+    }
+
+    try {
+      const profileRef = firestoreApi.doc(window.firebaseDB, "customerProfiles", user.uid);
+      const loyaltyRef = firestoreApi.doc(window.firebaseDB, "loyaltyAccounts", user.uid);
+      const ordersQuery = firestoreApi.query(firestoreApi.collection(window.firebaseDB, "orders"), firestoreApi.where("uid", "==", user.uid));
+      const [profileSnapshot, loyaltySnapshot, snapshot] = await Promise.all([
+        firestoreApi.getDoc(profileRef), firestoreApi.getDoc(loyaltyRef), firestoreApi.getDocs(ordersQuery)
+      ]);
+      if (refreshId !== accountRefreshToken || window.firebaseAuth?.currentUser?.uid !== user.uid) return;
+      currentCustomerProfile = profileSnapshot.exists() ? profileSnapshot.data() : { addresses: [] };
+      if (!Array.isArray(currentCustomerProfile.addresses)) currentCustomerProfile.addresses = [];
+      const name = currentCustomerProfile.name || "";
+      profileContent.innerHTML = `<div class="profile-account-card"><div class="profile-avatar">${esc(phone.slice(-2))}</div><div><span>LOGGED IN AS</span><strong>${esc(name || phone)}</strong><p>${name ? `${esc(phone)} · Your account is ready.` : "Your account is ready."}</p></div><button type="button" class="account-secondary-button" data-account-logout>LOG OUT</button></div>`;
+      renderSavedAddresses();
+      prefillCheckoutFromDefaultAddress();
+      const orders = snapshot.docs.map(document => ({ id: document.id, ...document.data() }));
+      customerHasOrderedOnline = orders.some(order => order.source === "website");
+      const getTime = value => value?.toDate ? value.toDate().getTime() : new Date(value || 0).getTime();
+      orders.sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt));
+      const pointsBalance = document.getElementById("loyaltyPointsBalance");
+      currentLoyaltyAccount = loyaltySnapshot.exists() ? loyaltySnapshot.data() : { points: 0, completedOrders: 0, availableRewards: [] };
+      if (!Array.isArray(currentLoyaltyAccount.availableRewards)) currentLoyaltyAccount.availableRewards = [];
+      const points = Math.max(0, Number(currentLoyaltyAccount.points || 0));
+      const pointsText = points.toLocaleString("en-IN");
+      if (pointsBalance) pointsBalance.textContent = pointsText;
+      const pointsValue = document.getElementById("loyaltyPointsValue");
+      if (pointsValue) pointsValue.textContent = `₹${(points / REWARDS_CONFIG.pointsPerRedemptionRupees * 10).toFixed(2)}`;
+      const homePointsBalance = document.getElementById("homeLoyaltyPointsBalance");
+      if (homePointsBalance) homePointsBalance.textContent = pointsText;
+      const homePointsSummary = document.getElementById("homeLoyaltySummary");
+      if (homePointsSummary) homePointsSummary.textContent = "Craving Points · combos earn half rate";
+      renderRewardsJourney(currentLoyaltyAccount, true);
+      if (cartOverlay?.classList.contains("open")) renderCart();
+      if (!orders.length) {
+        ordersContent.innerHTML = `<div class="account-empty"><div class="account-empty-icon">▤</div><h2>No orders yet</h2><p>Your order history will show here after your first order.</p><button type="button" class="account-primary-button" data-screen="menu">EXPLORE MENU</button></div>`;
+        return;
+      }
+      ordersContent.innerHTML = orders.map(order => {
+        const orderItems = Array.isArray(order.items) ? order.items.map(item => `${esc(item.name || "Item")} × ${Number(item.qty || 1)}`).join(" · ") : "Order details unavailable";
+        const orderMode = order.orderType === "pickup" ? "Store pickup" : "Delivery";
+        return `<article class="order-history-card"><div class="order-history-head"><div><span class="order-history-date">${esc(orderHistoryDate(order.createdAt))} · ${orderMode}</span><h2>Order #${esc(order.id.slice(-7).toUpperCase())}</h2></div><span class="order-status-pill">${esc(String(order.status || "Received"))}</span></div><p>${orderItems}</p><div class="order-history-total"><span>ORDER TOTAL</span><strong>${money(order.total || order.subtotal || 0)}</strong></div></article>`;
+      }).join("");
+    } catch (error) {
+      console.error("Could not load customer orders:", error);
+      if (savedAddresses?.querySelector(".account-loading")) {
+        savedAddresses.innerHTML = `<div class="address-empty">Saved addresses could not load. Please try again.</div>`;
+      }
+      const pointsBalance = document.getElementById("loyaltyPointsBalance");
+      if (pointsBalance && pointsBalance.textContent === "Loading…") pointsBalance.textContent = "—";
+      const homePointsBalance = document.getElementById("homeLoyaltyPointsBalance");
+      if (homePointsBalance && homePointsBalance.textContent === "Loading…") homePointsBalance.textContent = "—";
+      const homePointsSummary = document.getElementById("homeLoyaltySummary");
+      if (homePointsSummary && homePointsSummary.textContent === "your Craving Points.") homePointsSummary.textContent = "couldn’t load. Try again later.";
+      ordersContent.innerHTML = `<div class="account-empty"><h2>Orders couldn’t load</h2><p>Please check your connection and try again.</p><button type="button" class="account-primary-button" data-reload-orders>TRY AGAIN</button></div>`;
+    }
+  }
 
   // ---------------------------------------------------------
   // EVENT LISTENERS
@@ -612,6 +913,13 @@ const checkoutLandmark =
 
 const checkoutArea =
   document.getElementById("checkoutArea");
+const checkoutSavedAddress = document.getElementById("checkoutSavedAddress");
+const savedAddressPickerWrap = document.getElementById("savedAddressPickerWrap");
+const deliveryDetailsFields = document.getElementById("deliveryDetailsFields");
+const pickupInfo = document.getElementById("pickupInfo");
+const checkoutTitle = document.getElementById("checkoutTitle");
+const checkoutPaymentTitle = document.getElementById("checkoutPaymentTitle");
+const checkoutPaymentNote = document.getElementById("checkoutPaymentNote");
 
 const checkoutOrderSummary =
   document.getElementById("checkoutOrderSummary");
@@ -621,6 +929,7 @@ const checkoutSubmit =
 
 const checkoutMessage =
   document.getElementById("checkoutMessage");
+let checkoutReturnFocus = null;
 
 // =========================================================
 // ORDER SUCCESS
@@ -634,15 +943,21 @@ const orderSuccessClose =
 
 const orderSuccessId =
   document.getElementById("orderSuccessId");
+const orderSuccessNote = document.getElementById("orderSuccessNote");
 
 
-function openOrderSuccess(orderId) {
+function openOrderSuccess(orderId, orderType = "delivery") {
 
   if (!orderSuccessOverlay) return;
 
   if (orderSuccessId) {
     orderSuccessId.textContent =
       `#${orderId}`;
+  }
+  if (orderSuccessNote) {
+    orderSuccessNote.textContent = orderType === "pickup"
+      ? "Pickup at Shop 10, Pearl Oasis Building, Pathanwadi, Malad East. Pay at the store and track readiness from Your Orders."
+      : "Track your order anytime from the Orders screen.";
   }
 
   orderSuccessOverlay.classList.add("open");
@@ -662,6 +977,10 @@ function closeOrderSuccess() {
 
   if (!orderSuccessOverlay) return;
 
+  if (orderSuccessOverlay.contains(document.activeElement)) {
+    document.activeElement.blur();
+  }
+
   orderSuccessOverlay.classList.remove("open");
 
   orderSuccessOverlay.setAttribute(
@@ -679,7 +998,10 @@ if (orderSuccessClose) {
 
   orderSuccessClose.addEventListener(
     "click",
-    closeOrderSuccess
+    () => {
+      closeOrderSuccess();
+      setAppScreen("orders");
+    }
   );
 }
 
@@ -708,11 +1030,32 @@ function getCheckoutTotal() {
   const subtotal = getPaidSubtotal();
 
   const delivery =
-    subtotal >= FREE_DELIVERY_THRESHOLD
+    isPickupSelected() || subtotal >= FREE_DELIVERY_THRESHOLD
       ? 0
       : DELIVERY_CHARGE;
 
   return subtotal + delivery;
+}
+
+function isPickupSelected() {
+  return document.querySelector('input[name="fulfillmentType"]:checked')?.value === "pickup";
+}
+
+function updateCheckoutFulfillmentUI() {
+  const pickup = isPickupSelected();
+  const rewardWasCleared = pickup && getSelectedMilestoneReward()?.kind === "free-delivery";
+  if (deliveryDetailsFields) deliveryDetailsFields.hidden = pickup;
+  if (pickupInfo) pickupInfo.hidden = !pickup;
+  if (checkoutAddress) checkoutAddress.required = !pickup;
+  if (checkoutArea) checkoutArea.required = !pickup;
+  if (checkoutTitle) checkoutTitle.textContent = pickup ? "PICKUP ORDER" : "DELIVERY DETAILS";
+  if (checkoutPaymentTitle) checkoutPaymentTitle.textContent = pickup ? "PAY ON PICKUP" : "PAY ON DELIVERY";
+  if (checkoutPaymentNote) checkoutPaymentNote.textContent = pickup ? "Cash / UPI when you collect at the store" : "Cash / UPI on delivery";
+  if (rewardWasCleared) {
+    selectedMilestoneRewardId = null;
+    render();
+  }
+  renderCheckoutSummary();
 }
 
 
@@ -721,14 +1064,18 @@ function renderCheckoutSummary() {
   if (!checkoutOrderSummary) return;
 
   const subtotal = getPaidSubtotal();
+  const eligibleSubtotal = getOfferEligibleSubtotal();
+  const selectedReward = getSelectedMilestoneReward();
+  const estimatedPoints = estimatePointsForCurrentOrder(selectedReward, eligibleSubtotal);
 
   const delivery =
-    subtotal >= FREE_DELIVERY_THRESHOLD
+    isPickupSelected() || selectedReward?.kind === "free-delivery" || subtotal >= FREE_DELIVERY_THRESHOLD
       ? 0
       : DELIVERY_CHARGE;
 
-  const total =
-    subtotal + delivery;
+  const promotionDiscount = selectedReward?.kind === "discount" ? selectedReward.amount : 0;
+    const pointsDiscount = selectedPointsToRedeem / REWARDS_CONFIG.pointsPerRedemptionRupees * 10;
+  const total = Math.max(0, subtotal - promotionDiscount - pointsDiscount + delivery);
 
 
   const itemsHtml = cart
@@ -762,7 +1109,7 @@ function renderCheckoutSummary() {
         </div>
       `;
     })
-    .join("");
+    .join("") + (selectedReward?.kind === "free-item" ? `<div class="checkout-summary-item"><span>🎁 ${esc(selectedReward.item)} · Royal reward</span><strong>FREE</strong></div>` : "") + (selectedWelcomeOffer ? `<div class="checkout-summary-item"><span>🎁 ${esc(REWARDS_CONFIG.welcomeItem)} · First-order gift</span><strong>FREE</strong></div>` : "");
 
 
   checkoutOrderSummary.innerHTML = `
@@ -775,12 +1122,20 @@ function renderCheckoutSummary() {
     </div>
 
     <div class="checkout-summary-item">
-      <span>DELIVERY</span>
+      <span>${isPickupSelected() ? "PICKUP" : "DELIVERY"}</span>
 
       <strong class="${delivery === 0 ? "free" : ""}">
-        ${delivery === 0 ? "FREE" : money(delivery)}
+        ${isPickupSelected() ? "NO CHARGE" : delivery === 0 ? "FREE" : money(delivery)}
       </strong>
     </div>
+
+    ${promotionDiscount > 0 ? `<div class="checkout-summary-item"><span>OFFER SAVINGS</span><strong>−${money(promotionDiscount)}</strong></div>` : ""}
+    ${selectedReward?.kind === "free-delivery" ? `<div class="checkout-summary-item"><span>ROYAL REWARDS · DELIVERY</span><strong>−${money(DELIVERY_CHARGE)}</strong></div>` : ""}
+    ${pointsDiscount > 0 ? `<div class="checkout-summary-item"><span>CRAVING POINTS REDEEMED (${selectedPointsToRedeem})</span><strong>−${money(pointsDiscount)}</strong></div>` : ""}
+    ${selectedReward?.kind === "bonus-points" ? `<div class="checkout-summary-item"><span>CRAVING POINTS BONUS</span><strong>+${selectedReward.points}</strong></div>` : ""}
+    ${selectedReward?.kind === "double-points" ? `<div class="checkout-summary-item"><span>DOUBLE CRAVING POINTS REWARD</span><strong>Up to +${selectedReward.maxBonusPoints}</strong></div>` : ""}
+    <div class="checkout-summary-item checkout-points-estimate"><span>CRAVING POINTS YOU’LL EARN</span><strong>+${estimatedPoints} pts</strong></div>
+    <p class="checkout-points-note">Added to your balance once your order is ${isPickupSelected() ? "completed" : "delivered"}. Regular items earn 1 Craving Point per ₹10; combos earn 1 per ₹20.</p>
 
     <div class="checkout-summary-total">
 
@@ -801,7 +1156,7 @@ function openCheckout() {
 
     alert(
       "ONLINE CHECKOUT IS CURRENTLY UNAVAILABLE.\n\n" +
-      "Please call CRAVING HEAVEN to place your order."
+      "Please try again later or continue browsing the menu."
     );
 
     return;
@@ -821,6 +1176,13 @@ function openCheckout() {
     openCustomerLogin();
 
     return;
+  }
+
+  prefillCheckoutFromDefaultAddress();
+  updateCheckoutFulfillmentUI();
+
+  if (!checkoutOverlay.classList.contains("open")) {
+    checkoutReturnFocus = document.activeElement;
   }
 
 
@@ -850,6 +1212,10 @@ function openCheckout() {
 
 function closeCheckout() {
 
+  if (document.activeElement && checkoutOverlay.contains(document.activeElement)) {
+    document.activeElement.blur();
+  }
+
   checkoutOverlay.classList.remove("open");
 
   checkoutOverlay.setAttribute(
@@ -860,6 +1226,12 @@ function closeCheckout() {
   document.body.classList.remove(
     "checkout-open"
   );
+
+  const returnFocus = checkoutReturnFocus;
+  checkoutReturnFocus = null;
+  if (returnFocus?.isConnected && !returnFocus.disabled) {
+    returnFocus.focus({ preventScroll: true });
+  }
 }
 
 
@@ -867,6 +1239,8 @@ function validateCheckoutForm() {
 
   const name =
     checkoutName.value.trim();
+
+  const pickup = isPickupSelected();
 
   const address =
     checkoutAddress.value.trim();
@@ -886,7 +1260,7 @@ function validateCheckoutForm() {
   }
 
 
-  if (address.length < 8) {
+  if (!pickup && address.length < 8) {
 
     checkoutMessage.textContent =
       "Please enter your complete delivery address.";
@@ -897,7 +1271,7 @@ function validateCheckoutForm() {
   }
 
 
-  if (!area) {
+  if (!pickup && !area) {
 
     checkoutMessage.textContent =
       "Please select your area.";
@@ -912,255 +1286,86 @@ function validateCheckoutForm() {
 }
 
 
-function buildOrderMessage(orderId = "") {
-
-  const user =
-    window.firebaseAuth?.currentUser;
-
-  const mobile =
-    user?.phoneNumber ||
-    "Verified mobile";
-
-
-  const subtotal =
-    getPaidSubtotal();
-
-  const delivery =
-    subtotal >= FREE_DELIVERY_THRESHOLD
-      ? 0
-      : DELIVERY_CHARGE;
-
-  const total =
-    subtotal + delivery;
-
-
-  const itemsText =
-    cart
-      .map(item => {
-
-        if (item.isFreeOffer) {
-
-          return `🎁 ${item.name} × ${item.qty} — FREE`;
-        }
-
-        return `• ${item.name} × ${item.qty} — ${money(item.price * item.qty)}`;
-
-      })
-      .join("\n");
-
-
-  return `🍗 *CRAVING HEAVEN — NEW ORDER*
-
-🆔 Order ID: ${orderId || "Pending"}
-
-👤 Customer: ${checkoutName.value.trim()}
-
-📱 Mobile: ${mobile}
-
-📍 Area: ${checkoutArea.value}
-
-🏠 Address:
-${checkoutAddress.value.trim()}
-
-${checkoutLandmark.value.trim()
-    ? `📌 Landmark: ${checkoutLandmark.value.trim()}\n`
-    : ""}
-
-🍔 *ORDER ITEMS*
-
-${itemsText}
-
-💰 Item Total: ${money(subtotal)}
-
-🚚 Delivery: ${
-    delivery === 0
-      ? "FREE"
-      : money(delivery)
-  }
-
-💵 *TOTAL: ${money(total)}*
-
-💳 Payment: Pay on Delivery
-
-━━━━━━━━━━━━━━━━━━
-CRAVING HEAVEN
-Pathanwadi, Malad East
-━━━━━━━━━━━━━━━━━━`;
-}
-
-
 async function continueToOrder() {
-	
-	
-	  if (!ONLINE_CHECKOUT_ENABLED) {
-
-    checkoutMessage.textContent =
-      "Online checkout is currently unavailable.";
-
-    return;
-  }
-
   checkoutMessage.textContent = "";
-
-  if (!validateCheckoutForm()) {
+  if (!orderAvailabilityReady || !orderAvailability.acceptingOnlineOrders) {
+    checkoutMessage.textContent = orderAvailability.paused
+      ? "We’re preparing a rush of fresh orders right now. Please check back in a little while—we’d love to serve you soon!"
+      : "We’re closed for now, but we’ll be back soon with your favourites. Please check back a little later!";
     return;
   }
+  if (!validateCheckoutForm()) return;
 
+  const user = window.firebaseAuth?.currentUser;
+  const pickup = isPickupSelected();
+  if (!user) {
+    checkoutMessage.textContent = "Your login session has expired. Please log in again.";
+    return;
+  }
+  if (!window.FirebaseFunctionsAPI?.httpsCallable || !window.firebaseFunctions) {
+    checkoutMessage.textContent = "The secure order service is not ready. Please try again later.";
+    return;
+  }
 
   checkoutSubmit.disabled = true;
-
-  checkoutSubmit.textContent =
-    "CREATING ORDER...";
-
-
-  const user =
-    window.firebaseAuth?.currentUser;
-
-
-  if (!user) {
-
-    checkoutMessage.textContent =
-      "Your login session has expired. Please login again.";
-
-    checkoutSubmit.disabled = false;
-
-    checkoutSubmit.textContent =
-      "PLACE ORDER";
-
-    return;
-  }
-
-
-  const subtotal =
-    getPaidSubtotal();
-
-  const delivery =
-    subtotal >= FREE_DELIVERY_THRESHOLD
-      ? 0
-      : DELIVERY_CHARGE;
-
-  const total =
-    subtotal + delivery;
-
-
+  checkoutSubmit.textContent = "CREATING ORDER…";
   try {
+    if (!activeOrderRequestId) {
+      activeOrderRequestId = crypto.randomUUID
+        ? crypto.randomUUID()
+        : `req_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    }
+    const createOrder = window.FirebaseFunctionsAPI.httpsCallable(window.firebaseFunctions, "createOrder");
+    const response = await createOrder({
+      requestId: activeOrderRequestId,
+      customerName: checkoutName.value.trim(),
+      orderType: pickup ? "pickup" : "delivery",
+      address: pickup ? "" : checkoutAddress.value.trim(),
+      landmark: pickup ? "" : checkoutLandmark.value.trim(),
+      area: pickup ? "" : checkoutArea.value,
+      paymentMethod: pickup ? "Pay on Pickup" : "Pay on Delivery",
+      loyaltyRewardId: selectedMilestoneRewardId || "",
+      redeemPoints: selectedPointsToRedeem,
+      applyFirstOrderReward: selectedWelcomeOffer,
+      items: cart.map(item => ({
+        name: item.name,
+        qty: item.qty,
+        isFreeOffer: !!item.isFreeOffer,
+        freeOfferId: item.freeOfferId || ""
+      }))
+    });
+    const order = response.data;
+    if (!order?.orderId || !Array.isArray(order.items)) throw new Error("The order service returned an invalid confirmation.");
 
-    const orderData = {
-		uid:
-    user.uid,
-
-      customerName:
-        checkoutName.value.trim(),
-
-      mobile:
-        user.phoneNumber || "",
-
-      address:
-        checkoutAddress.value.trim(),
-
-      landmark:
-        checkoutLandmark.value.trim(),
-
-      area:
-        checkoutArea.value,
-
-      paymentMethod:
-        "Pay on Delivery",
-
-      items:
-        cart.map(item => ({
-          name: item.name,
-          price: item.price,
-          qty: item.qty,
-          isFreeOffer:
-            !!item.isFreeOffer
-        })),
-
-      subtotal,
-      deliveryCharge: delivery,
-      total,
-
-      status: "new",
-
-      source: "website",
-
-      createdAt:
-        window.FirebaseFirestoreAPI.serverTimestamp()
-    };
-
-
-    const orderRef =
-      await window.FirebaseFirestoreAPI.addDoc(
-        window.FirebaseFirestoreAPI.collection(
-          window.firebaseDB,
-          "orders"
-        ),
-        orderData
-      );
-
-
-    const orderId =
-      orderRef.id;
-
-
-    const message =
-      buildOrderMessage(orderId);
-
-
-    const whatsappUrl =
-      `https://wa.me/917700929693?text=${
-        encodeURIComponent(message)
-      }`;
-
-
-// Open WhatsApp with the order details.
-window.open(
-  whatsappUrl,
-  "_blank"
-);
-
-// Update checkout button.
-checkoutSubmit.textContent =
-  "ORDER SENT ✓";
-
-// Close checkout first.
-closeCheckout();
-
-// Clear the cart after successful order.
-cart = [];
-selectedFreeOfferId = null;
-render();
-
-// Show order confirmation.
-openOrderSuccess(orderId);
-
-// Reset checkout button for the next order.
-setTimeout(() => {
-
-  checkoutSubmit.disabled = false;
-
-  checkoutSubmit.textContent =
-    "PLACE ORDER";
-
-}, 500);
-
-
+    cart = order.items.map(item => ({
+      name: item.name,
+      price: Number(item.price),
+      qty: Number(item.qty),
+      isFreeOffer: !!item.isFreeOffer,
+      isCombo: !!item.isCombo
+    }));
+    activeOrderRequestId = null;
+    cart = [];
+    selectedFreeOfferId = null;
+    selectedMilestoneRewardId = null;
+    selectedPointsToRedeem = 0;
+    selectedWelcomeOffer = false;
+    closeCheckout();
+    closeCart();
+    render();
+    openOrderSuccess(order.orderId, pickup ? "pickup" : "delivery");
+    refreshAccountScreens(window.firebaseAuth?.currentUser || null);
   } catch (error) {
-
-    console.error(
-      "Order creation failed:",
-      error
-    );
-
-
-    checkoutMessage.textContent =
-      "Unable to create your order. Please try again or call us.";
-
-
+    console.error("Order creation failed:", error);
+    const code = error?.code || "";
+    checkoutMessage.textContent = code === "functions/failed-precondition" && /rush|high order volume|closed right now/i.test(error?.message || "")
+      ? error.message
+      : code.includes("not-found") || code.includes("unavailable")
+      ? "The secure order service is not available yet. Please try again later."
+      : error?.message || "Unable to create your order. Please try again.";
+  } finally {
     checkoutSubmit.disabled = false;
-
-    checkoutSubmit.textContent =
-      "PLACE ORDER";
+    checkoutSubmit.textContent = "PLACE ORDER";
   }
 }
 
@@ -1209,6 +1414,10 @@ if (checkoutForm) {
   );
 }
 
+document.querySelectorAll('input[name="fulfillmentType"]').forEach(input => {
+  input.addEventListener("change", updateCheckoutFulfillmentUI);
+});
+
 
 document.addEventListener(
   "keydown",
@@ -1233,69 +1442,67 @@ document.addEventListener(
   // END CUSTOMER PHONE LOGIN / FIREBASE OTP
   // =========================================================
   
-const FREE_OFFERS = {
-  burger3: {
-    id: "burger3",
-    name: "BUY 3, GET 1 FREE",
-    requirement: "3 CRUNCHY CHICKEN BURGERS",
-    freeItem: "CH CRUNCHY KING BURGER",
-    freePrice: 0,
-    days: ["Monday", "Tuesday", "Wednesday"],
-    type: "burger-count",
-    requiredQty: 3
-  },
-
-  weekend: {
-    id: "weekend",
-    name: "WEEKEND FEAST DEAL",
-    requirement: "ORDER ₹499 OR MORE",
-    freeItem: "PERI PERI SEASONING FRIES - HALF",
-    freePrice: 0,
-    days: ["Saturday", "Sunday"],
-    type: "subtotal",
-    threshold: 499
-  },
-
-  family: {
-    id: "family",
-    name: "FAMILY FEAST BONUS",
-    requirement: "ORDER ₹699 OR MORE",
-    freeItem: "CLASSIC REGULAR STRIPS - 3 PCS",
-    freePrice: 0,
-    days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-    type: "subtotal",
-    threshold: 699
-  },
-
-  sunday: {
-    id: "sunday",
-    name: "SUNDAY CHICKEN FEAST",
-    requirement: "ORDER ₹399 OR MORE",
-    freeItem: "CRUNCHY CHICKEN POPCORN - MEDIUM",
-    freePrice: 0,
-    days: ["Sunday"],
-    type: "subtotal",
-    threshold: 399
-  }
-};
+const FREE_OFFERS = Object.freeze({});
 
 let selectedFreeOfferId = null;
+let selectedMilestoneRewardId = null;
+let selectedPointsToRedeem = 0;
+let selectedWelcomeOffer = false;
+let customerHasOrderedOnline = false;
 
   const nav = document.getElementById("categoryNav");
   const sectionsRoot = document.getElementById("menuSections");
-  const comboSlider = document.getElementById("comboSlider");
+  const comboMenuRoot = document.getElementById("comboMenuGrid");
   const cartOverlay = document.getElementById("cartOverlay");
   const cartItemsEl = document.getElementById("cartItems");
   const cartSummaryEl = document.getElementById("cartSummary");
   const cartCountEl = document.getElementById("cartCount");
   const clearCartButton = document.getElementById("clearCart");
-  const placeCall = document.getElementById("placeCall");
-  const slidePrev = document.getElementById("slidePrev");
-  const slideNext = document.getElementById("slideNext");
+  const customerBottomNav = document.querySelector(".customer-bottom-nav");
+  const categoryNavigation = document.getElementById("categoryNav");
+  const ordersContent = document.getElementById("ordersContent");
+  const profileContent = document.getElementById("profileContent");
+  const savedAddresses = document.getElementById("savedAddresses");
+  const addressForm = document.getElementById("addressForm");
+  const addressArea = document.getElementById("addressArea");
+  const addressMessage = document.getElementById("addressMessage");
+  let currentCustomerProfile = { addresses: [] };
+  let currentLoyaltyAccount = { points: 0, completedOrders: 0, availableRewards: [] };
+  let accountRefreshToken = 0;
   
 
-  let cart = [];
+  const CART_STORAGE_KEY = "cravingHeavenCartV1";
+  const validCartPrices = new Map();
+  for (const section of Object.values(MENU_DATA)) {
+    for (const item of section.items) {
+      if (item.options) {
+        for (const option of item.options) validCartPrices.set(option.name, Number(option.price));
+      } else {
+        validCartPrices.set(item.name, Number(item.price));
+      }
+    }
+  }
+  for (const combo of COMBO_MENU_DATA) validCartPrices.set(combo.name, Number(combo.price));
+
+  function loadCart() {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(CART_STORAGE_KEY) || "[]");
+      if (!Array.isArray(saved)) return [];
+      return saved.flatMap(item => {
+        const name = typeof item?.name === "string" ? item.name : "";
+        const price = validCartPrices.get(name);
+        const qty = Number(item?.qty);
+        if (price === undefined || Number(item?.price) !== price || !Number.isSafeInteger(qty) || qty < 1 || qty > 99) return [];
+        return [{ name, price, qty, isCombo: COMBO_MENU_DATA.some(combo => combo.name === name) }];
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  let cart = loadCart();
   let activeCategory = "";
+  let activeOrderRequestId = null;
 
   const esc = (value) => String(value).replace(/[&<>"']/g, char => ({
     "&": "&amp;",
@@ -1352,7 +1559,7 @@ let selectedFreeOfferId = null;
     sectionsRoot.innerHTML = Object.entries(MENU_DATA).map(([id, section]) => {
       const cards = section.items.map(item => {
         const inCart = item.options ? null : cartItem(item.name, Number(item.price));
-        const image = `<img src="${esc(item.image)}" alt="${esc(item.name)}" loading="lazy" onerror="this.closest('.food-image').classList.add('image-missing')">`;
+        const image = item.image ? `<img src="${esc(item.image)}" alt="${esc(item.name)}" loading="lazy" onerror="this.closest('.food-image').classList.add('image-missing')">` : "";
 
         let controls;
         if (item.options) {
@@ -1364,11 +1571,14 @@ let selectedFreeOfferId = null;
 
                 return optionInCart
                   ? `<div class="option-control">
-                       <button type="button" data-action="minus" data-name="${esc(option.name)}" data-price="${optionPrice}" aria-label="Decrease ${esc(option.label)}">−</button>
-                       <span>${optionInCart.qty}</span>
-                       <button type="button" data-action="plus" data-name="${esc(option.name)}" data-price="${optionPrice}" aria-label="Increase ${esc(option.label)}">+</button>
+                       <span class="option-selected-label">${esc(option.label)} — ${money(optionPrice)}</span>
+                       <div class="option-qty-control">
+                         <button type="button" data-action="minus" data-name="${esc(option.name)}" data-price="${optionPrice}" aria-label="Decrease ${esc(option.label)}">−</button>
+                         <span class="option-qty">${optionInCart.qty}</span>
+                         <button type="button" data-action="plus" data-name="${esc(option.name)}" data-price="${optionPrice}" aria-label="Increase ${esc(option.label)}">+</button>
+                       </div>
                      </div>`
-                  : `<button type="button" class="option" data-add="1" data-name="${esc(option.name)}" data-price="${optionPrice}">${esc(option.label)}</button>`;
+                  : `<button type="button" class="option" data-add="1" data-name="${esc(option.name)}" data-price="${optionPrice}" aria-label="Add ${esc(option.name)} for ${money(optionPrice)}"><span class="option-label">${esc(option.label)}</span><strong>${money(optionPrice)}</strong><span class="option-add-hint" aria-hidden="true">ADD +</span></button>`;
               }).join("")}
             </div>`;
         } else {
@@ -1387,9 +1597,9 @@ let selectedFreeOfferId = null;
 
         return `
           <article class="menu-card">
-            <div class="food-image">
+            <div class="food-image${item.image ? "" : " image-missing"}" data-fallback="${esc(item.name)}">
               ${image}
-              <span class="image-fallback">FOOD IMAGE</span>
+              <span class="image-fallback">${esc(item.name)}</span>
             </div>
             <div class="card-content">
               <h3>${esc(item.name)}</h3>
@@ -1402,7 +1612,6 @@ let selectedFreeOfferId = null;
       return `
         <section class="menu-section" id="${esc(id)}">
           <div class="section-heading">
-            <span class="section-kicker">CRAVING HEAVEN</span>
             <h2>${esc(section.title)}</h2>
             <p>${esc(section.subtitle)}</p>
           </div>
@@ -1418,35 +1627,66 @@ let selectedFreeOfferId = null;
       img.addEventListener("load", update, { once: true });
       update();
     });
+    filterCustomerMenu(document.getElementById("customerMenuSearch")?.value || "");
   }
 
-  function renderCombos() {
-    comboSlider.innerHTML = COMBO_SLIDES.map(item => {
-      const price = Number(item.price);
-      const inCart = cartItem(item.name, price);
+  function filterCustomerMenu(value) {
+    const query = String(value || "").trim().toLocaleLowerCase();
+    const sections = [...document.querySelectorAll("#menuSections .menu-section")];
+    let visibleCount = 0;
+    for (const section of sections) {
+      let sectionCount = 0;
+      const categoryLabel = section.querySelector(".section-heading h2")?.textContent.toLocaleLowerCase() || "";
+      section.querySelectorAll(".menu-card").forEach(card => {
+        const matches = !query || card.textContent.toLocaleLowerCase().includes(query) || categoryLabel.includes(query);
+        card.hidden = !matches;
+        if (matches) sectionCount += 1;
+      });
+      section.hidden = sectionCount === 0;
+      visibleCount += sectionCount;
+      const categoryLink = nav.querySelector(`[data-category="${section.id}"]`);
+      if (categoryLink) categoryLink.hidden = query.length > 0 && sectionCount === 0;
+    }
+    const status = document.getElementById("customerMenuSearchStatus");
+    if (status) status.textContent = query ? `${visibleCount} ${visibleCount === 1 ? "dish" : "dishes"} found` : "";
+  }
 
+  const customerMenuSearch = document.getElementById("customerMenuSearch");
+  const clearCustomerMenuSearch = document.getElementById("clearCustomerMenuSearch");
+  customerMenuSearch?.addEventListener("input", () => {
+    filterCustomerMenu(customerMenuSearch.value);
+    if (clearCustomerMenuSearch) clearCustomerMenuSearch.hidden = !customerMenuSearch.value;
+  });
+  clearCustomerMenuSearch?.addEventListener("click", () => {
+    customerMenuSearch.value = "";
+    clearCustomerMenuSearch.hidden = true;
+    filterCustomerMenu("");
+    customerMenuSearch.focus();
+  });
+
+  function renderComboMenu() {
+    if (!comboMenuRoot) return;
+    comboMenuRoot.innerHTML = COMBO_MENU_DATA.map(combo => {
+      const comboPrice = Number(combo.price);
+      const inCart = cartItem(combo.name, comboPrice);
       return `
-        <article class="combo-slide">
-          <div class="combo-image">
-            <img src="${esc(item.image)}" alt="${esc(item.name)}" loading="lazy" onerror="this.closest('.combo-image').classList.add('image-missing')">
-            
-            <span class="combo-badge">VALUE PICK</span>
-          </div>
-          <div class="combo-info">
-            <h3>${esc(item.name)}</h3>
-            <p>${esc(item.description)}</p>
-            <div class="combo-row">
-<strong class="combo-price">${price === 0 ? "DEAL" : money(price)}</strong>
-           ${inCart
-  ? `<div class="qty-control">
-       <button type="button" data-action="minus" data-name="${esc(item.name)}" data-price="${price}" aria-label="Decrease ${esc(item.name)}">−</button>
-       <span>${inCart.qty}</span>
-       <button type="button" data-action="plus" data-name="${esc(item.name)}" data-price="${price}" aria-label="Increase ${esc(item.name)}">+</button>
-     </div>`
-  : ""}
+      <article class="combo-menu-card">
+        <div class="combo-menu-image${combo.image ? "" : " image-missing"}" data-fallback="${esc(combo.name)}">${combo.image ? `<img src="${esc(combo.image)}" alt="${esc(combo.name)}" loading="lazy" onerror="this.closest('.combo-menu-image').classList.add('image-missing')">` : ""}<span>SAVE ${money(combo.value - combo.price)}</span></div>
+        <div class="combo-menu-content">
+          <h3>${esc(combo.name)}</h3>
+          <ul>${combo.items.map(item => `<li>${esc(item)}</li>`).join("")}</ul>
+          <div class="combo-menu-footer">
+            <div class="combo-menu-prices">
+              <div><span>MENU VALUE</span><del>${money(combo.value)}</del></div>
+              <div><span>YOU SAVE</span><strong>${money(combo.value - combo.price)}</strong></div>
+              <div class="combo-price-total"><span>COMBO PRICE</span><b>${money(comboPrice)}</b></div>
             </div>
+            ${inCart
+              ? `<div class="combo-cart-control"><span>IN YOUR CART</span><div class="qty-control"><button type="button" data-action="minus" data-name="${esc(combo.name)}" data-price="${comboPrice}" aria-label="Remove one ${esc(combo.name)}">−</button><span>${inCart.qty}</span><button type="button" data-action="plus" data-name="${esc(combo.name)}" data-price="${comboPrice}" aria-label="Add one ${esc(combo.name)}">+</button></div></div>`
+              : `<button type="button" class="add-btn combo-add-btn" data-add="1" data-name="${esc(combo.name)}" data-price="${comboPrice}" aria-label="Add ${esc(combo.name)} to cart">ADD COMBO TO CART</button>`}
           </div>
-        </article>`;
+        </div>
+      </article>`;
     }).join("");
   }
  function getMumbaiDay() {
@@ -1463,11 +1703,40 @@ function getPaidSubtotal() {
   }, 0);
 }
 
+function estimatePointsForCurrentOrder(selectedReward = getSelectedMilestoneReward(), eligibleSubtotal = getOfferEligibleSubtotal()) {
+  const { regularSubtotal, comboSubtotal } = cart.reduce((totals, item) => {
+    if (item.isFreeOffer) return totals;
+    const lineTotal = Number(item.price || 0) * Number(item.qty || 0);
+    const isCombo = item.isCombo || COMBO_MENU_DATA.some(combo => combo.name === item.name);
+    if (isCombo) totals.comboSubtotal += lineTotal;
+    else if (!REWARD_EXCLUDED_NAMES.has(item.name)) totals.regularSubtotal += lineTotal;
+    return totals;
+  }, { regularSubtotal: 0, comboSubtotal: 0 });
+
+  const promotionDiscount = selectedReward?.kind === "discount" ? selectedReward.amount : 0;
+  const pointsDiscount = selectedPointsToRedeem / REWARDS_CONFIG.pointsPerRedemptionRupees * 10;
+  const regularPoints = Math.floor(Math.max(0, regularSubtotal - promotionDiscount - pointsDiscount) / REWARDS_CONFIG.pointRateRegularRupees);
+  const comboPoints = Math.floor(comboSubtotal / REWARDS_CONFIG.pointRateComboRupees);
+  const basePoints = regularPoints + comboPoints;
+
+  if (selectedReward?.kind === "bonus-points") return basePoints + Number(selectedReward.points || 0);
+  if (selectedReward?.kind === "double-points") return basePoints + Math.min(basePoints, Number(selectedReward.maxBonusPoints || 0));
+  return basePoints;
+}
+
+function getOfferEligibleSubtotal() {
+  return cart.reduce((sum, item) => {
+    if (item.isFreeOffer || item.isCombo || COMBO_MENU_DATA.some(combo => combo.name === item.name)) return sum;
+    if (REWARD_EXCLUDED_NAMES.has(item.name)) return sum;
+    return sum + item.price * item.qty;
+  }, 0);
+}
+
 function getBurgerCount() {
   return cart.reduce((count, item) => {
-    if (item.isFreeOffer) return count;
+    if (item.isFreeOffer || item.isCombo || COMBO_MENU_DATA.some(combo => combo.name === item.name)) return count;
 
-    if (item.name === "CLASSIC CRUNCHY BURGER") {
+    if (item.name.trim().toLowerCase() === "classic crunchy burger") {
       return count + item.qty;
     }
 
@@ -1480,11 +1749,11 @@ function isOfferDay(offer) {
   return offer.days.includes(today);
 }
 
-function isOfferQualified(offer, subtotal, burgerCount) {
+function isOfferQualified(offer, eligibleSubtotal, burgerCount) {
   if (!isOfferDay(offer)) return false;
 
   if (offer.type === "subtotal") {
-    return subtotal >= offer.threshold;
+    return eligibleSubtotal >= offer.threshold;
   }
 
   if (offer.type === "burger-count") {
@@ -1496,6 +1765,21 @@ function isOfferQualified(offer, subtotal, burgerCount) {
 
 function removeSelectedFreeOffer() {
   cart = cart.filter(item => !item.isFreeOffer);
+  selectedFreeOfferId = null;
+}
+
+function getSelectedMilestoneReward() {
+  const reward = currentLoyaltyAccount.availableRewards?.find(item => (item.ticketId || item.id) === selectedMilestoneRewardId);
+  if (!reward) return null;
+  if (reward.expiresAt) {
+    const expiry = reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt);
+    if (Number.isNaN(expiry.getTime()) || expiry.getTime() <= Date.now()) return null;
+  }
+  return REWARDS_CONFIG.rewardById[reward.id] || null;
+}
+
+function hasComboInCart() {
+  return cart.some(item => !item.isFreeOffer && (item.isCombo || COMBO_MENU_DATA.some(combo => combo.name === item.name)));
 }
 
 function selectFreeOffer(offerId) {
@@ -1503,7 +1787,7 @@ function selectFreeOffer(offerId) {
 
   if (!offer) return;
 
-  const subtotal = getPaidSubtotal();
+  const subtotal = getOfferEligibleSubtotal();
   const burgerCount = getBurgerCount();
 
   if (!isOfferQualified(offer, subtotal, burgerCount)) {
@@ -1512,6 +1796,9 @@ function selectFreeOffer(offerId) {
 
   // Remove any previously selected free offer.
   removeSelectedFreeOffer();
+  selectedMilestoneRewardId = null;
+  selectedPointsToRedeem = 0;
+  selectedWelcomeOffer = false;
 
   // Add the newly selected free offer.
   cart.push({
@@ -1526,17 +1813,79 @@ function selectFreeOffer(offerId) {
 
   render();
 }
+
+function selectMilestoneReward(rewardId) {
+  const ticket = currentLoyaltyAccount.availableRewards?.find(item => (item.ticketId || item.id) === rewardId);
+  const definition = ticket ? REWARDS_CONFIG.rewardById[ticket.id] : null;
+  if (!definition || !ticket) return;
+  const eligibleSubtotal = getOfferEligibleSubtotal();
+  if (eligibleSubtotal < Number(definition.minimum || 0)) return;
+  if (definition.kind === "free-delivery" && getPaidSubtotal() >= FREE_DELIVERY_THRESHOLD) return;
+  removeSelectedFreeOffer();
+  selectedPointsToRedeem = 0;
+  selectedWelcomeOffer = false;
+  selectedMilestoneRewardId = rewardId;
+  render();
+}
+
+function selectPointsRedemption(points) {
+  const balance = Math.max(0, Number(currentLoyaltyAccount.points || 0));
+  const eligibleSubtotal = getOfferEligibleSubtotal();
+  const maxByEligibleFood = Math.floor(eligibleSubtotal / 10) * 100;
+  const next = Math.max(0, Math.min(REWARDS_CONFIG.maxRedeemPointsPerOrder, balance, maxByEligibleFood, Math.floor(Number(points) / 100) * 100));
+  selectedPointsToRedeem = next;
+  if (next) {
+    removeSelectedFreeOffer();
+    selectedMilestoneRewardId = null;
+    selectedWelcomeOffer = false;
+  }
+  render();
+}
 function renderCart() {
-  const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
-
   const subtotal = getPaidSubtotal();
+  const offerEligibleSubtotal = getOfferEligibleSubtotal();
   const burgerCount = getBurgerCount();
-  const today = getMumbaiDay();
+  let selectedReward = getSelectedMilestoneReward();
+  const comboPresent = hasComboInCart();
+  const placeOrderNote = document.getElementById("placeOrderNote");
 
-  const delivery = subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_CHARGE;
-  const total = subtotal + delivery;
+  if (placeOrderNote) {
+    placeOrderNote.textContent = customerLoggedIn
+      ? "Continue to checkout to add or choose your delivery details."
+      : "Log in with your mobile number to continue with your order.";
+  }
+
+  if (selectedMilestoneRewardId && !selectedReward) {
+    selectedMilestoneRewardId = null;
+    selectedReward = null;
+  }
+  const maxRedeemablePoints = Math.min(REWARDS_CONFIG.maxRedeemPointsPerOrder, Math.max(0, Number(currentLoyaltyAccount.points || 0)), Math.floor(offerEligibleSubtotal / 10) * 100);
+  if (selectedPointsToRedeem > maxRedeemablePoints) selectedPointsToRedeem = maxRedeemablePoints;
+  if (selectedFreeOfferId || selectedMilestoneRewardId || selectedPointsToRedeem) selectedWelcomeOffer = false;
+  const welcomeEligible = !customerHasOrderedOnline && !currentLoyaltyAccount.welcomeCompleted && !currentLoyaltyAccount.welcomeReservationId && offerEligibleSubtotal > 0;
+  if (welcomeEligible && !selectedFreeOfferId && !selectedMilestoneRewardId && !selectedPointsToRedeem) selectedWelcomeOffer = true;
+  if (!welcomeEligible) selectedWelcomeOffer = false;
+
+  if (selectedFreeOfferId) {
+    const selectedOffer = FREE_OFFERS[selectedFreeOfferId];
+    if (!selectedOffer || !isOfferQualified(selectedOffer, offerEligibleSubtotal, burgerCount)) {
+      removeSelectedFreeOffer();
+    }
+  }
+
+  // Calculate points after offer selection is normalized so the cart estimate
+  // includes the discount that checkout and the server use.
+  const estimatedPoints = estimatePointsForCurrentOrder(selectedReward, offerEligibleSubtotal);
+
+  const totalQty = cart.reduce((sum, item) => sum + item.qty, 0) + (selectedReward?.kind === "free-item" || selectedWelcomeOffer ? 1 : 0);
+
+  const delivery = selectedReward?.kind === "free-delivery" || subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_CHARGE;
+  const promotionDiscount = selectedReward?.kind === "discount" ? selectedReward.amount : 0;
+  const pointsDiscount = selectedPointsToRedeem / REWARDS_CONFIG.pointsPerRedemptionRupees * 10;
+  const total = Math.max(0, subtotal - promotionDiscount - pointsDiscount + delivery);
 
   cartCountEl.textContent = totalQty;
+  document.getElementById("cartButton").hidden = totalQty === 0;
   clearCartButton.hidden = cart.length === 0;
 
   if (!cart.length) {
@@ -1553,6 +1902,7 @@ function renderCart() {
 
   cartItemsEl.innerHTML = cart.map((item, index) => {
     const lineTotal = item.price * item.qty;
+    const comboDetails = COMBO_MENU_DATA.find(combo => combo.name === item.name);
 
     if (item.isFreeOffer) {
       return `
@@ -1580,6 +1930,8 @@ function renderCart() {
         <div class="cart-item-info">
           <div class="cart-name">${esc(item.name)}</div>
 
+          ${comboDetails ? `<p class="cart-combo-discount-note" role="note">Already discounted — extra offers and point redemption don’t apply to this combo.</p><div class="cart-combo-includes"><strong>INCLUDES</strong><ul>${comboDetails.items.map(comboItem => `<li>${esc(comboItem)}</li>`).join("")}</ul></div>` : ""}
+
           <div class="cart-meta">
             ${money(item.price)} × ${item.qty} =
             <strong>${money(lineTotal)}</strong>
@@ -1604,7 +1956,7 @@ function renderCart() {
           >+</button>
         </div>
       </div>`;
-  }).join("");
+  }).join("") + (selectedReward?.kind === "free-item" ? `<div class="cart-item sunday-freebie"><div class="cart-item-info"><div class="cart-name">🎁 ${esc(selectedReward.item)}</div><div class="cart-meta"><strong style="color:#16804a">FREE WITH ROYAL REWARDS</strong></div></div><div class="cart-free-label">FREE</div></div>` : "") + (selectedWelcomeOffer ? `<div class="cart-item sunday-freebie"><div class="cart-item-info"><div class="cart-name">🎁 ${esc(REWARDS_CONFIG.welcomeItem)}</div><div class="cart-meta"><strong style="color:#16804a">FREE · FIRST-ORDER GIFT</strong></div></div><div class="cart-free-label">FREE</div></div>` : "");
 
   // ====================== FREE OFFER SELECTOR ======================
 
@@ -1614,7 +1966,7 @@ function renderCart() {
 
       const qualified = isOfferQualified(
         offer,
-        subtotal,
+        offerEligibleSubtotal,
         burgerCount
       );
 
@@ -1634,7 +1986,7 @@ function renderCart() {
         if (offer.type === "subtotal") {
           const remaining = Math.max(
             0,
-            offer.threshold - subtotal
+            offer.threshold - offerEligibleSubtotal
           );
 
           statusText =
@@ -1704,17 +2056,43 @@ ${esc(offer.freeItem)}
     })
     .join("");
 
-  const freeOfferSelector = `
+  const freeOfferSelector = offerCards ? `
     <div class="free-offers-box">
       <div class="free-offers-heading">
         <span>🎁 SPECIAL OFFERS</span>
-        <strong>CHOOSE ANY 1</strong>
-        <p>Only one free offer can be selected per order.</p>
+        <strong>ONE BENEFIT PER ORDER</strong>
+        <p>Choose one offer, Craving Points reward, or points redemption.${comboPresent ? " Combo value does not count toward spend-reward minimums." : ""}</p>
       </div>
 
       ${offerCards}
     </div>
-  `;
+  ` : "";
+
+  const availableRewardCards = (currentLoyaltyAccount.availableRewards || []).filter(reward => {
+    if (!reward.expiresAt) return true;
+    const expiry = reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt);
+    return !Number.isNaN(expiry.getTime()) && expiry.getTime() > Date.now();
+  }).slice(0, 1).map(reward => {
+    const definition = REWARDS_CONFIG.rewardById[reward.id];
+    if (!definition) return "";
+    const rewardTicketId = reward.ticketId || reward.id;
+    const chosen = selectedMilestoneRewardId === rewardTicketId;
+    const remaining = Math.max(0, Number(definition.minimum || 0) - offerEligibleSubtotal);
+    const eligible = remaining === 0 && !(definition.kind === "free-delivery" && subtotal >= FREE_DELIVERY_THRESHOLD);
+    const rewardDescription = definition.kind === "free-item" ? `${definition.item} free` : definition.kind === "free-delivery" ? "Free delivery" : definition.kind === "discount" ? `${money(definition.amount)} off` : definition.kind === "bonus-points" ? `${definition.points} Craving Points on delivery` : `Double Craving Points, up to ${definition.maxBonusPoints} extra`;
+    const statusNote = remaining > 0 ? `Add ${money(remaining)} in regular menu items to use this reward.` : definition.kind === "free-delivery" && subtotal >= FREE_DELIVERY_THRESHOLD ? "Your order already qualifies for free delivery." : "";
+    return `<article class="cart-reward-choice ${chosen ? "is-selected" : ""}"><div><strong>${esc(definition.title)}</strong><small>${esc(rewardDescription)} · ${esc(definition.detail)}</small>${statusNote ? `<small class="reward-remaining">${esc(statusNote)}</small>` : ""}</div><button type="button" data-select-loyalty-reward="${esc(rewardTicketId)}" ${!eligible ? "disabled" : ""}>${chosen ? "SELECTED" : eligible ? "USE REWARD" : "LOCKED"}</button></article>`;
+  }).filter(Boolean).join("");
+  const rewardWallet = availableRewardCards ? `<div class="cart-benefit-box"><strong>YOUR ROYAL REWARDS</strong>${availableRewardCards}</div>` : "";
+
+  const welcomeCard = !customerHasOrderedOnline && !currentLoyaltyAccount.welcomeCompleted && !currentLoyaltyAccount.welcomeReservationId
+    ? `<article class="cart-reward-choice ${selectedWelcomeOffer ? "is-selected" : ""}"><div><strong>FIRST ONLINE ORDER · FREE BURGER</strong><small>${esc(REWARDS_CONFIG.welcomeItem)} free with any paid regular-menu item. ₹30 delivery below ₹300.</small></div><button type="button" data-select-welcome>${selectedWelcomeOffer ? "APPLIED" : "APPLY"}</button></article>`
+    : "";
+  const pointsBalance = Math.max(0, Number(currentLoyaltyAccount.points || 0));
+  const pointsAvailable = Math.floor(Math.min(REWARDS_CONFIG.maxRedeemPointsPerOrder, pointsBalance, offerEligibleSubtotal * 10) / 100) * 100;
+  const pointsControls = pointsAvailable > 0
+    ? `<div class="cart-points-choice"><div><strong>Use Craving Points</strong><small>${pointsBalance.toLocaleString("en-IN")} Craving Points · up to ${money(pointsAvailable / 10)} off</small><small>${selectedMilestoneRewardId || selectedFreeOfferId || selectedWelcomeOffer ? "Using Craving Points replaces the selected offer or reward." : comboPresent ? "Points apply to eligible regular menu items only; combo and extra items stay full price." : "Choose Craving Points instead of another offer or reward."}</small></div><div class="points-stepper"><button type="button" data-points-step="-100" ${selectedPointsToRedeem <= 0 ? "disabled" : ""}>−</button><span>${selectedPointsToRedeem.toLocaleString("en-IN")}</span><button type="button" data-points-step="100" ${selectedPointsToRedeem >= pointsAvailable ? "disabled" : ""}>+</button></div></div>`
+    : `<div class="cart-points-note">${comboPresent ? "Points can reduce regular menu items in a mixed order; add at least ₹10 of eligible regular food. Combo and extra items stay full price." : pointsBalance < 100 ? "Earn at least 100 Craving Points to redeem ₹10. Points are added after delivery or pickup completion." : "Add eligible regular menu food to use points. Points are added after delivery or pickup completion."}</div>`;
 
   // ====================== DELIVERY PROGRESS ======================
 
@@ -1731,6 +2109,9 @@ ${esc(offer.freeItem)}
 
   cartSummaryEl.innerHTML = `
     ${freeOfferSelector}
+    ${rewardWallet}
+    ${welcomeCard}
+    ${pointsControls}
 
     ${deliveryProgress}
 
@@ -1746,6 +2127,14 @@ ${esc(offer.freeItem)}
       </strong>
     </div>
 
+    ${promotionDiscount > 0 ? `<div class="sum-row sum-discount"><span>OFFER SAVINGS</span><strong>−${money(promotionDiscount)}</strong></div>` : ""}
+    ${selectedReward?.kind === "free-delivery" ? `<div class="sum-row sum-discount"><span>REWARD DELIVERY SAVING</span><strong>${money(DELIVERY_CHARGE)}</strong></div>` : ""}
+    ${pointsDiscount > 0 ? `<div class="sum-row sum-discount"><span>CRAVING POINTS REDEEMED</span><strong>−${money(pointsDiscount)}</strong></div>` : ""}
+    ${selectedReward?.kind === "bonus-points" ? `<div class="sum-row sum-discount"><span>CRAVING POINTS BONUS</span><strong>+${selectedReward.points}</strong></div>` : ""}
+    ${selectedReward?.kind === "double-points" ? `<div class="sum-row sum-discount"><span>DOUBLE CRAVING POINTS REWARD</span><strong>UP TO +${selectedReward.maxBonusPoints}</strong></div>` : ""}
+    <div class="sum-row cart-points-estimate"><span>CRAVING POINTS YOU’LL EARN</span><strong>+${estimatedPoints} pts</strong></div>
+    <p class="cart-points-estimate-note">Added after delivery or pickup completion. Regular items earn 1 Craving Point per ₹10; combos earn 1 per ₹20.</p>
+
     <div class="sum-divider"></div>
 
     <div class="sum-row sum-total">
@@ -1755,9 +2144,36 @@ ${esc(offer.freeItem)}
 }
 
  
- function render() {
+  function renderHomeComboCard() {
+    const root = document.getElementById("homeComboCard");
+    const combo = COMBO_MENU_DATA[0];
+    if (!root || !combo) return;
+    const price = Number(combo.price);
+    const value = Number(combo.value);
+    const inCart = cartItem(combo.name, price);
+    root.innerHTML = `<article class="home-dashboard-card home-card-combos">
+      <div class="home-combo-photo${combo.image ? "" : " image-missing"}" data-fallback="${esc(combo.name)}">${combo.image ? `<img src="${esc(combo.image)}" alt="${esc(combo.name)}" loading="lazy" onerror="this.closest('.home-combo-photo').classList.add('image-missing')">` : ""}<span>FEATURED COMBO</span></div>
+      <div class="home-combo-details">
+        <span class="home-card-kicker">COMBOS</span>
+        <h2>${esc(combo.name)}</h2>
+        <div class="home-combo-price"><strong>${money(price)}</strong><del>${money(value)}</del><span>SAVE ${money(value - price)}</span></div>
+        <ul class="home-combo-items">${combo.items.map(comboItem => `<li>${esc(comboItem)}</li>`).join("")}</ul>
+        <div class="home-combo-actions">${inCart
+          ? `<div class="qty-control home-combo-qty"><button type="button" data-action="minus" data-name="${esc(combo.name)}" data-price="${price}" aria-label="Remove one ${esc(combo.name)}">−</button><span>${inCart.qty}</span><button type="button" data-action="plus" data-name="${esc(combo.name)}" data-price="${price}" aria-label="Add one ${esc(combo.name)}">+</button></div>`
+          : `<button type="button" class="home-combo-add" data-add="1" data-name="${esc(combo.name)}" data-price="${price}">ADD TO CART</button>`}<button type="button" class="home-combo-view" data-screen="offers">ALL COMBOS</button></div>
+      </div>
+    </article>`;
+  }
+
+  function render() {
+    try {
+      window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart.filter(item => !item.isFreeOffer)));
+    } catch (error) {
+      console.warn("Could not save the cart on this device:", error);
+    }
     renderMenu();
-    renderCombos();
+    renderComboMenu();
+    renderHomeComboCard();
     renderCart();
     if (activeCategory) setActiveCategory(activeCategory);
   }
@@ -1771,7 +2187,8 @@ ${esc(offer.freeItem)}
         cart = cart.filter(entry => !(entry.name === name && entry.price === price));
       }
     } else if (delta > 0) {
-      cart.push({ name, price, qty: 1 });
+      const isCombo = COMBO_MENU_DATA.some(combo => combo.name === name);
+      cart.push({ name, price, qty: 1, isCombo });
     }
 
     render();
@@ -1806,6 +2223,63 @@ function closeCart() {
 
 document.addEventListener("click", event => {
 
+  const editAddressButton = event.target.closest("[data-edit-address]");
+  if (editAddressButton) {
+    editAddress(editAddressButton.dataset.editAddress);
+    return;
+  }
+
+  const deleteAddressButton = event.target.closest("[data-delete-address]");
+  if (deleteAddressButton) {
+    const addressId = deleteAddressButton.dataset.deleteAddress;
+    const addresses = (currentCustomerProfile.addresses || []).filter(item => item.id !== addressId);
+    if (addresses.length && !addresses.some(item => item.isDefault)) addresses[0].isDefault = true;
+    saveCustomerProfile({ ...currentCustomerProfile, addresses }).catch(error => {
+      console.error("Could not remove delivery address:", error);
+      if (addressMessage) addressMessage.textContent = "Could not remove this address. Please try again.";
+    });
+    return;
+  }
+
+  const defaultAddressButton = event.target.closest("[data-default-address]");
+  if (defaultAddressButton) {
+    const chosenId = defaultAddressButton.dataset.defaultAddress;
+    const addresses = (currentCustomerProfile.addresses || []).map(item => ({ ...item, isDefault: item.id === chosenId }));
+    saveCustomerProfile({ ...currentCustomerProfile, addresses }).then(prefillCheckoutFromDefaultAddress).catch(error => {
+      console.error("Could not update default address:", error);
+    });
+    return;
+  }
+
+  const screenButton = event.target.closest("[data-screen]");
+  if (screenButton) {
+    event.preventDefault();
+    setAppScreen(screenButton.dataset.screen);
+    return;
+  }
+
+  if (event.target.closest("[data-open-cart]")) {
+    openCart();
+    return;
+  }
+
+  if (event.target.closest("[data-account-login]")) {
+    openCustomerLogin();
+    return;
+  }
+
+  if (event.target.closest("[data-account-logout]")) {
+    window.FirebaseAuthAPI?.signOut(window.firebaseAuth).catch(error => {
+      console.error("Could not log out:", error);
+    });
+    return;
+  }
+
+  if (event.target.closest("[data-reload-orders]")) {
+    refreshAccountScreens(window.firebaseAuth?.currentUser || null);
+    return;
+  }
+
   const freeOfferButton =
     event.target.closest("[data-select-free-offer]");
 
@@ -1816,6 +2290,47 @@ document.addEventListener("click", event => {
       freeOfferButton.dataset.selectFreeOffer
     );
 
+    return;
+  }
+
+  const milestoneButton = event.target.closest("[data-select-loyalty-reward]");
+  if (milestoneButton) {
+    event.preventDefault();
+    selectMilestoneReward(milestoneButton.dataset.selectLoyaltyReward);
+    return;
+  }
+
+  const pointsStep = event.target.closest("[data-points-step]");
+  if (pointsStep) {
+    event.preventDefault();
+    selectPointsRedemption(selectedPointsToRedeem + Number(pointsStep.dataset.pointsStep));
+    return;
+  }
+
+  if (event.target.closest("[data-select-welcome]")) {
+    if (!customerHasOrderedOnline && getOfferEligibleSubtotal() > 0) {
+      removeSelectedFreeOffer();
+      selectedMilestoneRewardId = null;
+      selectedPointsToRedeem = 0;
+      selectedWelcomeOffer = true;
+      render();
+    }
+    return;
+  }
+
+  const useRewardButton = event.target.closest("[data-use-reward]");
+  if (useRewardButton) {
+    const ticketId = useRewardButton.dataset.useReward;
+    const ticket = currentLoyaltyAccount.availableRewards?.find(item => (item.ticketId || item.id) === ticketId);
+    const definition = ticket ? REWARDS_CONFIG.rewardById[ticket.id] : null;
+    if (definition && ticket) {
+      removeSelectedFreeOffer();
+      selectedPointsToRedeem = 0;
+      selectedWelcomeOffer = false;
+      selectedMilestoneRewardId = ticketId;
+      if (cart.length) openCart();
+      else setAppScreen("menu");
+    }
     return;
   }
 
@@ -1889,13 +2404,63 @@ document.addEventListener("click", event => {
   });
 
   // Online ordering is temporarily disabled.
-  // The cart remains available for browsing and the customer can use the separate CALL NOW button.
+  // Keep the cart available while online ordering is disabled.
 
-  slidePrev.addEventListener("click", () => comboSlider.scrollBy({ left: -340, behavior: "smooth" }));
-  slideNext.addEventListener("click", () => comboSlider.scrollBy({ left: 340, behavior: "smooth" }));
+
+  if (checkoutArea && addressArea) {
+    [...checkoutArea.options].filter(option => option.value).forEach(option => {
+      addressArea.add(new Option(option.textContent, option.value));
+    });
+  }
+  checkoutSavedAddress?.addEventListener("change", () => {
+    const chosen = (currentCustomerProfile.addresses || []).find(item => item.id === checkoutSavedAddress.value);
+    if (!chosen) return;
+    checkoutName.value = chosen.name || "";
+    checkoutAddress.value = chosen.address || "";
+    checkoutLandmark.value = chosen.landmark || "";
+    checkoutArea.value = chosen.area || "";
+  });
+  document.getElementById("addAddressButton")?.addEventListener("click", () => {
+    if (!window.firebaseAuth?.currentUser) {
+      openCustomerLogin();
+      return;
+    }
+    addressForm.reset();
+    document.getElementById("addressId").value = "";
+    document.getElementById("addressDefault").checked = !(currentCustomerProfile.addresses || []).length;
+    document.getElementById("addressContactName").value = currentCustomerProfile.name || "";
+    if (addressMessage) addressMessage.textContent = "";
+    setAddressFormVisible(true);
+  });
+  document.getElementById("cancelAddressButton")?.addEventListener("click", () => setAddressFormVisible(false));
+  addressForm?.addEventListener("submit", submitAddressForm);
 
   renderNav();
   render();
+  setAppScreen("home");
+
+  const firstVisitFlyer = document.getElementById("firstVisitFlyer");
+  const firstVisitFlyerSeenKey = "cravingHeavenFirstVisitFlyerSeen_v8";
+  const markFirstVisitFlyerSeen = () => {
+    try { localStorage.setItem(firstVisitFlyerSeenKey, "1"); } catch (_) { /* Flyer may still be dismissed if storage is unavailable. */ }
+  };
+  firstVisitFlyer?.addEventListener("close", markFirstVisitFlyerSeen);
+  firstVisitFlyer?.addEventListener("click", event => {
+    if (event.target === firstVisitFlyer) firstVisitFlyer.close();
+    const closeButton = event.target.closest("[data-close-first-visit]");
+    if (closeButton) firstVisitFlyer.close();
+    if (event.target.closest("[data-first-visit-menu]")) {
+      firstVisitFlyer.close();
+      setAppScreen("menu");
+    }
+  });
+  let firstVisitFlyerAlreadySeen = false;
+  try { firstVisitFlyerAlreadySeen = localStorage.getItem(firstVisitFlyerSeenKey) === "1"; } catch (_) { /* Show the offer for this visit if storage is unavailable. */ }
+  if (firstVisitFlyer && !firstVisitFlyerAlreadySeen) {
+    window.setTimeout(() => {
+      if (!firstVisitFlyer.open) firstVisitFlyer.showModal();
+    }, 450);
+  }
 
   const sections = [...document.querySelectorAll(".menu-section")];
   const observer = new IntersectionObserver(entries => {
@@ -1913,20 +2478,6 @@ document.addEventListener("click", event => {
 
   const firstCategory = Object.keys(MENU_DATA)[0];
   if (firstCategory) setActiveCategory(firstCategory);
-
-  // Show the promotion on every fresh page visit. No localStorage/cookie is used,
-  // so closing it only closes it for the current page visit.
-
-  let touchStartX = 0;
-  comboSlider.addEventListener("touchstart", event => {
-    touchStartX = event.changedTouches[0].screenX;
-  }, { passive: true });
-  comboSlider.addEventListener("touchend", event => {
-    const diff = event.changedTouches[0].screenX - touchStartX;
-    if (Math.abs(diff) > 45) {
-      comboSlider.scrollBy({ left: diff < 0 ? 250 : -250, behavior: "smooth" });
-    }
-  }, { passive: true });
 
   
   // =========================================================
@@ -2279,112 +2830,59 @@ function updateOpeningHours() {
 
   const cartStatusEl = document.getElementById("cartOpeningHoursStatus");
   const cartDotEl = document.getElementById("cartOpeningHoursDot");
-
-  // Get current Mumbai time
-  const parts = new Intl.DateTimeFormat("en-IN", {
-    timeZone: "Asia/Kolkata",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23"
-  }).formatToParts(new Date());
-
-  const hour = Number(
-    parts.find(part => part.type === "hour")?.value || 0
-  );
-
-  const minute = Number(
-    parts.find(part => part.type === "minute")?.value || 0
-  );
-
-  const currentMinutes = hour * 60 + minute;
-
-  // Store timing
-  const openingMinutes = 12 * 60 + 30; // 12:30 PM
-  const closingMinutes = 23 * 60 + 45; // 11:45 PM
-
-  const isOpen =
-    currentMinutes >= openingMinutes &&
-    currentMinutes < closingMinutes;
-
-
-  // ================= MAIN STATUS =================
-
-  if (statusEl && dotEl) {
-
-    statusEl.textContent = isOpen
-      ? "OPEN NOW"
-      : "CLOSED NOW";
-
-    statusEl.classList.toggle("is-open", isOpen);
-    statusEl.classList.toggle("is-closed", !isOpen);
-
-    dotEl.classList.toggle("is-open", isOpen);
-    dotEl.classList.toggle("is-closed", !isOpen);
+  const mainNotice = document.getElementById("onlineOrderNotice");
+  const cartNotice = document.getElementById("cartOrderAvailabilityNotice");
+  const isOpen = orderAvailability.isOpen;
+  const label = isOpen ? "OPEN" : "CLOSED";
+  for (const [status, dot] of [[statusEl, dotEl], [cartStatusEl, cartDotEl]]) {
+    if (!status || !dot) continue;
+    status.textContent = label;
+    status.classList.toggle("is-open", isOpen);
+    status.classList.toggle("is-closed", !isOpen);
+    dot.classList.toggle("is-open", isOpen);
+    dot.classList.toggle("is-closed", !isOpen);
   }
-
-
-  // ================= CART STATUS =================
-
-  if (cartStatusEl && cartDotEl) {
-
-    cartStatusEl.textContent = isOpen
-      ? "OPEN NOW"
-      : "CLOSED NOW";
-
-    cartStatusEl.classList.toggle("is-open", isOpen);
-    cartStatusEl.classList.toggle("is-closed", !isOpen);
-
-    cartDotEl.classList.toggle("is-open", isOpen);
-    cartDotEl.classList.toggle("is-closed", !isOpen);
+  const notice = orderAvailabilityReady
+    ? orderAvailability.paused
+      ? "We’re preparing a rush of fresh orders right now. Please check back in a little while—we’d love to serve you soon!"
+      : isOpen ? "" : "We’re closed for now, but we’ll be back soon with your favourites. Please check back a little later!"
+    : "Unable to confirm online order status. Please refresh and try again.";
+  for (const element of [mainNotice, cartNotice]) {
+    if (!element) continue;
+    element.textContent = notice;
+    element.hidden = !notice;
   }
+}
 
-
-  // ================= CALL BUTTONS =================
-
-  const callButtons = document.querySelectorAll(
-    ".call-header, .cart-call-now, .footer-call"
-  );
-
-  callButtons.forEach(button => {
-
-    if (isOpen) {
-
-      // ENABLE CALL BUTTON
-      button.classList.remove("call-disabled");
-      button.setAttribute("aria-disabled", "false");
-      button.removeAttribute("tabindex");
-
-    } else {
-
-      // DISABLE CALL BUTTON
-      button.classList.add("call-disabled");
-      button.setAttribute("aria-disabled", "true");
-      button.setAttribute("tabindex", "-1");
-    }
-
-  });
+async function refreshOrderingAvailability() {
+  const api = window.FirebaseFunctionsAPI?.httpsCallable;
+  if (!api || !window.firebaseFunctions) {
+    orderAvailabilityReady = false;
+    updateOpeningHours();
+    updatePlaceOrderButton();
+    return;
+  }
+  try {
+    const response = await api(window.firebaseFunctions, "getOrderingStatus")({});
+    const data = response.data || {};
+    orderAvailability = {
+      isOpen: data.isOpen === true,
+      paused: data.paused === true,
+      acceptingOnlineOrders: data.acceptingOnlineOrders === true
+    };
+    orderAvailabilityReady = true;
+  } catch (error) {
+    console.warn("Could not refresh online ordering status:", error);
+    orderAvailabilityReady = false;
+  }
+  updateOpeningHours();
+  updatePlaceOrderButton();
 }
 
 
 // Run immediately
-updateOpeningHours();
-
-// Check every 30 seconds
-setInterval(updateOpeningHours, 30000);
+refreshOrderingAvailability();
+setInterval(refreshOrderingAvailability, 20000);
 
 
-// Prevent disabled call buttons from calling
-document.addEventListener("click", function(event) {
-
-  const button = event.target.closest(
-    ".call-header.call-disabled, .cart-call-now.call-disabled, .footer-call.call-disabled"
-  );
-
-  if (button) {
-    event.preventDefault();
-    event.stopPropagation();
-  }
-
-});
-  
 });
