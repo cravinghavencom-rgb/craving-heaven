@@ -255,6 +255,22 @@ exports.adminUpdateRestaurantSettings = onCall({ region: REGION }, async request
 const MENU_CONFIG_REF = () => db.collection("restaurantSettings").doc("menuCatalog");
 const REWARDS_CONFIG_REF = () => db.collection("restaurantSettings").doc("rewardsConfig");
 
+function removeDiscontinuedMenuItems(menu) {
+  const clean = {};
+  for (const [id, section] of Object.entries(menu || {})) {
+    clean[id] = {
+      ...section,
+      items: (Array.isArray(section?.items) ? section.items : []).filter(item => {
+        if (String(item?.name || "").trim().toLowerCase() === "cheese slice") return false;
+        return !Array.isArray(item?.options) || item.options.every(option => String(option?.name || "").trim().toLowerCase() !== "cheese slice");
+      }).map(item => Array.isArray(item.options)
+        ? { ...item, options: item.options.filter(option => String(option?.name || "").trim().toLowerCase() !== "cheese slice") }
+        : item)
+    };
+  }
+  return clean;
+}
+
 async function readBusinessConfig() {
   const [menuSnapshot, rewardsSnapshot] = await Promise.all([MENU_CONFIG_REF().get(), REWARDS_CONFIG_REF().get()]);
   const menu = menuSnapshot.exists && menuSnapshot.data()?.menu && typeof menuSnapshot.data().menu === "object"
@@ -265,7 +281,7 @@ async function readBusinessConfig() {
     ? rewardsSnapshot.data().journey : REWARDS.journey;
   const rewards = { ...REWARDS, journey: savedRewards };
   rewards.rewardById = Object.fromEntries(savedRewards.filter(item => item?.id).map(item => [item.id, item]));
-  return { menu, combos, rewards };
+  return { menu: removeDiscontinuedMenuItems(menu), combos, rewards };
 }
 
 function buildPriceByName(menuData, combos) {
@@ -473,7 +489,7 @@ exports.adminGetBusinessConfig = onCall({ region: REGION }, async request => {
 
 exports.adminSaveMenuCatalog = onCall({ region: REGION }, async request => {
   const adminUid = await requireAdmin(request);
-  const menu = validateMenuCatalog(request.data?.menu);
+  const menu = removeDiscontinuedMenuItems(validateMenuCatalog(request.data?.menu));
   await MENU_CONFIG_REF().set({ menu, updatedBy: adminUid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   return { saved: true, categories: Object.keys(menu).length, items: Object.values(menu).reduce((sum, section) => sum + section.items.length, 0) };
 });
@@ -939,6 +955,8 @@ exports.staffListOrders = onCall({ region: REGION }, async request => {
         total: Number(order.total || 0),
         paymentMethod: String(order.paymentMethod || ""),
         paymentStatus: String(order.paymentStatus || "pending"),
+        amountPaid: Number(order.amountPaid || (String(order.paymentStatus || "").toLowerCase() === "paid" ? order.total || 0 : 0)),
+        balanceDue: Number(order.balanceDue ?? (String(order.paymentStatus || "pending").toLowerCase() === "paid" ? 0 : order.total || 0)),
         status: String(order.status || "new"),
         pointsToAward: Number(order.pointsToAward || 0),
         loyaltyLinked: Boolean(order.uid),
@@ -1091,11 +1109,81 @@ exports.staffMarkOrderPaid = onCall({ region: REGION }, async request => {
     }
     transaction.update(orderRef, {
       paymentStatus: "paid",
+      amountPaid: Number(order.total || 0),
+      balanceDue: 0,
       paymentReceivedAt: FieldValue.serverTimestamp(),
       paymentRecordedBy: staffUid,
       updatedAt: FieldValue.serverTimestamp()
     });
     return { orderId, paymentStatus: "paid" };
+  });
+});
+
+exports.staffAddItemsToWalkInOrder = onCall({ region: REGION }, async request => {
+  const staffUid = await requireStaff(request);
+  const orderId = typeof request.data?.orderId === "string" ? request.data.orderId.trim() : "";
+  const requestId = typeof request.data?.requestId === "string" ? request.data.requestId : "";
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(orderId) || !/^[a-zA-Z0-9_-]{16,80}$/.test(requestId)) {
+    throw new HttpsError("invalid-argument", "Choose a valid walk-in order and retry the item update.");
+  }
+  const config = await readBusinessConfig();
+  const additions = validateAndPriceItems(
+    Array.isArray(request.data?.items) ? request.data.items.map(item => ({ name: item?.name, qty: item?.qty })) : [],
+    config.menu,
+    config.combos
+  );
+  const orderRef = db.collection("orders").doc(orderId);
+  const requestRef = db.collection("orderRequests").doc(`staff_add_${staffUid}_${requestId}`);
+  return db.runTransaction(async transaction => {
+    const [requestSnapshot, orderSnapshot] = await Promise.all([transaction.get(requestRef), transaction.get(orderRef)]);
+    if (requestSnapshot.exists) return requestSnapshot.data().response;
+    if (!orderSnapshot.exists) throw new HttpsError("not-found", "Walk-in order not found.");
+    const order = orderSnapshot.data();
+    if (order.source !== "walk-in" || !["new", "preparing", "ready"].includes(String(order.status || "new").toLowerCase())) {
+      throw new HttpsError("failed-precondition", "Items can only be added while the walk-in order is still active.");
+    }
+    const oldItems = Array.isArray(order.items) ? order.items : [];
+    if (oldItems.length + additions.pricedItems.length > 50) throw new HttpsError("failed-precondition", "This order has reached its item limit.");
+    const items = [...oldItems, ...additions.pricedItems];
+    if (items.reduce((sum, item) => sum + Math.max(0, Number(item.qty || 0)), 0) > 100) {
+      throw new HttpsError("failed-precondition", "This order has reached its quantity limit.");
+    }
+    const subtotal = Number(order.subtotal || 0) + additions.subtotal;
+    const eligibleSubtotal = Number(order.eligibleSubtotal || 0) + additions.eligibleSubtotal;
+    const total = Number(order.total || 0) + additions.subtotal;
+    const oldTotal = Number(order.total || 0);
+    const previouslyPaid = Math.max(0, Number(order.amountPaid ?? (String(order.paymentStatus || "").toLowerCase() === "paid" ? oldTotal : 0)));
+    const amountPaid = Math.min(total, previouslyPaid);
+    const balanceDue = Math.max(0, total - amountPaid);
+    const extras = new Set((config.menu.extras?.items || []).map(item => item.name));
+    let regularPointSubtotal = 0;
+    let comboPointSubtotal = 0;
+    for (const item of items) {
+      const lineTotal = Math.max(0, Number(item.price || 0)) * Math.max(0, Number(item.qty || 0));
+      if (item.isCombo) comboPointSubtotal += lineTotal;
+      else if (!extras.has(item.name) && !item.isFreeOffer && !item.isLoyaltyReward) regularPointSubtotal += lineTotal;
+    }
+    const pointsConfig = config.rewards;
+    const basePoints = order.uid
+      ? Math.floor(Math.max(0, regularPointSubtotal - Number(order.discountAmount || 0)) / pointsConfig.pointRateRegularRupees)
+        + Math.floor(comboPointSubtotal / pointsConfig.pointRateComboRupees)
+      : 0;
+    const reward = order.claimedReward?.id ? pointsConfig.rewardById[order.claimedReward.id] : null;
+    const pointsToAward = (reward?.kind === "double-points"
+      ? basePoints + Math.min(basePoints, Number(reward.maxBonusPoints || 0))
+      : basePoints) + (reward?.kind === "bonus-points" ? Number(reward.points || 0) : 0);
+    const update = {
+      items, subtotal, eligibleSubtotal, total, amountPaid, balanceDue,
+      paymentStatus: balanceDue === 0 ? "paid" : "pending",
+      pointsToAward,
+      updatedAt: FieldValue.serverTimestamp(),
+      lastItemAdditionAt: FieldValue.serverTimestamp(),
+      lastItemAdditionBy: staffUid
+    };
+    transaction.update(orderRef, update);
+    const response = { orderId, orderNumber: String(order.orderNumber || ""), items, subtotal, eligibleSubtotal, total, amountPaid, balanceDue, paymentStatus: update.paymentStatus, pointsToAward };
+    transaction.create(requestRef, { staffUid, orderId, addedItems: additions.pricedItems, addedSubtotal: additions.subtotal, previousTotal: oldTotal, newTotal: total, response, createdAt: FieldValue.serverTimestamp() });
+    return response;
   });
 });
 
@@ -1214,6 +1302,8 @@ exports.createWalkInOrder = onCall({ region: REGION }, async request => {
       area: "",
       paymentMethod,
       paymentStatus,
+      amountPaid: paymentStatus === "paid" ? total : 0,
+      balanceDue: paymentStatus === "paid" ? 0 : total,
       items: pricedItems,
       subtotal,
       eligibleSubtotal,
@@ -1242,7 +1332,8 @@ exports.createWalkInOrder = onCall({ region: REGION }, async request => {
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
     }
-    const response = { orderId: orderRef.id, orderNumber, subtotal, discountAmount: totalDiscount, pointsDiscount, total, pointsRedeemed: requestedPoints, loyaltyLinked: Boolean(customerUid), pointsToAward, benefitTitle: loyaltyReward?.title || (requestedPoints ? `${requestedPoints} Craving Points` : ""), items: pricedItems };
+    const amountPaid = paymentStatus === "paid" ? total : 0;
+    const response = { orderId: orderRef.id, orderNumber, subtotal, discountAmount: totalDiscount, pointsDiscount, total, amountPaid, balanceDue: total - amountPaid, paymentStatus, pointsRedeemed: requestedPoints, loyaltyLinked: Boolean(customerUid), pointsToAward, benefitTitle: loyaltyReward?.title || (requestedPoints ? `${requestedPoints} Craving Points` : ""), items: pricedItems };
     transaction.create(requestRef, { orderId: orderRef.id, response, createdAt: FieldValue.serverTimestamp() });
     return response;
   });

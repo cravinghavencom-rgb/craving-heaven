@@ -30,7 +30,7 @@ const MENU_DATA = {
     ['Classic Salted Fries',70,120,'images/french-fries/classic-salted-fries.png'],['Peri Peri Seasoning Fries',80,140,'images/french-fries/peri-peri-seasoning-fries.png'],['Cheese Dust Fries',80,140,'images/french-fries/cheese-dust-fries.png']
   ], 'images/french-fries', ['HALF','FULL'], ['HALF','FULL']) },
   extras: { title: 'EXTRAS & DIPS', subtitle: 'MAKE IT EXTRA.', items: simpleItems([
-    ['Mayo',20,'images/extras/mayo.png'],['Schezwan',20,'images/extras/schezwan.png'],['Chipotle Dip',30,'images/extras/chipotle-dip.png'],['Garlic Dip',30,'images/extras/garlic-dip.png'],['Tandoori Dip',30,'images/extras/tandoori-dip.png'],['Cheese Slice',30,'images/extras/cheese-slice.png'],['Melted Cheese',30,'images/extras/melted-cheese.png'],['Peri Peri Seasoning',20,'images/extras/peri-peri-seasoning.png'],['Cheese Dust Seasoning',30,'images/extras/cheese-dust-seasoning.png']
+    ['Mayo',20,'images/extras/mayo.png'],['Schezwan',20,'images/extras/schezwan.png'],['Chipotle Dip',30,'images/extras/chipotle-dip.png'],['Garlic Dip',30,'images/extras/garlic-dip.png'],['Tandoori Dip',30,'images/extras/tandoori-dip.png'],['Melted Cheese',30,'images/extras/melted-cheese.png'],['Peri Peri Seasoning',20,'images/extras/peri-peri-seasoning.png'],['Cheese Dust Seasoning',30,'images/extras/cheese-dust-seasoning.png']
   ], 'images/extras') }
 };
 

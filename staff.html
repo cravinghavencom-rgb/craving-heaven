@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow">
   <title>Staff Desk | CRAVING HEAVEN</title>
   <link rel="icon" type="image/png" href="images/logo.png">
-  <link rel="stylesheet" href="staff.css?v=20261023-readable-order-cards">
+  <link rel="stylesheet" href="staff.css?v=20261023-staff-order-tools">
 </head>
 <body>
   <header class="staff-header"><a class="brand" href="/"><img src="images/logo.png" alt=""><span>CRAVING HEAVEN<small>STAFF DESK</small></span></a><button id="logoutButton" class="quiet-button" hidden>Log out</button></header>
@@ -32,10 +32,10 @@
         <p id="availabilityActionMessage" class="message" role="status"></p>
       </section>
       <section id="newOrderPanel" class="panel" hidden>
-        <div class="section-heading"><div><p class="eyebrow">COUNTER ORDER</p><h2>New walk-in order</h2></div></div>
+        <div class="section-heading"><div><p class="eyebrow">COUNTER ORDER</p><h2 id="walkinEditorTitle">New walk-in order</h2><p id="walkinEditHint" class="muted" hidden>Add items to this active walk-in order. Prices and points will be recalculated.</p></div><button id="cancelEditOrderButton" class="quiet-button" type="button" hidden>Cancel</button></div>
         <div class="order-builder-grid">
           <div class="builder-menu">
-            <div class="customer-fields"><label>Customer name<input id="walkinName" maxlength="80" placeholder="Walk-in customer" value="Walk-in customer"></label><label>Mobile number <span class="muted">(optional)</span><input id="walkinMobile" inputmode="tel" maxlength="16" placeholder="10-digit number"><small id="walkinLoyaltyHint" class="field-hint">Enter a customer's registered mobile number to look up their profile and Craving Points.</small></label></div>
+            <div id="walkinCustomerFields" class="customer-fields"><label>Customer name<input id="walkinName" maxlength="80" placeholder="Walk-in customer" value="Walk-in customer"></label><label>Mobile number <span class="muted">(optional)</span><input id="walkinMobile" inputmode="tel" maxlength="16" placeholder="10-digit number"><small id="walkinLoyaltyHint" class="field-hint">Enter a customer's registered mobile number to look up their profile and Craving Points.</small></label></div>
             <div class="menu-picker-heading"><div><p class="eyebrow">QUICK ADD</p><h3>Choose from menu</h3></div><span class="menu-count" id="menuCount"></span></div>
             <div class="menu-filters"><label><span class="sr-only">Filter menu category</span><select id="menuCategory"></select></label><label class="menu-search"><span class="sr-only">Search menu items</span><input id="menuSearch" type="search" placeholder="Search dishes or combos"></label></div>
             <div id="menuResults" class="menu-results" aria-live="polite"></div>
@@ -49,7 +49,7 @@
               <label>Royal Rewards<select id="walkinReward"><option value="">Don't use a reward</option></select></label>
               <p id="walkinBenefitHint" class="benefit-hint">One benefit per order. Combo orders cannot use points.</p>
             </section>
-            <details class="loyalty-staff-guide">
+            <details id="walkinStaffGuide" class="loyalty-staff-guide">
               <summary>Staff guide: explain Craving Points &amp; rewards</summary>
               <ul>
                 <li><strong>Earn points:</strong> 1 point per ₹10 on regular menu food; combos earn half-rate (1 point per ₹20). Extras and dips do not earn points.</li>
@@ -61,9 +61,9 @@
                 <li><strong>First-order gift:</strong> the first online order gets one free Classic Crunchy Burger with any paid regular-menu item. Combos or extras alone do not qualify; ₹30 delivery applies below ₹300.</li>
               </ul>
             </details>
-            <div class="payment-fields"><label>Payment method<select id="paymentMethod"><option>Cash</option><option>UPI</option></select></label><label>Payment status<select id="paymentStatus"><option value="paid">Paid</option><option value="pending">Pending</option></select></label></div>
+            <div id="walkinPaymentFields" class="payment-fields"><label>Payment method<select id="paymentMethod"><option>Cash</option><option>UPI</option></select></label><label>Payment status<select id="paymentStatus"><option value="paid">Paid</option><option value="pending">Pending</option></select></label></div>
             <div id="walkinDiscountRow" class="walkin-discount-row" hidden><span id="walkinDiscountLabel">Benefit</span><strong id="walkinDiscountAmount">−₹0</strong></div>
-            <div class="order-total"><span>Order total</span><strong id="walkinTotal">₹0</strong></div>
+            <div class="order-total"><span id="walkinTotalLabel">Order total</span><strong id="walkinTotal">₹0</strong></div>
             <button id="saveWalkinButton" class="primary-button full-button" disabled>Create walk-in order</button><p id="orderMessage" class="message" role="status"></p>
           </aside>
         </div>
@@ -72,7 +72,7 @@
   </main>
   <section id="invoice" class="invoice" aria-label="Order invoice"></section>
 
-  <script src="menu.js"></script>
-  <script type="module" src="staff.js?v=20261023-readable-order-cards"></script>
+  <script src="menu.js?v=20261023-remove-cheese-slice"></script>
+  <script type="module" src="staff.js?v=20261023-staff-order-tools"></script>
 </body>
 </html>

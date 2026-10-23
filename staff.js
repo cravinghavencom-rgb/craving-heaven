@@ -56,6 +56,7 @@ let activeTab = "online";
 let activeStatusFilter = "all";
 let cart = [];
 let pendingWalkinRequestId = null;
+let editingWalkinOrderId = null;
 
 const money = value => `₹${Number(value || 0).toLocaleString("en-IN")}`;
 const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
@@ -106,11 +107,14 @@ otpForm.addEventListener("submit", async event => {
   event.preventDefault();
   if (!confirmation || !/^\d{6}$/.test(otpInput.value.trim())) { authMessage.textContent = "Enter the 6-digit code."; return; }
   verifyOtpButton.disabled = true;
+  verifyOtpButton.textContent = "Verifying…";
+  authMessage.textContent = "Checking staff access…";
   try {
     await confirmation.confirm(otpInput.value.trim());
   } catch (error) {
     authMessage.textContent = error.code === "auth/invalid-verification-code" ? "That code is incorrect. Check it and try again." : "Sign-in failed. Please request a new code.";
     verifyOtpButton.disabled = false;
+    verifyOtpButton.textContent = "Verify";
   }
 });
 
@@ -134,7 +138,8 @@ async function showDesk(user) {
   }
   try {
     await authPersistence;
-    const token = await user.getIdTokenResult(true);
+    let token = await user.getIdTokenResult();
+    if (token.claims.staff !== true && token.claims.admin !== true) token = await user.getIdTokenResult(true);
     if (token.claims.staff !== true) {
       await signOut(auth);
       loginPanel.hidden = false;
@@ -146,7 +151,7 @@ async function showDesk(user) {
     deskPanel.hidden = false;
     logoutButton.hidden = false;
     $("staffPhone").textContent = user.phoneNumber || "Staff account";
-    await Promise.all([loadOrders(), loadTodaySales(), loadOrderingStatus()]);
+    await Promise.all([loadOrders(), loadOrderingStatus()]);
   } catch (error) {
     loginPanel.hidden = false;
     deskPanel.hidden = true;
@@ -171,7 +176,6 @@ async function loadOrders() {
     renderOrders();
     if (incomingOnlineOrders.length) {
       announceNewOnlineOrders(incomingOnlineOrders);
-      loadTodaySales();
     }
   } catch (error) {
     ordersList.innerHTML = `<p class="message">${escapeHtml(error.code === "functions/permission-denied" ? "Staff access is required. Sign out and ask the administrator to check your account." : "Orders could not load. Check the connection and try again.")}</p>`;
@@ -417,11 +421,13 @@ function renderOrders() {
     const nextStatuses = statusActions[String(order.status || "new").toLowerCase()] || [];
     const statusControl = nextStatuses.length ? `<div class="order-status-control"><label><span class="sr-only">Update status for order ${escapeHtml(order.id)}</span><select data-status-select="${escapeHtml(order.id)}">${nextStatuses.map(status => `<option value="${status}">${status === "preparing" ? "Preparing" : status === "ready" ? "Ready for pickup" : status === "delivered" ? "Delivered" : status === "completed" ? "Completed" : "Cancelled"}</option>`).join("")}</select></label><button type="button" class="status-update-button" data-update-status="${escapeHtml(order.id)}">Update</button></div>` : "";
     const canMarkPaid = String(order.paymentStatus || "pending").toLowerCase() === "pending" && !["cancelled", "canceled"].includes(String(order.status || "").toLowerCase());
-    const paymentControl = canMarkPaid ? `<button class="payment-paid-button" type="button" data-mark-paid="${escapeHtml(order.id)}">Mark paid</button>` : "";
+    const balanceDue = Math.max(0, Number(order.balanceDue ?? (canMarkPaid ? order.total : 0)));
+    const paymentControl = canMarkPaid ? `<button class="payment-paid-button" type="button" data-mark-paid="${escapeHtml(order.id)}">Mark ₹${balanceDue.toLocaleString("en-IN")} paid</button>` : "";
+    const canAddWalkinItems = isWalkIn && ["new", "preparing", "ready"].includes(String(order.status || "new").toLowerCase());
     const orderMode = isWalkIn ? "Walk-in" : isPickup ? "Online pickup" : "Online delivery";
     const itemRows = (order.items || []).map(item => `<li><span>${escapeHtml(item.name)}${item.isFreeOffer || item.isLoyaltyReward ? ` <em>FREE</em>` : ""}</span><strong>× ${Number(item.qty) || 1}</strong></li>`).join("");
     const addressBlock = !isPickup && fullAddress ? `<details class="order-address"><summary><span><b>${escapeHtml(order.addressLabel || "Delivery")}</b>${order.area ? ` · ${escapeHtml(order.area)}` : ""}</span><span class="address-toggle">View full address</span></summary><p>${escapeHtml(fullAddress)}</p></details>` : isPickup ? `<div class="order-pickup"><b>Store pickup</b><span>CRAVING HEAVEN · Pathanwadi</span></div>` : "";
-    return `<article class="order-card"><div class="order-card-primary"><div class="order-card-title"><h3>Order <span class="order-number">${escapeHtml(readableOrderNumber(order))}</span></h3><span class="status-badge ${order.paymentStatus === "paid" ? "paid" : ""}">${escapeHtml(order.status)} · ${escapeHtml(order.paymentStatus || "pending")}</span></div><div class="order-meta"><span>${escapeHtml(orderDate(order.createdAt))}</span><span>${orderMode}</span><span>${escapeHtml(customer)}</span>${order.paymentMethod ? `<span>${escapeHtml(order.paymentMethod)}</span>` : ""}</div></div><div class="order-card-actions"><strong>${money(order.total)}</strong><div>${paymentControl}<button class="print-button" type="button" data-print-order="${escapeHtml(order.id)}">Print invoice</button></div></div><div class="order-lines"><p class="order-items-heading">${(order.items || []).length} ${((order.items || []).length === 1) ? "item" : "items"}</p><ul class="order-item-list">${itemRows || `<li>${escapeHtml(lines)}</li>`}</ul>${addressBlock}${loyaltyNote ? `<p class="loyalty-order-note">✦ ${escapeHtml(loyaltyNote)}</p>` : ""}</div>${statusControl}</article>`;
+    return `<article class="order-card"><div class="order-card-primary"><div class="order-card-title"><h3>Order <span class="order-number">${escapeHtml(readableOrderNumber(order))}</span></h3><span class="status-badge ${order.paymentStatus === "paid" ? "paid" : ""}">${escapeHtml(order.status)} · ${escapeHtml(order.paymentStatus || "pending")}</span></div><div class="order-meta"><span>${escapeHtml(orderDate(order.createdAt))}</span><span>${orderMode}</span><span>${escapeHtml(customer)}</span>${order.paymentMethod ? `<span>${escapeHtml(order.paymentMethod)}</span>` : ""}</div></div><div class="order-card-actions"><strong>${money(order.total)}</strong>${balanceDue ? `<small class="order-balance-due">Due ${money(balanceDue)}</small>` : ""}<div>${canAddWalkinItems ? `<button class="add-order-items-button" type="button" data-add-walkin-items="${escapeHtml(order.id)}">＋ Add items</button>` : ""}${paymentControl}<button class="print-button" type="button" data-print-order="${escapeHtml(order.id)}">Print invoice</button></div></div><div class="order-lines"><p class="order-items-heading">${(order.items || []).length} ${((order.items || []).length === 1) ? "item" : "items"}</p><ul class="order-item-list">${itemRows || `<li>${escapeHtml(lines)}</li>`}</ul>${addressBlock}${loyaltyNote ? `<p class="loyalty-order-note">✦ ${escapeHtml(loyaltyNote)}</p>` : ""}</div>${statusControl}</article>`;
   }).join("");
 }
 $("orderSearch").addEventListener("input", renderOrders);
@@ -431,6 +437,7 @@ document.querySelectorAll("[data-status-filter]").forEach(button => button.addEv
 }));
 
 document.querySelectorAll("[data-tab]").forEach(button => button.addEventListener("click", () => {
+  if (editingWalkinOrderId) cancelWalkinItemAddition(false);
   activeTab = button.dataset.tab;
   document.querySelectorAll("[data-tab]").forEach(tab => tab.classList.toggle("active", tab === button));
   ordersPanel.hidden = activeTab === "new" || activeTab === "sales" || activeTab === "availability";
@@ -453,10 +460,16 @@ function printableInvoice(order) {
   const orderMode = order.orderType === "walk-in" ? "Walk-in" : order.orderType === "pickup" ? "Online pickup" : "Online delivery";
   const completionLabel = order.orderType === "walk-in" || order.orderType === "pickup" ? "completion" : "delivery";
   const discount = Number(order.discountAmount || 0);
-  $("invoice").innerHTML = `<div class="invoice-sheet"><h1>CRAVING HEAVEN</h1><p>Shop 10, Pearl Oasis Building, Pathanwadi, Malad East, Mumbai – 400097</p><p>7700929693</p><div class="invoice-rule"></div><div class="invoice-top"><span><b>Order</b><br>${escapeHtml(orderNumber)}</span><span><b>Date</b><br>${escapeHtml(orderDate(order.createdAt || new Date().toISOString()))}</span></div><p style="text-align:left"><b>${escapeHtml(orderMode)}</b><br>${escapeHtml(customer)}${order.mobile ? `<br>${escapeHtml(order.mobile)}` : ""}${address ? `<br>${escapeHtml(address)}` : ""}</p><table class="invoice-table"><thead><tr><th>Item</th><th>Amount</th></tr></thead><tbody>${lines}</tbody></table><div class="invoice-total"><span>Subtotal</span><span>${money(order.subtotal)}</span></div>${order.pointsRedeemed ? `<div class="invoice-total"><span>Craving Points redeemed (${Number(order.pointsRedeemed)})</span><span>−${money(order.pointsDiscount || 0)}</span></div>` : ""}${discount > Number(order.pointsDiscount || 0) ? `<div class="invoice-total"><span>Reward discount</span><span>−${money(discount - Number(order.pointsDiscount || 0))}</span></div>` : ""}${Number(order.deliveryCharge) ? `<div class="invoice-total"><span>Delivery</span><span>${money(order.deliveryCharge)}</span></div>` : ""}<div class="invoice-total grand"><span>Total</span><span>${money(order.total)}</span></div><div class="invoice-rule"></div><div class="invoice-total"><span>Payment</span><span>${escapeHtml(order.paymentMethod || "—")} · ${escapeHtml(order.paymentStatus || "pending")}</span></div>${order.loyaltyLinked ? `<p style="text-align:left">Craving Points: ${Number(order.pointsToAward || 0)} after ${completionLabel}. Reward progress is tracked on completed orders.</p>` : ""}<p class="invoice-thanks">Thank you. Made with quality, served with love!</p></div>`;
+  $("invoice").innerHTML = `<div class="invoice-sheet"><h1>CRAVING HEAVEN</h1><p>Shop 10, Pearl Oasis Building, Pathanwadi, Malad East, Mumbai – 400097</p><p>7700929693</p><div class="invoice-rule"></div><div class="invoice-top"><span><b>Order</b><br>${escapeHtml(orderNumber)}</span><span><b>Date</b><br>${escapeHtml(orderDate(order.createdAt || new Date().toISOString()))}</span></div><p style="text-align:left"><b>${escapeHtml(orderMode)}</b><br>${escapeHtml(customer)}${order.mobile ? `<br>${escapeHtml(order.mobile)}` : ""}${address ? `<br>${escapeHtml(address)}` : ""}</p><table class="invoice-table"><thead><tr><th>Item</th><th>Amount</th></tr></thead><tbody>${lines}</tbody></table><div class="invoice-total"><span>Subtotal</span><span>${money(order.subtotal)}</span></div>${order.pointsRedeemed ? `<div class="invoice-total"><span>Craving Points redeemed (${Number(order.pointsRedeemed)})</span><span>−${money(order.pointsDiscount || 0)}</span></div>` : ""}${discount > Number(order.pointsDiscount || 0) ? `<div class="invoice-total"><span>Reward discount</span><span>−${money(discount - Number(order.pointsDiscount || 0))}</span></div>` : ""}${Number(order.deliveryCharge) ? `<div class="invoice-total"><span>Delivery</span><span>${money(order.deliveryCharge)}</span></div>` : ""}<div class="invoice-total grand"><span>Total</span><span>${money(order.total)}</span></div>${Number(order.balanceDue || 0) ? `<div class="invoice-total"><span>Balance due</span><span>${money(order.balanceDue)}</span></div>` : ""}<div class="invoice-rule"></div><div class="invoice-total"><span>Payment</span><span>${escapeHtml(order.paymentMethod || "—")} · ${escapeHtml(order.paymentStatus || "pending")}</span></div>${order.loyaltyLinked ? `<p style="text-align:left">Craving Points: ${Number(order.pointsToAward || 0)} after ${completionLabel}. Reward progress is tracked on completed orders.</p>` : ""}<p class="invoice-thanks">Thank you. Made with quality, served with love!</p></div>`;
   window.print();
 }
 ordersList.addEventListener("click", event => {
+  const addItemsButton = event.target.closest("[data-add-walkin-items]");
+  if (addItemsButton) {
+    const order = orders.find(item => item.id === addItemsButton.dataset.addWalkinItems);
+    if (order) beginWalkinItemAddition(order);
+    return;
+  }
   const paymentButton = event.target.closest("[data-mark-paid]");
   if (paymentButton) {
     const orderId = paymentButton.dataset.markPaid;
@@ -466,6 +479,8 @@ ordersList.addEventListener("click", event => {
     paymentButton.textContent = "Saving…";
     httpsCallable(functions, "staffMarkOrderPaid")({ orderId }).then(() => {
       order.paymentStatus = "paid";
+      order.amountPaid = Number(order.total || 0);
+      order.balanceDue = 0;
       renderOrders();
       $("orderStatusMessage").textContent = `Payment recorded for ${readableOrderNumber(order)}.`;
     }).catch(error => {
@@ -489,7 +504,6 @@ ordersList.addEventListener("click", event => {
     httpsCallable(functions, "staffUpdateOrderStatus")({ orderId, status: select.value }).then(() => {
       order.status = select.value;
       renderOrders();
-      loadTodaySales();
     }).catch(error => {
       statusButton.disabled = false;
       statusButton.textContent = "Update";
@@ -649,6 +663,11 @@ function getWalkinEligibleSubtotal() {
 
 function renderWalkinBenefits() {
   const benefitsPanel = $("walkinBenefits");
+  if (editingWalkinOrderId) {
+    benefitsPanel.hidden = true;
+    $("walkinDiscountRow").hidden = true;
+    return;
+  }
   const customer = lastLookupResult?.found ? lastLookupResult : null;
   if (!customer) {
     benefitsPanel.hidden = true;
@@ -766,13 +785,81 @@ $("walkinCart").addEventListener("click", event => {
   }
 });
 
+function beginWalkinItemAddition(order) {
+  editingWalkinOrderId = order.id;
+  pendingWalkinRequestId = crypto.randomUUID();
+  cart = [];
+  $("walkinEditorTitle").textContent = `Add items to ${readableOrderNumber(order)}`;
+  $("walkinEditHint").hidden = false;
+  $("cancelEditOrderButton").hidden = false;
+  $("walkinCustomerFields").hidden = true;
+  $("walkinPaymentFields").hidden = true;
+  $("walkinStaffGuide").hidden = true;
+  $("walkinBenefits").hidden = true;
+  $("walkinTotalLabel").textContent = "Items to add";
+  $("saveWalkinButton").textContent = "Add items to this order";
+  $("orderMessage").textContent = "";
+  document.querySelectorAll("[data-tab]").forEach(tab => tab.classList.toggle("active", tab.dataset.tab === "new"));
+  activeTab = "new";
+  ordersPanel.hidden = true;
+  newOrderPanel.hidden = false;
+  renderWalkinCart();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function cancelWalkinItemAddition(returnToOrders = true) {
+  editingWalkinOrderId = null;
+  pendingWalkinRequestId = null;
+  cart = [];
+  $("walkinEditorTitle").textContent = "New walk-in order";
+  $("walkinEditHint").hidden = true;
+  $("cancelEditOrderButton").hidden = true;
+  $("walkinCustomerFields").hidden = false;
+  $("walkinPaymentFields").hidden = false;
+  $("walkinStaffGuide").hidden = false;
+  $("walkinTotalLabel").textContent = "Order total";
+  $("saveWalkinButton").textContent = "Create walk-in order";
+  $("orderMessage").textContent = "";
+  $("walkinName").value = "Walk-in customer";
+  mobileField.value = "";
+  lastLookupResult = null;
+  lastLookedUpMobile = "";
+  autoFilledCustomerName = "";
+  renderWalkinCart();
+  if (returnToOrders) {
+    activeTab = "walkin";
+    document.querySelectorAll("[data-tab]").forEach(tab => tab.classList.toggle("active", tab.dataset.tab === "walkin"));
+    ordersPanel.hidden = false;
+    newOrderPanel.hidden = true;
+  }
+}
+
+$("cancelEditOrderButton").addEventListener("click", () => cancelWalkinItemAddition());
+
 $("saveWalkinButton").addEventListener("click", async () => {
   const button = $("saveWalkinButton");
   orderMessage.textContent = "";
   button.disabled = true;
-  button.textContent = "Creating order…";
+  const editOrderId = editingWalkinOrderId;
+  button.textContent = editOrderId ? "Adding items…" : "Creating order…";
   pendingWalkinRequestId ||= crypto.randomUUID();
   try {
+    if (editOrderId) {
+      const targetOrder = orders.find(order => order.id === editOrderId);
+      if (!targetOrder) throw new Error("This walk-in order is no longer in the recent list. Refresh and try again.");
+      const result = await httpsCallable(functions, "staffAddItemsToWalkInOrder")({
+        orderId: editOrderId,
+        requestId: pendingWalkinRequestId,
+        items: cart.map(item => ({ name: item.name, qty: item.qty }))
+      });
+      Object.assign(targetOrder, result.data);
+      pendingWalkinRequestId = null;
+      orderMessage.textContent = `${readableOrderNumber(targetOrder)} updated · new total ${money(targetOrder.total)}${targetOrder.balanceDue ? ` · due ${money(targetOrder.balanceDue)}` : ""}.`;
+      $("orderStatusMessage").textContent = `${readableOrderNumber(targetOrder)} updated. The order total and points were recalculated; use Print invoice when needed.`;
+      cancelWalkinItemAddition();
+      renderOrders();
+      return;
+    }
     await lookupWalkinCustomer();
     const walkinOrder = {
       customerName: $("walkinName").value.trim() || "Walk-in customer",
@@ -785,7 +872,7 @@ $("saveWalkinButton").addEventListener("click", async () => {
       items: cart.map(item => ({ name: item.name, qty: item.qty }))
     };
     const result = await httpsCallable(functions, "createWalkInOrder")(walkinOrder);
-    const created = { id: result.data.orderId, orderNumber: result.data.orderNumber || "", ...walkinOrder, items: result.data.items || cart.map(item => ({ ...item, lineTotal: item.price * item.qty })), subtotal: Number(result.data.subtotal ?? result.data.total), discountAmount: Number(result.data.discountAmount || 0), pointsDiscount: Number(result.data.pointsDiscount || 0), pointsRedeemed: Number(result.data.pointsRedeemed || 0), deliveryCharge: 0, total: result.data.total, source: "walk-in", orderType: "walk-in", status: "new", loyaltyLinked: Boolean(result.data.loyaltyLinked), pointsToAward: Number(result.data.pointsToAward || 0), benefitTitle: result.data.benefitTitle || "", createdAt: new Date().toISOString() };
+    const created = { id: result.data.orderId, orderNumber: result.data.orderNumber || "", ...walkinOrder, items: result.data.items || cart.map(item => ({ ...item, lineTotal: item.price * item.qty })), subtotal: Number(result.data.subtotal ?? result.data.total), discountAmount: Number(result.data.discountAmount || 0), pointsDiscount: Number(result.data.pointsDiscount || 0), pointsRedeemed: Number(result.data.pointsRedeemed || 0), deliveryCharge: 0, total: result.data.total, amountPaid: Number(result.data.amountPaid || 0), balanceDue: Number(result.data.balanceDue || 0), paymentStatus: result.data.paymentStatus || walkinOrder.paymentStatus, source: "walk-in", orderType: "walk-in", status: "new", loyaltyLinked: Boolean(result.data.loyaltyLinked), pointsToAward: Number(result.data.pointsToAward || 0), benefitTitle: result.data.benefitTitle || "", createdAt: new Date().toISOString() };
     orders.unshift(created);
     pendingWalkinRequestId = null;
     cart = [];
@@ -798,7 +885,6 @@ $("saveWalkinButton").addEventListener("click", async () => {
     lastLookupResult = null;
     renderWalkinBenefits();
     orderMessage.textContent = `${readableOrderNumber(created)} created.`;
-    printableInvoice(created);
     activeTab = "walkin";
     $("orderStatusMessage").textContent = created.loyaltyLinked
       ? `${created.benefitTitle ? `${created.benefitTitle} applied. ` : ""}Customer account matched. ${created.pointsToAward} Craving Points and reward progress will be credited when this walk-in order is completed.`
@@ -807,12 +893,12 @@ $("saveWalkinButton").addEventListener("click", async () => {
     ordersPanel.hidden = false;
     newOrderPanel.hidden = true;
     renderOrders();
-    loadTodaySales();
   } catch (error) {
     orderMessage.textContent = error.code === "functions/permission-denied" ? "Staff access is required. Refresh the page and sign in again." : error.message?.replace(/^FirebaseError:\s*/i, "") || "Could not create order. Please check the items and try again.";
     button.disabled = false;
   } finally {
-    button.textContent = "Create walk-in order";
+    button.textContent = editingWalkinOrderId ? "Add items to this order" : "Create walk-in order";
+    button.disabled = !cart.length;
   }
 });
 
