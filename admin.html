@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#241b18">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Admin Desk | CRAVING HEAVEN</title>
+  <link rel="icon" type="image/png" href="images/logo.png">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <header class="admin-header">
+    <a class="admin-brand" href="/" aria-label="Craving Heaven home"><img src="images/logo.png" alt=""><span>CRAVING HEAVEN<small>ADMIN DESK</small></span></a>
+    <div class="header-actions"><a href="/staff.html">Staff Desk</a><button id="adminLogout" class="button button-quiet" type="button" hidden>Log out</button></div>
+  </header>
+  <main class="admin-main">
+    <section id="adminLogin" class="card login-card">
+      <span class="eyebrow">OWNER ACCESS</span><h1>Sign in to Admin Desk</h1>
+      <p class="muted">Use an administrator mobile number. Admin permissions are managed securely by Firebase.</p>
+      <form id="adminPhoneForm"><label for="adminPhone">MOBILE NUMBER</label><div class="phone-row"><span>+91</span><input id="adminPhone" inputmode="numeric" autocomplete="tel-national" maxlength="10" placeholder="10-digit number" required><button class="button button-primary" id="adminSendOtp" type="submit">Send OTP</button></div></form>
+      <form id="adminOtpForm" hidden><label for="adminOtp">VERIFICATION CODE</label><div class="phone-row"><input id="adminOtp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" required><button class="button button-primary" id="adminVerifyOtp" type="submit">Verify</button></div><button id="adminChangeNumber" class="text-button" type="button">Use another number</button></form>
+      <p id="adminAuthMessage" class="message" role="status"></p><div id="adminRecaptcha"></div>
+    </section>
+
+    <section id="adminApp" hidden>
+      <div class="page-heading"><div><span class="eyebrow">BUSINESS OVERVIEW</span><h1>Admin Desk</h1><p class="muted">Signed in as <strong id="adminSignedInAs"></strong></p></div><span class="secure-badge">🔒 Admin-only workspace</span></div>
+      <nav class="admin-tabs" role="tablist" aria-label="Admin sections">
+        <button class="admin-tab active" data-admin-tab="dashboard">Overview</button><button class="admin-tab" data-admin-tab="customers">Customers</button><button class="admin-tab" data-admin-tab="access">Access</button><button class="admin-tab" data-admin-tab="menu">Menu</button><button class="admin-tab" data-admin-tab="rewards">Rewards</button><button class="admin-tab" data-admin-tab="benefits">Customer benefits</button><button class="admin-tab" data-admin-tab="messages">WhatsApp</button>
+      </nav>
+
+      <section class="admin-section" data-admin-section="dashboard">
+        <div class="section-heading"><div><span class="eyebrow">SALES ANALYTICS · MUMBAI TIME</span><h2>Sales overview</h2></div><div class="range-switch" role="group" aria-label="Sales period"><button data-range="today" class="selected">Today</button><button data-range="week">This week</button><button data-range="month">This month</button></div></div>
+        <p id="analyticsMessage" class="message" role="status">Loading sales…</p>
+        <div class="metric-grid"><article class="metric-card metric-main"><span>Total sales</span><strong id="metricSales">₹0</strong><small id="metricOrders">0 orders</small></article><article class="metric-card"><span>Online sales</span><strong id="metricOnlineSales">₹0</strong><small id="metricOnlineOrders">0 orders</small></article><article class="metric-card"><span>Walk-in sales</span><strong id="metricWalkinSales">₹0</strong><small id="metricWalkinOrders">0 orders</small></article></div>
+        <article class="card ordering-card"><div><span class="eyebrow">RESTAURANT CONTROL</span><h3 id="orderingTitle">Checking online ordering…</h3><p id="orderingMessage" class="muted">Only staff or admin can start online orders each day.</p></div><div class="ordering-actions"><button id="adminGoOnline" class="button button-primary" type="button">Start online ordering</button><button id="adminGoOffline" class="button button-quiet" type="button">Stop online ordering</button></div></article>
+        <div class="report-grid"><article class="card report-card"><div class="section-heading compact"><div><span class="eyebrow">BEST SELLERS</span><h3>Item-wise sales</h3></div></div><div class="table-scroll"><table><thead><tr><th>Item</th><th>Qty</th><th>Menu value</th></tr></thead><tbody id="itemSalesRows"><tr><td colspan="3" class="empty-cell">No sales for this period yet.</td></tr></tbody></table></div><p class="footnote">Menu value uses listed prices; order-level discounts are shown in total sales.</p></article><article class="card report-card"><div class="section-heading compact"><div><span class="eyebrow">WEEKDAY PATTERN</span><h3>Sales by day</h3></div></div><div id="weekdayChart" class="weekday-chart"></div><p class="footnote">Shows completed and active orders placed this month, excluding cancelled orders.</p></article></div>
+      </section>
+
+      <section class="admin-section" data-admin-section="customers" hidden>
+        <div class="section-heading"><div><span class="eyebrow">CUSTOMER DIRECTORY</span><h2>Customers</h2><p class="muted">Search by name or mobile. Select a customer to open account details and full order history.</p></div><button id="refreshCustomers" class="button button-quiet" type="button">Refresh list</button></div>
+        <label class="search-field"><span class="sr-only">Search customers</span><input id="customerSearch" type="search" placeholder="Search name or mobile number"></label>
+        <div class="customer-layout"><div class="card directory-card"><div id="customerRows" class="customer-rows"><p class="empty-cell">Loading customers…</p></div></div><div id="customerDetails" class="card customer-details"><p class="empty-cell">Choose a customer, or enter their mobile number below to look them up.</p><form id="customerLookupForm" class="lookup-form"><input id="customerLookupMobile" inputmode="tel" placeholder="10-digit mobile number"><button class="button button-primary" type="submit">Look up</button></form></div></div>
+      </section>
+
+      <section class="admin-section" data-admin-section="access" hidden>
+        <div class="section-heading"><div><span class="eyebrow">TEAM PERMISSIONS</span><h2>Staff and admin access</h2><p class="muted">Grant access only to people you trust. A person must sign in with OTP once before access can be assigned.</p></div><button id="refreshAccess" class="button button-quiet" type="button">Refresh</button></div>
+        <form id="accessForm" class="card form-card"><label>Mobile number<input id="accessMobile" inputmode="tel" placeholder="10-digit number" required></label><label>Access level<select id="accessRole"><option value="staff">Staff · orders and walk-in desk</option><option value="admin">Admin · all business controls</option><option value="customer">Customer only · remove staff/admin access</option></select></label><button class="button button-primary" type="submit">Update access</button><p id="accessMessage" class="message" role="status"></p></form>
+        <div class="card"><div class="section-heading compact"><div><span class="eyebrow">CURRENT TEAM</span><h3>Authorized accounts</h3></div></div><div class="table-scroll"><table><thead><tr><th>Name</th><th>Mobile</th><th>Access</th><th>Last sign-in</th><th>Status</th></tr></thead><tbody id="accessRows"><tr><td colspan="5" class="empty-cell">Loading access list…</td></tr></tbody></table></div></div>
+      </section>
+
+      <section class="admin-section" data-admin-section="menu" hidden>
+        <div class="section-heading"><div><span class="eyebrow">LIVE WEBSITE CATALOG</span><h2>Menu management</h2><p class="muted">Changes save to Firebase, update the customer menu, and become the order service’s source for prices.</p></div><button id="saveMenu" class="button button-primary" type="button">Save menu changes</button></div>
+        <p id="menuMessage" class="message" role="status"></p>
+        <div class="admin-two-column"><form id="categoryForm" class="card form-card"><span class="eyebrow">ADD A CATEGORY</span><label>Category name<input id="newCategoryName" maxlength="60" placeholder="e.g. Meal Boxes" required></label><label>Short description<input id="newCategorySubtitle" maxlength="120" placeholder="A short line for the menu"></label><button class="button button-quiet" type="submit">Add category</button></form>
+        <form id="itemForm" class="card form-card"><span class="eyebrow">ADD A MENU ITEM</span><label>Category<select id="newItemCategory" required></select></label><label>Item name<input id="newItemName" maxlength="100" required></label><label>Price (₹)<input id="newItemPrice" type="number" min="1" max="20000" step="1" required></label><label>Description<input id="newItemDescription" maxlength="180" placeholder="Optional short description"></label><button class="button button-quiet" type="submit">Add item</button></form></div>
+        <div id="menuEditor" class="menu-editor"></div>
+      </section>
+
+      <section class="admin-section" data-admin-section="rewards" hidden>
+        <div class="section-heading"><div><span class="eyebrow">ROYAL REWARDS</span><h2>Reward journey</h2><p class="muted">Edit milestone rewards below. Existing unexpired customer reward tickets must stay in the lineup until used or expired.</p></div><button id="saveRewards" class="button button-primary" type="button">Save reward lineup</button></div>
+        <p id="rewardsMessage" class="message" role="status"></p><div id="rewardEditor" class="reward-editor"></div>
+      </section>
+
+      <section class="admin-section" data-admin-section="benefits" hidden>
+        <div class="section-heading"><div><span class="eyebrow">MANUAL ACCOUNT ADJUSTMENT</span><h2>Give points or a reward</h2><p class="muted">Every adjustment records the administrator, reason, and an audit entry on the customer account.</p></div></div>
+        <form id="benefitForm" class="card form-card benefit-form"><label>Customer mobile number<input id="benefitMobile" inputmode="tel" required placeholder="10-digit number"></label><label>Craving Points change<input id="benefitPoints" type="number" min="-10000" max="10000" step="1" value="0"><small>Use a negative number to correct or remove points.</small></label><label>Extra reward<select id="benefitReward"><option value="">No extra reward</option></select></label><label>Reason for audit log<textarea id="benefitReason" minlength="5" maxlength="250" required placeholder="Why are you adjusting this customer account?"></textarea></label><button class="button button-primary" type="submit">Apply customer benefit</button><p id="benefitMessage" class="message" role="status"></p></form>
+      </section>
+
+      <section class="admin-section" data-admin-section="messages" hidden>
+        <div class="section-heading"><div><span class="eyebrow">CUSTOMER COMMUNICATION</span><h2>WhatsApp messages</h2><p class="muted">Choose customers from your recent order list, then prepare a personal message.</p></div></div>
+        <div class="message-layout"><div class="card"><div class="section-heading compact"><div><span class="eyebrow">RECENT CUSTOMERS</span><h3>Choose recipients</h3></div><button id="selectAllCustomers" class="text-button" type="button">Select visible</button></div><div id="messageRecipients" class="recipient-list"><p class="empty-cell">Load the customer list first.</p></div></div><div class="card form-card"><label>Message<textarea id="campaignMessage" maxlength="1000" placeholder="Hi {name}, we have something tasty for you…"></textarea><small>Use {name} to personalize the message.</small></label><button id="startCampaign" class="button button-primary" type="button">Prepare WhatsApp messages</button><div id="campaignQueue" class="campaign-queue" aria-live="polite"></div><p class="footnote">This opens one pre-filled WhatsApp chat at a time. You review and tap Send in WhatsApp; the website does not send messages automatically.</p></div></div>
+      </section>
+    </section>
+  </main>
+  <script type="module" src="admin.js"></script>
+</body>
+</html>

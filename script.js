@@ -1,6 +1,40 @@
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
 const REWARDS_CONFIG = window.CRAVING_REWARDS || { journey: [], rewardById: {} };
 const REWARD_EXCLUDED_NAMES = new Set((MENU_DATA.extras?.items || []).map(item => item.name));
+let menuInitialized = false;
+function applyRemoteBusinessConfig(data) {
+  if (!data || !data.menu || !Array.isArray(data.combos) || !data.rewards) return false;
+  for (const key of Object.keys(MENU_DATA)) delete MENU_DATA[key];
+  Object.assign(MENU_DATA, data.menu);
+  COMBO_MENU_DATA.splice(0, COMBO_MENU_DATA.length, ...data.combos);
+  Object.assign(REWARDS_CONFIG, data.rewards, { rewardById: Object.fromEntries((data.rewards.journey || []).filter(reward => reward.id).map(reward => [reward.id, reward])) });
+  REWARD_EXCLUDED_NAMES.clear();
+  for (const item of MENU_DATA.extras?.items || []) REWARD_EXCLUDED_NAMES.add(item.name);
+  return true;
+}
+async function fetchRemoteBusinessConfig() {
+  try {
+    const callable = window.FirebaseFunctionsAPI?.httpsCallable;
+    if (!callable || !window.firebaseFunctions) return null;
+    const response = await callable(window.firebaseFunctions, "getPublicBusinessConfig")({});
+    return response.data || null;
+  } catch (error) {
+    console.warn("Could not load the latest menu and reward settings:", error);
+    return null;
+  }
+}
+const businessConfigPromise = fetchRemoteBusinessConfig();
+const businessConfigTimeout = new Promise(resolve => setTimeout(() => resolve(null), 1800));
+const initialBusinessConfig = await Promise.race([businessConfigPromise, businessConfigTimeout]);
+if (applyRemoteBusinessConfig(initialBusinessConfig)) {
+  // Use current Firebase-managed prices before restoring any saved cart rows.
+}
+businessConfigPromise.then(data => {
+  if (data && applyRemoteBusinessConfig(data) && menuInitialized) {
+    cart = loadCart();
+    render();
+  }
+});
 const FREE_DELIVERY_THRESHOLD = 300;
 const DELIVERY_CHARGE = 30;
 const ONLINE_CHECKOUT_ENABLED = true;
@@ -2441,6 +2475,7 @@ document.addEventListener("click", event => {
 
   renderNav();
   render();
+  menuInitialized = true;
   setAppScreen("home");
 
   const firstVisitFlyer = document.getElementById("firstVisitFlyer");

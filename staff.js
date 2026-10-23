@@ -501,10 +501,21 @@ function getCatalogItems() {
   for (const combo of window.COMBO_MENU_DATA || []) items.push({ name: combo.name, price: Number(combo.price), group: "COMBOS" });
   return items;
 }
-const catalogItems = getCatalogItems();
+let catalogItems = getCatalogItems();
 const menuCategory = $("menuCategory");
-const categories = [...new Set(catalogItems.map(item => item.group))];
-menuCategory.innerHTML = `<option value="all">All categories</option>${categories.map(category => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("")}`;
+function renderMenuCategories() {
+  const categories = [...new Set(catalogItems.map(item => item.group))];
+  menuCategory.innerHTML = `<option value="all">All categories</option>${categories.map(category => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("")}`;
+}
+function applyPublicMenu(config) {
+  if (!config?.menu || !Array.isArray(config.combos)) return false;
+  for (const key of Object.keys(window.MENU_DATA || {})) delete window.MENU_DATA[key];
+  Object.assign(window.MENU_DATA, config.menu);
+  window.COMBO_MENU_DATA.splice(0, window.COMBO_MENU_DATA.length, ...config.combos);
+  catalogItems = getCatalogItems();
+  renderMenuCategories();
+  return true;
+}
 
 function renderMenuResults() {
   const query = $("menuSearch").value.trim().toLowerCase();
@@ -520,6 +531,11 @@ $("menuResults").addEventListener("click", event => {
   if (button) addCatalogItem(Number(button.dataset.addMenu));
 });
 renderMenuResults();
+httpsCallable(functions, "getPublicBusinessConfig")({})
+  .then(result => {
+    if (applyPublicMenu(result.data)) renderMenuResults();
+  })
+  .catch(error => console.warn("Could not load updated staff menu:", error));
 
 let customerLookupTimer = null;
 let customerLookupVersion = 0;

@@ -1,5 +1,5 @@
 const { initializeApp } = require("firebase-admin/app");
-const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
@@ -92,7 +92,7 @@ exports.staffSetOnlineOrderingPaused = onCall({ region: REGION }, async request 
 });
 
 async function requireStaff(request) {
-  if (!request.auth?.uid || request.auth.token.staff !== true) {
+  if (!request.auth?.uid || (request.auth.token.staff !== true && request.auth.token.admin !== true)) {
     throw new HttpsError("permission-denied", "Staff access is required.");
   }
   // Check the current Auth record as well as the ID token. This makes staff
@@ -104,10 +104,153 @@ async function requireStaff(request) {
     console.error("Could not verify current staff access", error);
     throw new HttpsError("permission-denied", "Staff access could not be verified.");
   }
-  if (currentUser.disabled || currentUser.customClaims?.staff !== true) {
+  if (currentUser.disabled || (currentUser.customClaims?.staff !== true && currentUser.customClaims?.admin !== true)) {
     throw new HttpsError("permission-denied", "Staff access is required.");
   }
   return request.auth.uid;
+}
+
+async function requireAdmin(request) {
+  if (!request.auth?.uid || request.auth.token.admin !== true) {
+    throw new HttpsError("permission-denied", "Administrator access is required.");
+  }
+  try {
+    const currentUser = await getAuth().getUser(request.auth.uid);
+    if (currentUser.disabled || currentUser.customClaims?.admin !== true) {
+      throw new HttpsError("permission-denied", "Administrator access is required.");
+    }
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    console.error("Could not verify current administrator access", error);
+    throw new HttpsError("permission-denied", "Administrator access could not be verified.");
+  }
+  return request.auth.uid;
+}
+
+const MENU_CONFIG_REF = () => db.collection("restaurantSettings").doc("menuCatalog");
+const REWARDS_CONFIG_REF = () => db.collection("restaurantSettings").doc("rewardsConfig");
+
+async function readBusinessConfig() {
+  const [menuSnapshot, rewardsSnapshot] = await Promise.all([MENU_CONFIG_REF().get(), REWARDS_CONFIG_REF().get()]);
+  const menu = menuSnapshot.exists && menuSnapshot.data()?.menu && typeof menuSnapshot.data().menu === "object"
+    ? menuSnapshot.data().menu : MENU_DATA;
+  const combos = menuSnapshot.exists && Array.isArray(menuSnapshot.data()?.combos)
+    ? menuSnapshot.data().combos : COMBO_MENU_DATA;
+  const savedRewards = rewardsSnapshot.exists && Array.isArray(rewardsSnapshot.data()?.journey)
+    ? rewardsSnapshot.data().journey : REWARDS.journey;
+  const rewards = { ...REWARDS, journey: savedRewards };
+  rewards.rewardById = Object.fromEntries(savedRewards.filter(item => item?.id).map(item => [item.id, item]));
+  return { menu, combos, rewards };
+}
+
+function buildPriceByName(menuData, combos) {
+  const prices = new Map();
+  for (const section of Object.values(menuData || {})) {
+    for (const item of Array.isArray(section?.items) ? section.items : []) {
+      if (Array.isArray(item.options)) {
+        for (const option of item.options) prices.set(option.name, Number(option.price));
+      } else prices.set(item.name, Number(item.price));
+    }
+  }
+  for (const combo of Array.isArray(combos) ? combos : []) prices.set(combo.name, Number(combo.price));
+  return prices;
+}
+
+function publicBusinessConfig(config) {
+  const { rewardById, ...rewards } = config.rewards;
+  return { menu: config.menu, combos: config.combos, rewards };
+}
+
+function safeFirestoreData(value) {
+  if (value instanceof Date) return value.toISOString();
+  if (value?.toDate) return value.toDate().toISOString();
+  if (Array.isArray(value)) return value.map(safeFirestoreData);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, safeFirestoreData(child)]));
+  return value;
+}
+
+function validateMenuCatalog(menu) {
+  if (!menu || typeof menu !== "object" || Array.isArray(menu)) throw new HttpsError("invalid-argument", "Provide menu categories and items.");
+  const entries = Object.entries(menu);
+  if (!entries.length || entries.length > 30) throw new HttpsError("invalid-argument", "Menu needs between 1 and 30 categories.");
+  const clean = {};
+  const names = new Set();
+  for (const [id, section] of entries) {
+    if (!/^[a-z0-9][a-z0-9-]{1,39}$/.test(id) || !section || typeof section.title !== "string" || !Array.isArray(section.items) || section.items.length > 100) {
+      throw new HttpsError("invalid-argument", "A menu category or its item list is invalid.");
+    }
+    clean[id] = {
+      title: section.title.trim().slice(0, 60),
+      subtitle: String(section.subtitle || "").trim().slice(0, 120),
+      items: section.items.map(item => {
+        const name = String(item?.name || "").trim();
+        if (name.length < 2 || name.length > 100) throw new HttpsError("invalid-argument", "Menu item names must be between 2 and 100 characters.");
+        const options = Array.isArray(item.options) ? item.options : null;
+        const rows = options ? options.map(option => ({ name: String(option.name || "").trim(), label: String(option.label || "").trim().slice(0, 40), price: Number(option.price) })) : [{ name, price: Number(item.price) }];
+        if (!rows.length || rows.length > 10) throw new HttpsError("invalid-argument", `Add valid sizes for ${name}.`);
+        for (const row of rows) {
+          if (row.name.length < 2 || !Number.isSafeInteger(row.price) || row.price < 1 || row.price > 20000 || names.has(row.name.toLowerCase())) {
+            throw new HttpsError("invalid-argument", `The name or price for ${row.name || name} is invalid or duplicated.`);
+          }
+          names.add(row.name.toLowerCase());
+        }
+        const image = String(item.image || "").trim();
+        if (image && (!image.startsWith("images/") || image.includes("..") || !/^images\/[\w./-]+\.(png|jpe?g|webp)$/i.test(image))) {
+          throw new HttpsError("invalid-argument", `Use a website image path under images/ for ${name}, or leave it blank.`);
+        }
+        const output = { name, image, description: String(item.description || `${name}.`).trim().slice(0, 180) };
+        if (options) output.options = rows.map((row, index) => ({ name: row.name, label: options[index].label || row.name, price: row.price }));
+        else output.price = rows[0].price;
+        return output;
+      })
+    };
+  }
+  return clean;
+}
+
+function validateRewardJourney(journey, menu) {
+  if (!Array.isArray(journey) || journey.length < 1 || journey.length > 30) throw new HttpsError("invalid-argument", "Reward journey must contain 1 to 30 order milestones.");
+  const prices = buildPriceByName(menu, COMBO_MENU_DATA);
+  const ids = new Set();
+  const orders = new Set();
+  const validKinds = new Set(["welcome", "progress", "free-delivery", "free-item", "discount", "bonus-points", "double-points"]);
+  return journey.map(entry => {
+    const order = Number(entry?.order);
+    const kind = String(entry?.kind || "");
+    const id = entry?.id ? String(entry.id).trim() : "";
+    const title = String(entry?.title || "").trim();
+    const detail = String(entry?.detail || "").trim();
+    const requiresId = !["progress", "welcome"].includes(kind);
+    if (!Number.isSafeInteger(order) || order < 1 || order > 30 || orders.has(order) || !validKinds.has(kind) || title.length < 2 || title.length > 100 || detail.length > 180 || (requiresId && !id) || (id && (!/^[a-zA-Z0-9_-]{2,64}$/.test(id) || ids.has(id)))) {
+      throw new HttpsError("invalid-argument", "A reward title, type, ID, or order number is invalid or duplicated.");
+    }
+    orders.add(order);
+    if (id) ids.add(id);
+    const reward = { order, kind, title, detail };
+    if (id) reward.id = id;
+    if (["free-delivery", "free-item", "discount"].includes(kind)) {
+      reward.minimum = Number(entry.minimum || 0);
+      if (!Number.isSafeInteger(reward.minimum) || reward.minimum < 0 || reward.minimum > 10000) throw new HttpsError("invalid-argument", `The minimum spend for ${title} is invalid.`);
+    }
+    if (kind === "free-item") {
+      reward.item = String(entry.item || "").trim();
+      reward.itemPrice = prices.get(reward.item);
+      if (!reward.item || !Number.isSafeInteger(reward.itemPrice) || (menu.extras?.items || []).some(item => item.name === reward.item) || COMBO_MENU_DATA.some(combo => combo.name === reward.item)) throw new HttpsError("invalid-argument", `Choose a regular menu item for ${title}.`);
+    }
+    if (kind === "discount") {
+      reward.amount = Number(entry.amount || 0);
+      if (!Number.isSafeInteger(reward.amount) || reward.amount < 1 || reward.amount > 1000) throw new HttpsError("invalid-argument", `The discount for ${title} is invalid.`);
+    }
+    if (kind === "bonus-points") {
+      reward.points = Number(entry.points || 0);
+      if (!Number.isSafeInteger(reward.points) || reward.points < 1 || reward.points > 10000) throw new HttpsError("invalid-argument", `The point reward for ${title} is invalid.`);
+    }
+    if (kind === "double-points") {
+      reward.maxBonusPoints = Number(entry.maxBonusPoints || 0);
+      if (!Number.isSafeInteger(reward.maxBonusPoints) || reward.maxBonusPoints < 1 || reward.maxBonusPoints > 10000) throw new HttpsError("invalid-argument", `The point bonus limit for ${title} is invalid.`);
+    }
+    return reward;
+  }).sort((left, right) => left.order - right.order);
 }
 
 function normalizeIndianMobile(value) {
@@ -116,19 +259,6 @@ function normalizeIndianMobile(value) {
   if (/^91[6-9]\d{9}$/.test(digits)) return `+${digits}`;
   return "";
 }
-
-const PRICE_BY_NAME = new Map();
-const EXTRA_NAMES = new Set((MENU_DATA.extras?.items || []).map(item => item.name));
-for (const section of Object.values(MENU_DATA)) {
-  for (const item of section.items) {
-    if (Array.isArray(item.options)) {
-      for (const option of item.options) PRICE_BY_NAME.set(option.name, Number(option.price));
-    } else {
-      PRICE_BY_NAME.set(item.name, Number(item.price));
-    }
-  }
-}
-for (const combo of COMBO_MENU_DATA) PRICE_BY_NAME.set(combo.name, Number(combo.price));
 
 const FREE_OFFERS = Object.freeze({});
 
@@ -144,7 +274,7 @@ function timestampMillis(value) {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-function validateAndPriceItems(items) {
+function validateAndPriceItems(items, menuData = MENU_DATA, comboData = COMBO_MENU_DATA) {
   if (!Array.isArray(items) || items.length < 1 || items.length > 50) {
     throw new HttpsError("invalid-argument", "Your cart is empty or has too many different items.");
   }
@@ -156,7 +286,9 @@ function validateAndPriceItems(items) {
   let burgerCount = 0;
   let freeOffer = null;
   const pricedItems = [];
-  const comboNames = new Set(COMBO_MENU_DATA.map(combo => combo.name));
+  const priceByName = buildPriceByName(menuData, comboData);
+  const extraNames = new Set((menuData.extras?.items || []).map(item => item.name));
+  const comboNames = new Set(comboData.map(combo => combo.name));
 
   for (const line of items) {
     const name = typeof line?.name === "string" ? line.name.trim() : "";
@@ -179,16 +311,16 @@ function validateAndPriceItems(items) {
       continue;
     }
 
-    const price = PRICE_BY_NAME.get(name);
+    const price = priceByName.get(name);
     if (!Number.isSafeInteger(price) || price <= 0) {
       throw new HttpsError("invalid-argument", `The menu item “${name}” is not available.`);
     }
     const isCombo = comboNames.has(name);
     const lineTotal = price * qty;
     subtotal += lineTotal;
-    if (!isCombo && !EXTRA_NAMES.has(name)) eligibleSubtotal += lineTotal;
+    if (!isCombo && !extraNames.has(name)) eligibleSubtotal += lineTotal;
     if (isCombo) comboPointSubtotal += lineTotal;
-    else if (!EXTRA_NAMES.has(name)) regularPointSubtotal += lineTotal;
+    else if (!extraNames.has(name)) regularPointSubtotal += lineTotal;
     if (!isCombo && name.toLowerCase() === "classic crunchy burger") burgerCount += qty;
     pricedItems.push({ name, price, qty, isCombo, isFreeOffer: false, lineTotal });
   }
@@ -206,6 +338,241 @@ function validateAndPriceItems(items) {
 
   return { pricedItems, subtotal, eligibleSubtotal, regularPointSubtotal, comboPointSubtotal, freeOffer };
 }
+
+exports.getPublicBusinessConfig = onCall({ region: REGION }, async () => publicBusinessConfig(await readBusinessConfig()));
+
+exports.adminGetBusinessConfig = onCall({ region: REGION }, async request => {
+  await requireAdmin(request);
+  return publicBusinessConfig(await readBusinessConfig());
+});
+
+exports.adminSaveMenuCatalog = onCall({ region: REGION }, async request => {
+  const adminUid = await requireAdmin(request);
+  const menu = validateMenuCatalog(request.data?.menu);
+  await MENU_CONFIG_REF().set({ menu, updatedBy: adminUid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  return { saved: true, categories: Object.keys(menu).length, items: Object.values(menu).reduce((sum, section) => sum + section.items.length, 0) };
+});
+
+exports.adminSaveRewardsConfig = onCall({ region: REGION }, async request => {
+  const adminUid = await requireAdmin(request);
+  const businessConfig = await readBusinessConfig();
+  const journey = validateRewardJourney(request.data?.journey, businessConfig.menu);
+  const keepIds = new Set(journey.filter(item => item.id).map(item => item.id));
+  const accounts = await db.collection("loyaltyAccounts").get();
+  for (const accountDoc of accounts.docs) {
+    const activeTickets = (accountDoc.data().availableRewards || []).filter(ticket => !ticket.expiresAt || timestampMillis(ticket.expiresAt) > Date.now());
+    if (activeTickets.some(ticket => !keepIds.has(ticket.id))) {
+      throw new HttpsError("failed-precondition", "This reward lineup still has active customer rewards. Keep those reward IDs until the issued rewards expire or are used.");
+    }
+  }
+  await REWARDS_CONFIG_REF().set({ journey, updatedBy: adminUid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  return { saved: true, milestones: journey.length };
+});
+
+exports.adminListAccessUsers = onCall({ region: REGION }, async request => {
+  await requireAdmin(request);
+  const users = [];
+  let pageToken;
+  do {
+    const page = await getAuth().listUsers(1000, pageToken);
+    users.push(...page.users.filter(user => user.customClaims?.staff === true || user.customClaims?.admin === true).map(user => ({
+      uid: user.uid,
+      mobile: user.phoneNumber || "",
+      name: user.displayName || "",
+      role: user.customClaims?.admin === true ? "admin" : "staff",
+      lastSignIn: user.metadata?.lastSignInTime || null,
+      disabled: user.disabled === true
+    })));
+    pageToken = page.pageToken;
+  } while (pageToken);
+  return { users: users.sort((a, b) => a.role.localeCompare(b.role) || a.mobile.localeCompare(b.mobile)) };
+});
+
+exports.adminSetUserRole = onCall({ region: REGION }, async request => {
+  const adminUid = await requireAdmin(request);
+  const mobile = normalizeIndianMobile(request.data?.mobile);
+  const role = String(request.data?.role || "");
+  if (!mobile || !["admin", "staff", "customer"].includes(role)) throw new HttpsError("invalid-argument", "Enter a valid mobile number and choose customer, staff, or admin.");
+  let user;
+  try {
+    user = await getAuth().getUserByPhoneNumber(mobile);
+  } catch (error) {
+    if (error.code === "auth/user-not-found") throw new HttpsError("not-found", "This number must sign in with OTP on the website once before access can be assigned.");
+    throw new HttpsError("unavailable", "Could not look up this phone account. Please retry.");
+  }
+  const claims = { ...(user.customClaims || {}) };
+  if (role === "admin") { claims.admin = true; claims.staff = true; }
+  else if (role === "staff") { delete claims.admin; claims.staff = true; }
+  else { delete claims.admin; delete claims.staff; }
+  if (role !== "admin" && user.customClaims?.admin === true) {
+    let adminCount = 0;
+    let pageToken;
+    do {
+      const page = await getAuth().listUsers(1000, pageToken);
+      adminCount += page.users.filter(candidate => !candidate.disabled && candidate.customClaims?.admin === true).length;
+      pageToken = page.pageToken;
+    } while (pageToken && adminCount < 2);
+    if (adminCount <= 1) throw new HttpsError("failed-precondition", "Keep at least one active administrator account.");
+  }
+  await getAuth().setCustomUserClaims(user.uid, claims);
+  await getAuth().revokeRefreshTokens(user.uid);
+  await db.collection("adminAccessChanges").add({ changedBy: adminUid, targetUid: user.uid, mobile, role, createdAt: FieldValue.serverTimestamp() });
+  return { mobile, role, changedBy: adminUid, message: "The account must sign in again for the new access to take effect." };
+});
+
+exports.adminListCustomers = onCall({ region: REGION }, async request => {
+  await requireAdmin(request);
+  const snapshot = await db.collection("orders").orderBy("createdAt", "desc").limit(1000).get();
+  const customers = new Map();
+  for (const document of snapshot.docs) {
+    const order = document.data();
+    const mobile = normalizeIndianMobile(order.mobile);
+    if (!mobile) continue;
+    const key = order.uid || mobile;
+    const row = customers.get(key) || { uid: order.uid || "", mobile, name: String(order.customerName || "Customer"), orders: 0, spend: 0, lastOrderAt: null };
+    row.orders += 1;
+    if (!["cancelled", "canceled"].includes(String(order.status || "").toLowerCase())) row.spend += Math.max(0, Number(order.total || 0));
+    row.lastOrderAt ||= order.createdAt?.toDate?.().toISOString?.() || null;
+    if (row.name === "Customer" && order.customerName) row.name = String(order.customerName);
+    customers.set(key, row);
+  }
+  return { customers: [...customers.values()].sort((a, b) => String(b.lastOrderAt || "").localeCompare(String(a.lastOrderAt || ""))).slice(0, 500) };
+});
+
+exports.adminGetCustomerDetails = onCall({ region: REGION }, async request => {
+  await requireAdmin(request);
+  const mobile = normalizeIndianMobile(request.data?.mobile);
+  if (!mobile) throw new HttpsError("invalid-argument", "Enter a valid Indian mobile number.");
+  let user = null;
+  try { user = await getAuth().getUserByPhoneNumber(mobile); }
+  catch (error) { if (error.code !== "auth/user-not-found") throw new HttpsError("unavailable", "Could not look up this customer account."); }
+  const queries = [db.collection("orders").where("mobile", "==", mobile).orderBy("createdAt", "desc").limit(1000)];
+  if (user) queries.unshift(db.collection("orders").where("uid", "==", user.uid).orderBy("createdAt", "desc").limit(1000));
+  const [profileSnapshot, loyaltySnapshot, ...orderSnapshots] = await Promise.all([
+    user ? db.collection("customerProfiles").doc(user.uid).get() : Promise.resolve(null),
+    user ? db.collection("loyaltyAccounts").doc(user.uid).get() : Promise.resolve(null),
+    ...queries.map(query => query.get())
+  ]);
+  const orderMap = new Map();
+  for (const result of orderSnapshots) for (const document of result.docs) orderMap.set(document.id, { id: document.id, ...safeFirestoreData(document.data()) });
+  const orders = [...orderMap.values()].sort((a, b) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt));
+  const profile = profileSnapshot?.exists ? profileSnapshot.data() : {};
+  const loyalty = loyaltySnapshot?.exists ? loyaltySnapshot.data() : {};
+  return {
+    found: Boolean(user || orders.length), mobile,
+    name: String(profile.name || user?.displayName || orders.find(order => order.customerName)?.customerName || "Customer").slice(0, 80),
+    addresses: safeFirestoreData(profile.addresses || []),
+    points: Math.max(0, Number(loyalty.points || 0)),
+    completedOrders: Math.max(0, Number(loyalty.completedOrders || 0)),
+    availableRewards: safeFirestoreData(loyalty.availableRewards || []),
+    orders,
+    historyLimited: orders.length >= 1000
+  };
+});
+
+function mumbaiMidnight(dateKey) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day) - 330 * 60 * 1000);
+}
+
+function mumbaiRange(range, now = new Date()) {
+  const todayKey = mumbaiDateKey(now);
+  const [year, month] = todayKey.split("-").map(Number);
+  let startKey = todayKey;
+  if (range === "week") {
+    const weekday = new Date(`${todayKey}T00:00:00Z`).getUTCDay();
+    const monday = new Date(Date.UTC(year, month - 1, Number(todayKey.slice(-2)) - ((weekday + 6) % 7)));
+    startKey = `${monday.getUTCFullYear()}-${String(monday.getUTCMonth() + 1).padStart(2, "0")}-${String(monday.getUTCDate()).padStart(2, "0")}`;
+  } else if (range === "month") startKey = `${year}-${String(month).padStart(2, "0")}-01`;
+  else if (range !== "today") throw new HttpsError("invalid-argument", "Choose today, week, or month.");
+  return { start: mumbaiMidnight(startKey), end: now, startKey, todayKey };
+}
+
+function summarizeSales(orders) {
+  const summary = { total: { sales: 0, orders: 0 }, online: { sales: 0, orders: 0 }, walkIn: { sales: 0, orders: 0 } };
+  const items = new Map();
+  const weekdays = new Map(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map(day => [day, { sales: 0, orders: 0 }]));
+  for (const order of orders) {
+    if (["cancelled", "canceled"].includes(String(order.status || "").toLowerCase())) continue;
+    const amount = Math.max(0, Number(order.total || 0));
+    const channel = order.source === "walk-in" ? summary.walkIn : summary.online;
+    summary.total.sales += amount; summary.total.orders += 1; channel.sales += amount; channel.orders += 1;
+    const weekday = order.createdAt?.toDate ? new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", weekday: "long" }).format(order.createdAt.toDate()) : "";
+    if (weekdays.has(weekday)) { weekdays.get(weekday).sales += amount; weekdays.get(weekday).orders += 1; }
+    for (const line of Array.isArray(order.items) ? order.items : []) {
+      const name = String(line.name || "Unknown item");
+      const row = items.get(name) || { name, quantity: 0, listedValue: 0 };
+      const qty = Math.max(0, Number(line.qty || 0));
+      row.quantity += qty;
+      row.listedValue += Math.max(0, Number(line.price || 0)) * qty;
+      items.set(name, row);
+    }
+  }
+  return { summary, items: [...items.values()].sort((a, b) => b.quantity - a.quantity), weekdays: [...weekdays.entries()].map(([day, values]) => ({ day, ...values })) };
+}
+
+exports.adminGetSalesAnalytics = onCall({ region: REGION }, async request => {
+  await requireAdmin(request);
+  const range = String(request.data?.range || "today");
+  const { start, end, startKey } = mumbaiRange(range);
+  const endTimestamp = Timestamp.fromDate(new Date(end.getTime() + 1));
+  const result = await db.collection("orders").where("createdAt", ">=", Timestamp.fromDate(start)).where("createdAt", "<", endTimestamp).orderBy("createdAt", "desc").limit(20000).get();
+  const orders = result.docs.map(document => document.data());
+  const report = summarizeSales(orders);
+  const [monthYear, monthNumber] = mumbaiDateKey().split("-").map(Number);
+  const monthStart = mumbaiMidnight(`${monthYear}-${String(monthNumber).padStart(2, "0")}-01`);
+  const weekdaySnapshot = range === "month" ? null : await db.collection("orders").where("createdAt", ">=", Timestamp.fromDate(monthStart)).where("createdAt", "<", endTimestamp).limit(20000).get();
+  const weekdayReport = weekdaySnapshot ? summarizeSales(weekdaySnapshot.docs.map(document => document.data())).weekdays : report.weekdays;
+  return { range, startDate: startKey, endDate: mumbaiDateKey(), timezone: "Asia/Kolkata", ...report, weekdays: weekdayReport, truncated: result.size === 20000 };
+});
+
+exports.adminAdjustCustomerBenefits = onCall({ region: REGION }, async request => {
+  const adminUid = await requireAdmin(request);
+  const mobile = normalizeIndianMobile(request.data?.mobile);
+  const pointsDelta = Number(request.data?.pointsDelta || 0);
+  const rewardId = String(request.data?.rewardId || "").trim();
+  const reason = String(request.data?.reason || "").trim();
+  const requestId = String(request.data?.requestId || "");
+  if (!mobile || !Number.isSafeInteger(pointsDelta) || Math.abs(pointsDelta) > 10000 || (!pointsDelta && !rewardId) || reason.length < 5 || reason.length > 250 || !/^[A-Za-z0-9_-]{16,80}$/.test(requestId)) {
+    throw new HttpsError("invalid-argument", "Enter a customer, a points change or reward, and a reason (5–250 characters).");
+  }
+  let user;
+  try { user = await getAuth().getUserByPhoneNumber(mobile); }
+  catch (error) { if (error.code === "auth/user-not-found") throw new HttpsError("not-found", "This customer must sign in with OTP on the website before receiving points or rewards."); throw error; }
+  const rewardConfig = (await readBusinessConfig()).rewards;
+  const reward = rewardId ? rewardConfig.rewardById[rewardId] : null;
+  if (rewardId && (!reward || ["welcome", "progress"].includes(reward.kind))) throw new HttpsError("not-found", "That reward is not available to grant from the current lineup.");
+  const accountRef = db.collection("loyaltyAccounts").doc(user.uid);
+  const adjustmentRef = db.collection("adminAdjustments").doc(`${adminUid}_${requestId}`);
+  return db.runTransaction(async transaction => {
+    const [adjustmentSnapshot, accountSnapshot] = await Promise.all([transaction.get(adjustmentRef), transaction.get(accountRef)]);
+    if (adjustmentSnapshot.exists) return adjustmentSnapshot.data().response;
+    const account = accountSnapshot.exists ? accountSnapshot.data() : {};
+    const currentPoints = Math.max(0, Number(account.points || 0));
+    if (currentPoints + pointsDelta < 0) throw new HttpsError("failed-precondition", "The customer does not have enough points for that deduction.");
+    const availableRewards = Array.isArray(account.availableRewards) ? [...account.availableRewards] : [];
+    let issuedReward = null;
+    if (reward) {
+      issuedReward = {
+        ticketId: `admin-${requestId}`, id: reward.id, order: reward.order,
+        title: reward.title, detail: reward.detail,
+        expiresAt: reward.kind === "free-item" ? new Date(Date.now() + rewardConfig.freeItemExpiryDays * 86400000) : null,
+        issuedAt: new Date()
+      };
+      availableRewards.push(issuedReward);
+    }
+    const response = { mobile, points: currentPoints + pointsDelta, reward: issuedReward ? { id: issuedReward.id, title: issuedReward.title } : null };
+    transaction.set(accountRef, {
+      uid: user.uid, points: currentPoints + pointsDelta,
+      totalEarned: Math.max(0, Number(account.totalEarned || 0)) + Math.max(0, pointsDelta),
+      totalRedeemed: Math.max(0, Number(account.totalRedeemed || 0)) + Math.max(0, -pointsDelta),
+      availableRewards, updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    transaction.create(accountRef.collection("entries").doc(`admin-${requestId}`), { points: pointsDelta, reason, adminUid, type: "admin-adjustment", createdAt: FieldValue.serverTimestamp(), rewardId: rewardId || null });
+    transaction.create(adjustmentRef, { adminUid, customerUid: user.uid, mobile, pointsDelta, rewardId: rewardId || null, reason, response, createdAt: FieldValue.serverTimestamp() });
+    return response;
+  });
+});
 
 exports.createOrder = onCall({ region: REGION }, async request => {
   if (!request.auth?.uid || !request.auth.token.phone_number) {
@@ -232,7 +599,10 @@ exports.createOrder = onCall({ region: REGION }, async request => {
     throw new HttpsError("invalid-argument", "Choose the payment method for your delivery or pickup order.");
   }
 
-  const { pricedItems, subtotal, eligibleSubtotal, regularPointSubtotal, comboPointSubtotal, freeOffer } = validateAndPriceItems(data.items);
+  const businessConfig = await readBusinessConfig();
+  const rewardConfig = businessConfig.rewards;
+  const priceByName = buildPriceByName(businessConfig.menu, businessConfig.combos);
+  const { pricedItems, subtotal, eligibleSubtotal, regularPointSubtotal, comboPointSubtotal, freeOffer } = validateAndPriceItems(data.items, businessConfig.menu, businessConfig.combos);
   const uid = request.auth.uid;
   const accountRef = db.collection("loyaltyAccounts").doc(uid);
   const requestRef = db.collection("orderRequests").doc(`${uid}_${requestId}`);
@@ -272,7 +642,7 @@ exports.createOrder = onCall({ region: REGION }, async request => {
     let claimedReward = null;
     let loyaltyReward = null;
 
-    if (!Number.isSafeInteger(requestedPoints) || requestedPoints < 0 || requestedPoints > REWARDS.maxRedeemPointsPerOrder || requestedPoints % 100 !== 0) {
+    if (!Number.isSafeInteger(requestedPoints) || requestedPoints < 0 || requestedPoints > rewardConfig.maxRedeemPointsPerOrder || requestedPoints % 100 !== 0) {
       throw new HttpsError("invalid-argument", "Redeem Craving Points in 100-point steps, up to 1,000 per order.");
     }
     if (requestedPoints && (requestedPoints > balance || freeOffer || loyaltyRewardTicketId || applyFirstOrderReward)) {
@@ -280,7 +650,7 @@ exports.createOrder = onCall({ region: REGION }, async request => {
     }
     if (loyaltyRewardTicketId) {
       claimedReward = availableRewards.find(reward => reward.ticketId === loyaltyRewardTicketId || (!reward.ticketId && reward.id === loyaltyRewardTicketId));
-      loyaltyReward = claimedReward ? REWARDS.rewardById[claimedReward.id] : null;
+      loyaltyReward = claimedReward ? rewardConfig.rewardById[claimedReward.id] : null;
       if (!loyaltyReward || freeOffer || requestedPoints) {
         throw new HttpsError("failed-precondition", "This reward is no longer available or cannot be combined with another offer.");
       }
@@ -305,7 +675,7 @@ exports.createOrder = onCall({ region: REGION }, async request => {
       if (loyaltyReward.kind === "bonus-points") pointsBonus = loyaltyReward.points;
       if (loyaltyReward.kind === "double-points") pointsMultiplier = 2;
       if (loyaltyReward.kind === "free-item") {
-        const itemPrice = PRICE_BY_NAME.get(loyaltyReward.item);
+        const itemPrice = priceByName.get(loyaltyReward.item);
         if (!Number.isSafeInteger(itemPrice) || itemPrice <= 0) throw new HttpsError("failed-precondition", "This reward item is unavailable.");
         pricedItems.push({ name: loyaltyReward.item, price: 0, qty: 1, isCombo: false, isFreeOffer: false, isLoyaltyReward: true, loyaltyRewardId: loyaltyRewardTicketId, lineTotal: 0 });
       }
@@ -317,18 +687,18 @@ exports.createOrder = onCall({ region: REGION }, async request => {
       const oldOrders = await transaction.get(db.collection("orders").where("uid", "==", uid).where("source", "==", "website").limit(1));
       if (!oldOrders.empty) throw new HttpsError("failed-precondition", "The free burger reward is only for your first online order.");
       welcomeUsed = true;
-      const welcomeItemPrice = PRICE_BY_NAME.get(REWARDS.welcomeItem);
+      const welcomeItemPrice = priceByName.get(rewardConfig.welcomeItem);
       if (!Number.isSafeInteger(welcomeItemPrice) || welcomeItemPrice <= 0) throw new HttpsError("failed-precondition", "The first-order reward item is unavailable.");
-      pricedItems.push({ name: REWARDS.welcomeItem, price: 0, qty: 1, isCombo: false, isFreeOffer: false, isLoyaltyReward: true, isWelcomeReward: true, lineTotal: 0 });
+      pricedItems.push({ name: rewardConfig.welcomeItem, price: 0, qty: 1, isCombo: false, isFreeOffer: false, isLoyaltyReward: true, isWelcomeReward: true, lineTotal: 0 });
     }
 
-    pointsDiscount = requestedPoints / REWARDS.pointsPerRedemptionRupees * 10;
+    pointsDiscount = requestedPoints / rewardConfig.pointsPerRedemptionRupees * 10;
     if (pointsDiscount > eligibleSubtotal) throw new HttpsError("failed-precondition", "Your food subtotal is too low for that points redemption.");
     const deliveryCharge = orderType === "pickup" || deliveryReward || subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_CHARGE;
     const totalDiscount = discountAmount + pointsDiscount;
     const total = Math.max(0, subtotal - totalDiscount + deliveryCharge);
     const regularSpentForPoints = Math.max(0, regularPointSubtotal - discountAmount - pointsDiscount);
-    const basePoints = Math.floor(regularSpentForPoints / REWARDS.pointRateRegularRupees) + Math.floor(comboPointSubtotal / REWARDS.pointRateComboRupees);
+    const basePoints = Math.floor(regularSpentForPoints / rewardConfig.pointRateRegularRupees) + Math.floor(comboPointSubtotal / rewardConfig.pointRateComboRupees);
     const pointsToAward = (pointsMultiplier === 2 ? basePoints + Math.min(basePoints, Number(loyaltyReward.maxBonusPoints || 0)) : basePoints) + pointsBonus;
     const remainingRewards = loyaltyRewardTicketId ? availableRewards.filter(reward => reward.ticketId !== loyaltyRewardTicketId && !( !reward.ticketId && reward.id === loyaltyRewardTicketId)) : availableRewards;
 
@@ -468,7 +838,8 @@ exports.staffLookupCustomer = onCall({ region: REGION }, async request => {
   const cycleOrder = completedOrders === 0 ? 0 : ((completedOrders - 1) % 30) + 1;
   const previewOrder = cycleOrder === 30 ? 0 : cycleOrder;
   const activeRewardIds = new Set(activeRewards.map(reward => reward.id));
-  const upcomingRewards = REWARDS.journey.filter(reward => reward.id && reward.order > previewOrder && !activeRewardIds.has(reward.id)).slice(0, 2);
+  const rewardConfig = (await readBusinessConfig()).rewards;
+  const upcomingRewards = rewardConfig.journey.filter(reward => reward.id && reward.order > previewOrder && !activeRewardIds.has(reward.id)).slice(0, 2);
   const recentOrderName = [...orderSnapshot.docs]
     .sort((left, right) => timestampMillis(right.data().createdAt) - timestampMillis(left.data().createdAt))
     .map(document => String(document.data().customerName || "").trim())
@@ -479,7 +850,7 @@ exports.staffLookupCustomer = onCall({ region: REGION }, async request => {
     points: Math.max(0, Number(loyalty.points || 0)),
     completedOrders,
     availableRewards: activeRewards.map(reward => {
-      const definition = REWARDS.rewardById[reward.id] || reward;
+      const definition = rewardConfig.rewardById[reward.id] || reward;
       const expiry = reward.expiresAt ? timestampMillis(reward.expiresAt) : 0;
       return {
         ticketId: String(reward.ticketId || reward.id || ""),
@@ -501,7 +872,7 @@ exports.staffLookupCustomer = onCall({ region: REGION }, async request => {
   };
 });
 
-exports.staffUpdateOrderStatus = onCall({ region: REGION }, async request => {
+exports.staffUpdateOrderStatus = onCall({ region: REGION, cpu: "gcf_gen1", maxInstances: 10 }, async request => {
   await requireStaff(request);
   const orderId = typeof request.data?.orderId === "string" ? request.data.orderId.trim() : "";
   const nextStatus = typeof request.data?.status === "string" ? request.data.status : "";
@@ -576,7 +947,10 @@ exports.createWalkInOrder = onCall({ region: REGION }, async request => {
   if (!/^[a-zA-Z0-9_-]{16,80}$/.test(requestId)) {
     throw new HttpsError("invalid-argument", "Order reference is missing. Please retry.");
   }
-  const { pricedItems, subtotal, eligibleSubtotal, regularPointSubtotal, comboPointSubtotal } = validateAndPriceItems(data.items);
+  const businessConfig = await readBusinessConfig();
+  const rewardConfig = businessConfig.rewards;
+  const priceByName = buildPriceByName(businessConfig.menu, businessConfig.combos);
+  const { pricedItems, subtotal, eligibleSubtotal, regularPointSubtotal, comboPointSubtotal } = validateAndPriceItems(data.items, businessConfig.menu, businessConfig.combos);
   let customerUid = null;
   if (mobile) {
     try {
@@ -600,7 +974,7 @@ exports.createWalkInOrder = onCall({ region: REGION }, async request => {
     const availableRewards = Array.isArray(account.availableRewards) ? account.availableRewards : [];
     const requestedPoints = Number(data.redeemPoints || 0);
     const loyaltyRewardTicketId = typeof data.loyaltyRewardId === "string" ? data.loyaltyRewardId : "";
-    if (!Number.isSafeInteger(requestedPoints) || requestedPoints < 0 || requestedPoints > REWARDS.maxRedeemPointsPerOrder || requestedPoints % 100 !== 0) {
+    if (!Number.isSafeInteger(requestedPoints) || requestedPoints < 0 || requestedPoints > rewardConfig.maxRedeemPointsPerOrder || requestedPoints % 100 !== 0) {
       throw new HttpsError("invalid-argument", "Redeem Craving Points in 100-point steps, up to 1,000 per order.");
     }
     if ((requestedPoints || loyaltyRewardTicketId) && !customerUid) {
@@ -618,7 +992,7 @@ exports.createWalkInOrder = onCall({ region: REGION }, async request => {
     let pointsMultiplier = 1;
     if (loyaltyRewardTicketId) {
       claimedReward = availableRewards.find(reward => reward.ticketId === loyaltyRewardTicketId || (!reward.ticketId && reward.id === loyaltyRewardTicketId));
-      loyaltyReward = claimedReward ? REWARDS.rewardById[claimedReward.id] : null;
+      loyaltyReward = claimedReward ? rewardConfig.rewardById[claimedReward.id] : null;
       if (!loyaltyReward || requestedPoints) throw new HttpsError("failed-precondition", "This reward is no longer available or cannot be combined with points.");
       const activeRewards = availableRewards.filter(reward => !reward.expiresAt || timestampMillis(reward.expiresAt) > Date.now());
       const oldestReward = activeRewards.sort((a, b) => timestampMillis(a.issuedAt) - timestampMillis(b.issuedAt))[0];
@@ -638,18 +1012,18 @@ exports.createWalkInOrder = onCall({ region: REGION }, async request => {
       if (loyaltyReward.kind === "bonus-points") pointsBonus = Number(loyaltyReward.points || 0);
       if (loyaltyReward.kind === "double-points") pointsMultiplier = 2;
       if (loyaltyReward.kind === "free-item") {
-        const itemPrice = PRICE_BY_NAME.get(loyaltyReward.item);
+        const itemPrice = priceByName.get(loyaltyReward.item);
         if (!Number.isSafeInteger(itemPrice) || itemPrice <= 0) throw new HttpsError("failed-precondition", "This reward item is unavailable.");
         pricedItems.push({ name: loyaltyReward.item, price: 0, qty: 1, isCombo: false, isFreeOffer: false, isLoyaltyReward: true, loyaltyRewardId: loyaltyRewardTicketId, lineTotal: 0 });
       }
     }
-    const pointsDiscount = requestedPoints / REWARDS.pointsPerRedemptionRupees * 10;
+    const pointsDiscount = requestedPoints / rewardConfig.pointsPerRedemptionRupees * 10;
     if (pointsDiscount > eligibleSubtotal) throw new HttpsError("failed-precondition", "Craving Points cannot reduce the eligible food subtotal below zero.");
     const totalDiscount = discountAmount + pointsDiscount;
     const total = Math.max(0, subtotal - totalDiscount);
     const regularSpentForPoints = Math.max(0, regularPointSubtotal - discountAmount - pointsDiscount);
     const basePoints = customerUid
-      ? Math.floor(regularSpentForPoints / REWARDS.pointRateRegularRupees) + Math.floor(comboPointSubtotal / REWARDS.pointRateComboRupees)
+      ? Math.floor(regularSpentForPoints / rewardConfig.pointRateRegularRupees) + Math.floor(comboPointSubtotal / rewardConfig.pointRateComboRupees)
       : 0;
     const pointsToAward = (pointsMultiplier === 2 ? basePoints + Math.min(basePoints, Number(loyaltyReward?.maxBonusPoints || 0)) : basePoints) + pointsBonus;
     const remainingRewards = loyaltyRewardTicketId
@@ -714,6 +1088,7 @@ exports.onOrderStatusChanged = onDocumentUpdated({ document: "orders/{orderId}",
   const becameDelivered = !isLoyaltyComplete(before) && isLoyaltyComplete(after);
   const becameCancelled = !["cancelled", "canceled"].includes(String(before.status || "").toLowerCase()) && ["cancelled", "canceled"].includes(String(after.status || "").toLowerCase());
   if (!becameDelivered && !becameCancelled) return;
+  const rewardConfig = (await readBusinessConfig()).rewards;
   await db.runTransaction(async transaction => {
     const [orderSnapshot, entrySnapshot, accountSnapshot] = await Promise.all([
       transaction.get(event.data.after.ref), transaction.get(entryRef), transaction.get(accountRef)
@@ -727,7 +1102,7 @@ exports.onOrderStatusChanged = onDocumentUpdated({ document: "orders/{orderId}",
       const completedOrders = Math.max(0, Number(account.completedOrders || 0)) + 1;
       // The welcome offer is first-order only; later cycles continue at journey order 2.
       const step = completedOrders === 1 ? 1 : ((completedOrders - 2) % 29) + 2;
-      const milestone = REWARDS.journey.find(item => item.order === step && item.id);
+      const milestone = rewardConfig.journey.find(item => item.order === step && item.id);
       const availableRewards = Array.isArray(account.availableRewards) ? [...account.availableRewards] : [];
       if (milestone) {
         availableRewards.push({
@@ -736,7 +1111,7 @@ exports.onOrderStatusChanged = onDocumentUpdated({ document: "orders/{orderId}",
           order: milestone.order,
           title: milestone.title,
           detail: milestone.detail,
-          expiresAt: milestone.kind === "free-item" ? new Date(Date.now() + REWARDS.freeItemExpiryDays * 86400000) : null,
+          expiresAt: milestone.kind === "free-item" ? new Date(Date.now() + rewardConfig.freeItemExpiryDays * 86400000) : null,
           issuedAt: new Date()
         });
       }
@@ -758,7 +1133,7 @@ exports.onOrderStatusChanged = onDocumentUpdated({ document: "orders/{orderId}",
     if (order.loyaltyReversed) return;
     const availableRewards = Array.isArray(account.availableRewards) ? [...account.availableRewards] : [];
     if (order.claimedRewardId && order.claimedReward && !availableRewards.some(item => item.ticketId === order.claimedRewardId)) {
-      const definition = REWARDS.rewardById[order.claimedReward.id];
+      const definition = rewardConfig.rewardById[order.claimedReward.id];
       const expired = order.claimedReward.expiresAt && timestampMillis(order.claimedReward.expiresAt) <= Date.now();
       if (definition && !expired) availableRewards.push({ ...order.claimedReward, order: definition.order, detail: definition.detail, expiresAt: order.claimedReward.expiresAt || null });
     }
