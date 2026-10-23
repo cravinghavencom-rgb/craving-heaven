@@ -15,6 +15,8 @@ const db = getFirestore();
 const REGION = "asia-south1";
 const DELIVERY_CHARGE = 30;
 const FREE_DELIVERY_THRESHOLD = 300;
+const DEFAULT_STORE_OPEN_TIME = "16:30";
+const DEFAULT_STORE_CLOSE_TIME = "23:45";
 const DELIVERY_AREAS = new Set([
   "Pathanwadi", "Kurar Village", "Koknipada", "Triveni Nagar", "Sanjay Nagar",
   "MHB Colony", "Dindoshi", "Laxman Nagar", "Rani Sati Marg", "Gokuldham", "Tapovan"
@@ -29,36 +31,82 @@ function mumbaiDateKey(now = new Date()) {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
-function isStoreOpenNow(now = new Date()) {
+function getStoreHours(settings = {}) {
+  const openingTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(settings.openingTime || "")
+    ? settings.openingTime : DEFAULT_STORE_OPEN_TIME;
+  const closingTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(settings.closingTime || "")
+    ? settings.closingTime : DEFAULT_STORE_CLOSE_TIME;
+  return { openingTime, closingTime };
+}
+
+function timeToMinutes(value) {
+  const [hour, minute] = value.split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+function isStoreOpenNow(now = new Date(), settings = {}) {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hourCycle: "h23"
   }).formatToParts(now);
   const hour = Number(parts.find(part => part.type === "hour")?.value || 0);
   const minute = Number(parts.find(part => part.type === "minute")?.value || 0);
   const currentMinutes = hour * 60 + minute;
-  return currentMinutes >= 16 * 60 + 30 && currentMinutes < 23 * 60 + 45;
+  const { openingTime, closingTime } = getStoreHours(settings);
+  const openingMinutes = timeToMinutes(openingTime);
+  const closingMinutes = timeToMinutes(closingTime);
+  if (openingMinutes === closingMinutes) return false;
+  return openingMinutes < closingMinutes
+    ? currentMinutes >= openingMinutes && currentMinutes < closingMinutes
+    : currentMinutes >= openingMinutes || currentMinutes < closingMinutes;
+}
+
+function isStaffSessionEnabled(settings = {}, now = new Date()) {
+  if (settings.enabled !== true) return false;
+  const today = mumbaiDateKey(now);
+  if (settings.enabledForDate === today) return true;
+  const { openingTime, closingTime } = getStoreHours(settings);
+  if (timeToMinutes(openingTime) < timeToMinutes(closingTime)) return false;
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", hourCycle: "h23" }).format(now));
+  const minute = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", minute: "2-digit" }).format(now));
+  return hour * 60 + minute < timeToMinutes(closingTime)
+    && settings.enabledForDate === mumbaiDateKey(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+}
+
+function buildOrderingStatus(settings = {}, now = new Date()) {
+  const today = mumbaiDateKey(now);
+  const adminMode = settings.adminModeForDate === today ? settings.adminMode : "";
+  const paused = settings.paused === true;
+  const staffEnabled = isStaffSessionEnabled(settings, now);
+  const isOpen = isStoreOpenNow(now, settings);
+  const manualOnline = adminMode === "online";
+  const manualClosed = adminMode === "closed";
+  const manualPaused = adminMode === "paused";
+  const acceptingOnlineOrders = manualOnline || (!manualClosed && !manualPaused && isOpen && staffEnabled && !paused);
+  const hours = getStoreHours(settings);
+  return {
+    isOpen,
+    paused: manualPaused || (!manualClosed && paused),
+    staffEnabled,
+    acceptingOnlineOrders,
+    adminMode,
+    hours,
+    message: manualOnline
+      ? "Online ordering is open."
+      : manualPaused || paused
+        ? "High order volume: we’re temporarily not taking online orders. Please try again shortly."
+        : manualClosed
+          ? "We’re closed for now, but we’ll be back soon with your favourites. Please check back a little later."
+          : !staffEnabled
+      ? "Online ordering is off until staff starts taking orders. Please check back soon."
+      : !isOpen
+        ? "Online ordering is closed right now. Please check back later."
+        : "Online ordering is open."
+  };
 }
 
 async function readOrderingStatus() {
   const snapshot = await ORDERING_STATUS_REF().get();
-  const settings = snapshot.exists ? snapshot.data() : {};
-  const paused = settings.paused === true;
-  const staffEnabled = settings.enabled === true && settings.enabledForDate === mumbaiDateKey();
-  const isOpen = isStoreOpenNow();
-  const acceptingOnlineOrders = isOpen && staffEnabled && !paused;
-  return {
-    isOpen,
-    paused,
-    staffEnabled,
-    acceptingOnlineOrders,
-    message: !staffEnabled
-      ? "Online ordering is off until staff starts taking orders. Please check back soon."
-      : paused
-        ? "High order volume: we’re temporarily not taking online orders. Please try again shortly."
-        : !isOpen
-      ? "Online ordering is closed right now. Please check back later."
-        : "Online ordering is open."
-  };
+  return buildOrderingStatus(snapshot.exists ? snapshot.data() : {});
 }
 
 exports.getOrderingStatus = onCall({ region: REGION }, async () => readOrderingStatus());
@@ -72,6 +120,8 @@ exports.staffSetOnlineOrderingEnabled = onCall({ region: REGION }, async request
     enabled: request.data.enabled,
     enabledForDate: request.data.enabled ? mumbaiDateKey() : null,
     paused: false,
+    adminMode: null,
+    adminModeForDate: null,
     updatedBy: staffUid,
     updatedAt: FieldValue.serverTimestamp()
   }, { merge: true });
@@ -85,6 +135,8 @@ exports.staffSetOnlineOrderingPaused = onCall({ region: REGION }, async request 
   }
   await ORDERING_STATUS_REF().set({
     paused: request.data.paused,
+    adminMode: null,
+    adminModeForDate: null,
     updatedBy: staffUid,
     updatedAt: FieldValue.serverTimestamp()
   }, { merge: true });
@@ -126,6 +178,57 @@ async function requireAdmin(request) {
   }
   return request.auth.uid;
 }
+
+exports.adminUpdateRestaurantSettings = onCall({ region: REGION }, async request => {
+  const adminUid = await requireAdmin(request);
+  const data = request.data || {};
+  const patch = {};
+  const allowedActions = new Set(["online", "pause", "closed"]);
+
+  if (data.action !== undefined) {
+    if (!allowedActions.has(data.action)) {
+      throw new HttpsError("invalid-argument", "Choose online, pause, or closed.");
+    }
+    const today = mumbaiDateKey();
+    patch.adminMode = data.action;
+    patch.adminModeForDate = today;
+    if (data.action === "online") {
+      patch.enabled = true;
+      patch.enabledForDate = today;
+      patch.paused = false;
+    } else if (data.action === "pause") {
+      patch.enabled = true;
+      patch.enabledForDate = today;
+      patch.paused = true;
+    } else {
+      patch.enabled = false;
+      patch.enabledForDate = null;
+      patch.paused = false;
+    }
+  }
+
+  const hasHours = data.openingTime !== undefined || data.closingTime !== undefined;
+  if (hasHours) {
+    const snapshot = await ORDERING_STATUS_REF().get();
+    const current = snapshot.exists ? snapshot.data() : {};
+    const openingTime = data.openingTime ?? getStoreHours(current).openingTime;
+    const closingTime = data.closingTime ?? getStoreHours(current).closingTime;
+    const validTime = value => typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+    if (!validTime(openingTime) || !validTime(closingTime) || openingTime === closingTime) {
+      throw new HttpsError("invalid-argument", "Enter valid store hours. Opening and closing times must be different.");
+    }
+    patch.openingTime = openingTime;
+    patch.closingTime = closingTime;
+  }
+
+  if (!Object.keys(patch).length) {
+    throw new HttpsError("invalid-argument", "Choose a store status or update the store hours.");
+  }
+  patch.updatedBy = adminUid;
+  patch.updatedAt = FieldValue.serverTimestamp();
+  await ORDERING_STATUS_REF().set(patch, { merge: true });
+  return readOrderingStatus();
+});
 
 const MENU_CONFIG_REF = () => db.collection("restaurantSettings").doc("menuCatalog");
 const REWARDS_CONFIG_REF = () => db.collection("restaurantSettings").doc("rewardsConfig");
@@ -633,14 +736,9 @@ exports.createOrder = onCall({ region: REGION }, async request => {
 
     const orderingStatusSnapshot = await transaction.get(orderingStatusRef);
     const orderingSettings = orderingStatusSnapshot.exists ? orderingStatusSnapshot.data() : {};
-    if (!isStoreOpenNow()) {
-      throw new HttpsError("failed-precondition", "Online ordering is closed right now. Please check back later.");
-    }
-    if (orderingSettings.enabled !== true || orderingSettings.enabledForDate !== mumbaiDateKey()) {
-      throw new HttpsError("failed-precondition", "Online ordering is off until our team starts taking orders. Please check back soon.");
-    }
-    if (orderingSettings.paused === true) {
-      throw new HttpsError("failed-precondition", "High order volume: online ordering is temporarily paused. Please try again shortly.");
+    const orderingDecision = buildOrderingStatus(orderingSettings);
+    if (!orderingDecision.acceptingOnlineOrders) {
+      throw new HttpsError("failed-precondition", orderingDecision.message);
     }
 
     const [accountSnapshot, profileSnapshot] = await Promise.all([

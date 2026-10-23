@@ -246,18 +246,49 @@ async function loadOrdering() {
 }
 function renderOrdering() {
   const active = orderingStatus?.acceptingOnlineOrders === true;
-  $("orderingTitle").textContent = active ? "Online orders are open" : "Online orders are stopped";
+  const mode = orderingStatus?.adminMode || "";
+  $("orderingTitle").textContent = mode === "online"
+    ? "Online ordering is open"
+    : mode === "paused" || orderingStatus?.paused
+      ? "Online orders are paused"
+      : mode === "closed"
+        ? "Online ordering is closed by admin"
+        : active
+          ? "Online orders are open"
+          : "Online orders are stopped";
   $("orderingMessage").textContent = orderingStatus?.message || "Online orders remain off until staff or admin starts them.";
-  $("adminGoOnline").disabled = active; $("adminGoOffline").disabled = !orderingStatus?.staffEnabled;
+  $("adminGoOnline").disabled = mode === "online";
+  $("adminPauseOnline").disabled = orderingStatus?.paused === true;
+  $("adminPauseOnline").textContent = orderingStatus?.paused ? "Orders paused" : "Pause orders";
+  $("adminGoOffline").disabled = mode === "closed";
+  if (orderingStatus?.hours) {
+    $("storeOpeningTime").value = orderingStatus.hours.openingTime;
+    $("storeClosingTime").value = orderingStatus.hours.closingTime;
+  }
 }
-async function setOrdering(enabled) {
-  const button = enabled ? $("adminGoOnline") : $("adminGoOffline"); button.disabled = true;
-  try { orderingStatus = await call("staffSetOnlineOrderingEnabled", { enabled }); renderOrdering(); }
+async function setOrdering(action) {
+  const button = action === "online" ? $("adminGoOnline") : action === "pause" ? $("adminPauseOnline") : $("adminGoOffline"); button.disabled = true;
+  try { orderingStatus = await call("adminUpdateRestaurantSettings", { action }); renderOrdering(); }
   catch (error) { $("orderingMessage").textContent = friendlyError(error); }
   finally { renderOrdering(); }
 }
-$("adminGoOnline").addEventListener("click", () => setOrdering(true));
-$("adminGoOffline").addEventListener("click", () => setOrdering(false));
+$("adminGoOnline").addEventListener("click", () => setOrdering("online"));
+$("adminPauseOnline").addEventListener("click", () => setOrdering("pause"));
+$("adminGoOffline").addEventListener("click", () => setOrdering("closed"));
+$("storeHoursForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = $("saveStoreHours"); button.disabled = true;
+  message($("storeHoursMessage"), "Saving store hours…");
+  try {
+    orderingStatus = await call("adminUpdateRestaurantSettings", {
+      openingTime: $("storeOpeningTime").value,
+      closingTime: $("storeClosingTime").value
+    });
+    renderOrdering();
+    message($("storeHoursMessage"), "Store hours saved. Customers will only see whether ordering is open or closed.", "success");
+  } catch (error) { message($("storeHoursMessage"), friendlyError(error), "error"); }
+  finally { button.disabled = false; }
+});
 
 function renderRecipients() {
   $("messageRecipients").innerHTML = customers.length ? customers.slice(0, 200).map((customer, index) => `<label class="recipient-option"><input type="checkbox" value="${index}"><span><strong>${escapeHtml(customer.name)}</strong><small>${escapeHtml(customer.mobile)} · ${customer.orders} orders</small></span></label>`).join("") : '<p class="empty-cell">No recent customers available.</p>';

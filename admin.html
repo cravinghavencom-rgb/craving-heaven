@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow">
   <title>Admin Desk | CRAVING HEAVEN</title>
   <link rel="icon" type="image/png" href="images/logo.png">
-  <link rel="stylesheet" href="admin.css?v=20261023-address-location">
+  <link rel="stylesheet" href="admin.css?v=20261023-store-controls">
 </head>
 <body>
   <header class="admin-header">
@@ -33,7 +33,21 @@
         <div class="section-heading"><div><span class="eyebrow">SALES ANALYTICS · MUMBAI TIME</span><h2>Sales overview</h2></div><div class="range-switch" role="group" aria-label="Sales period"><button data-range="today" class="selected">Today</button><button data-range="week">This week</button><button data-range="month">This month</button></div></div>
         <p id="analyticsMessage" class="message" role="status">Loading sales…</p>
         <div class="metric-grid"><article class="metric-card metric-main"><span>Total sales</span><strong id="metricSales">₹0</strong><small id="metricOrders">0 orders</small></article><article class="metric-card"><span>Online sales</span><strong id="metricOnlineSales">₹0</strong><small id="metricOnlineOrders">0 orders</small></article><article class="metric-card"><span>Walk-in sales</span><strong id="metricWalkinSales">₹0</strong><small id="metricWalkinOrders">0 orders</small></article></div>
-        <article class="card ordering-card"><div><span class="eyebrow">RESTAURANT CONTROL</span><h3 id="orderingTitle">Checking online ordering…</h3><p id="orderingMessage" class="muted">Only staff or admin can start online orders each day.</p></div><div class="ordering-actions"><button id="adminGoOnline" class="button button-primary" type="button">Start online ordering</button><button id="adminGoOffline" class="button button-quiet" type="button">Stop online ordering</button></div></article>
+        <article class="card restaurant-control-card">
+          <div class="restaurant-control-heading"><div><span class="eyebrow">RESTAURANT CONTROL</span><h3 id="orderingTitle">Checking online ordering…</h3><p id="orderingMessage" class="muted">Only an administrator or staff member can change online availability.</p></div></div>
+          <form id="storeHoursForm" class="store-hours-editor">
+            <label>Opens at<input id="storeOpeningTime" type="time" required></label>
+            <label>Closes at<input id="storeClosingTime" type="time" required></label>
+            <button id="saveStoreHours" class="button button-quiet" type="submit">Save store hours</button>
+            <p id="storeHoursMessage" class="message" role="status"></p>
+          </form>
+          <div class="ordering-actions">
+            <button id="adminGoOnline" class="button button-primary" type="button">Open online ordering</button>
+            <button id="adminPauseOnline" class="button button-quiet" type="button">Pause orders</button>
+            <button id="adminGoOffline" class="button button-quiet" type="button">Close online ordering</button>
+          </div>
+          <p class="footnote">Admin status changes apply immediately for today. Online ordering will not turn on automatically tomorrow; an authorized team member must open it again.</p>
+        </article>
         <div class="report-grid"><article class="card report-card"><div class="section-heading compact"><div><span class="eyebrow">BEST SELLERS</span><h3>Item-wise sales</h3></div></div><div class="table-scroll"><table><thead><tr><th>Item</th><th>Qty</th><th>Menu value</th></tr></thead><tbody id="itemSalesRows"><tr><td colspan="3" class="empty-cell">No sales for this period yet.</td></tr></tbody></table></div><p class="footnote">Menu value uses listed prices; order-level discounts are shown in total sales.</p></article><article class="card report-card"><div class="section-heading compact"><div><span class="eyebrow">WEEKDAY PATTERN</span><h3>Sales by day</h3></div></div><div id="weekdayChart" class="weekday-chart"></div><p class="footnote">Shows completed and active orders placed this month, excluding cancelled orders.</p></article><article class="card report-card"><div class="section-heading compact"><div><span class="eyebrow">ORDER LOCATIONS</span><h3>Sales by area</h3></div></div><div class="table-scroll"><table><thead><tr><th>Location</th><th>Orders</th><th>Sales</th></tr></thead><tbody id="locationSalesRows"><tr><td colspan="3" class="empty-cell">No sales for this period yet.</td></tr></tbody></table></div><p class="footnote">Delivery orders use the customer’s selected area. Pickup and counter orders are listed separately.</p></article></div>
       </section>
 
@@ -73,6 +87,6 @@
       </section>
     </section>
   </main>
-  <script type="module" src="admin.js?v=20261023-address-location"></script>
+  <script type="module" src="admin.js?v=20261023-store-controls"></script>
 </body>
 </html>

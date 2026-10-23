@@ -2905,10 +2905,12 @@ function updateOpeningHours() {
     dot.classList.toggle("is-closed", !isOpen);
   }
   const notice = orderAvailabilityReady
-    ? !orderAvailability.staffEnabled
-      ? "We’re getting ready to serve you! Online ordering will open when our team is ready. Please check back soon—we’d love to make your favourites!"
-      : orderAvailability.paused
+    ? orderAvailability.paused
       ? "We’re preparing a rush of fresh orders right now. Please check back in a little while—we’d love to serve you soon!"
+      : orderAvailability.adminMode === "closed"
+      ? "We’re closed for now, but we’ll be back soon with your favourites. Please check back a little later!"
+      : !orderAvailability.staffEnabled
+      ? "We’re getting ready to serve you! Online ordering will open when our team is ready. Please check back soon—we’d love to make your favourites!"
       : isOpen ? "" : "We’re closed for now, but we’ll be back soon with your favourites. Please check back a little later!"
     : "Unable to confirm online order status. Please refresh and try again.";
   for (const element of [mainNotice, cartNotice]) {
@@ -2933,7 +2935,8 @@ async function refreshOrderingAvailability() {
       isOpen: data.isOpen === true,
       paused: data.paused === true,
       staffEnabled: data.staffEnabled === true,
-      acceptingOnlineOrders: data.acceptingOnlineOrders === true
+      acceptingOnlineOrders: data.acceptingOnlineOrders === true,
+      adminMode: data.adminMode || ""
     };
     orderAvailabilityReady = true;
   } catch (error) {

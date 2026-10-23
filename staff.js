@@ -276,8 +276,12 @@ function renderOrderingStatus(data) {
   const status = data || {};
   const summary = $("staffAvailabilitySummary");
   const message = $("staffAvailabilityMessage");
-  summary.textContent = status.paused && status.staffEnabled
+  summary.textContent = status.adminMode === "closed"
+    ? "ONLINE ORDERS CLOSED BY ADMIN"
+    : status.paused && status.staffEnabled
     ? "ONLINE ORDERS PAUSED · HIGH ORDER VOLUME"
+    : status.adminMode === "online"
+      ? "ONLINE ORDERS OPEN · ADMIN CONTROL"
     : status.acceptingOnlineOrders
       ? "ONLINE ORDERS OPEN"
       : status.staffEnabled
@@ -286,7 +290,11 @@ function renderOrderingStatus(data) {
   summary.classList.toggle("is-paused", status.paused === true);
   summary.classList.toggle("is-open", status.acceptingOnlineOrders === true);
   summary.classList.toggle("is-closed", status.acceptingOnlineOrders !== true && status.paused !== true);
-  message.textContent = !status.staffEnabled
+  message.textContent = status.adminMode === "closed"
+    ? "Online orders are closed by an administrator. An administrator must reopen them; walk-in orders remain available."
+    : status.adminMode === "online"
+      ? "An administrator opened online ordering. You can stop or pause it here; it will not carry over to another day."
+    : !status.staffEnabled
     ? "Online ordering stays off until a staff member starts it. A start lasts for today only, so it will never switch on automatically when store hours begin another day. Walk-in orders remain available."
     : status.paused
     ? "Customers cannot place website delivery or pickup orders while this rush pause is active. Walk-in orders remain available."
