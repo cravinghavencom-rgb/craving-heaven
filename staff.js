@@ -59,6 +59,11 @@ let pendingWalkinRequestId = null;
 
 const money = value => `₹${Number(value || 0).toLocaleString("en-IN")}`;
 const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
+const readableOrderNumber = order => {
+  if (order.orderNumber) return order.orderNumber;
+  const prefix = order.source === "walk-in" ? "WK" : order.orderType === "pickup" ? "PK" : "DL";
+  return `${prefix}-${String(order.id || "").slice(-4).toUpperCase()}`;
+};
 const orderDate = value => value ? new Date(value).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "Time unavailable";
 
 function resetVerifier() {
@@ -205,7 +210,7 @@ function playOrderChime() {
 function announceNewOnlineOrders(newOrders) {
   const count = newOrders.length;
   const latestOrder = newOrders[0];
-  const orderLabel = latestOrder?.id ? ` #${String(latestOrder.id).slice(-7).toUpperCase()}` : "";
+  const orderLabel = latestOrder ? ` ${readableOrderNumber(latestOrder)}` : "";
   newOrderAlert.textContent = count === 1
     ? `🔔 NEW ONLINE ORDER${orderLabel} — please check the order inbox.`
     : `🔔 ${count} NEW ONLINE ORDERS — please check the order inbox.`;
@@ -379,7 +384,7 @@ function renderOrders() {
   };
   const shown = scopedOrders.filter(statusMatches).filter(order => {
     if (!query) return true;
-    return [order.id, order.customerName, order.mobile, ...(order.items || []).map(item => item.name)].some(value => String(value || "").toLowerCase().includes(query));
+    return [order.id, readableOrderNumber(order), order.customerName, order.mobile, ...(order.items || []).map(item => item.name)].some(value => String(value || "").toLowerCase().includes(query));
   });
   $("onlineCount").textContent = orders.filter(order => order.source !== "walk-in").length;
   $("walkinCount").textContent = orders.filter(order => order.source === "walk-in").length;
@@ -403,9 +408,7 @@ function renderOrders() {
   ordersList.innerHTML = shown.map(order => {
     const lines = (order.items || []).map(item => `${item.name} × ${item.qty}${item.isFreeOffer || item.isLoyaltyReward ? " · FREE" : ""}`).join(" · ");
     const customer = order.mobile ? `${order.customerName} · ${order.mobile}` : order.customerName;
-    const destination = order.orderType === "pickup"
-      ? "Pickup at CRAVING HEAVEN · Shop 10, Pearl Oasis Building, Pathanwadi, Malad East, Mumbai – 400097"
-      : [order.addressLabel, order.address, order.landmark, order.area].filter(Boolean).join(", ");
+    const fullAddress = [order.addressLabel, order.address, order.landmark ? `Near ${order.landmark}` : "", order.area].filter(Boolean).join(", ");
     const isWalkIn = order.source === "walk-in";
     const isPickup = order.orderType === "pickup";
     const loyaltyNote = order.loyaltyLinked ? `${Number(order.pointsToAward || 0)} Craving Points after ${isWalkIn || isPickup ? "completion" : "delivery"} · reward progress tracked` : "";
@@ -416,7 +419,9 @@ function renderOrders() {
     const canMarkPaid = String(order.paymentStatus || "pending").toLowerCase() === "pending" && !["cancelled", "canceled"].includes(String(order.status || "").toLowerCase());
     const paymentControl = canMarkPaid ? `<button class="payment-paid-button" type="button" data-mark-paid="${escapeHtml(order.id)}">Mark paid</button>` : "";
     const orderMode = isWalkIn ? "Walk-in" : isPickup ? "Online pickup" : "Online delivery";
-    return `<article class="order-card"><div><h3>Order #${escapeHtml(order.id.slice(-7).toUpperCase())} <span class="status-badge ${order.paymentStatus === "paid" ? "paid" : ""}">${escapeHtml(order.status)} · ${escapeHtml(order.paymentStatus || "pending")}</span></h3><div class="order-meta"><span>${escapeHtml(orderDate(order.createdAt))}</span><span>${orderMode}</span><span>${escapeHtml(customer)}</span>${order.paymentMethod ? `<span>${escapeHtml(order.paymentMethod)}</span>` : ""}</div></div><div class="order-card-actions">${paymentControl}<button class="print-button" type="button" data-print-order="${escapeHtml(order.id)}">Print invoice</button><strong>${money(order.total)}</strong></div><div class="order-lines">${escapeHtml(lines)}${destination ? `<br><span class="muted">${isPickup ? "Collect from" : "Deliver to"}: ${escapeHtml(destination)}</span>` : ""}${loyaltyNote ? `<br><span class="loyalty-order-note">✦ ${escapeHtml(loyaltyNote)}</span>` : ""}</div>${statusControl}</article>`;
+    const itemRows = (order.items || []).map(item => `<li><span>${escapeHtml(item.name)}${item.isFreeOffer || item.isLoyaltyReward ? ` <em>FREE</em>` : ""}</span><strong>× ${Number(item.qty) || 1}</strong></li>`).join("");
+    const addressBlock = !isPickup && fullAddress ? `<details class="order-address"><summary><span><b>${escapeHtml(order.addressLabel || "Delivery")}</b>${order.area ? ` · ${escapeHtml(order.area)}` : ""}</span><span class="address-toggle">View full address</span></summary><p>${escapeHtml(fullAddress)}</p></details>` : isPickup ? `<div class="order-pickup"><b>Store pickup</b><span>CRAVING HEAVEN · Pathanwadi</span></div>` : "";
+    return `<article class="order-card"><div class="order-card-primary"><div class="order-card-title"><h3>Order <span class="order-number">${escapeHtml(readableOrderNumber(order))}</span></h3><span class="status-badge ${order.paymentStatus === "paid" ? "paid" : ""}">${escapeHtml(order.status)} · ${escapeHtml(order.paymentStatus || "pending")}</span></div><div class="order-meta"><span>${escapeHtml(orderDate(order.createdAt))}</span><span>${orderMode}</span><span>${escapeHtml(customer)}</span>${order.paymentMethod ? `<span>${escapeHtml(order.paymentMethod)}</span>` : ""}</div></div><div class="order-card-actions"><strong>${money(order.total)}</strong><div>${paymentControl}<button class="print-button" type="button" data-print-order="${escapeHtml(order.id)}">Print invoice</button></div></div><div class="order-lines"><p class="order-items-heading">${(order.items || []).length} ${((order.items || []).length === 1) ? "item" : "items"}</p><ul class="order-item-list">${itemRows || `<li>${escapeHtml(lines)}</li>`}</ul>${addressBlock}${loyaltyNote ? `<p class="loyalty-order-note">✦ ${escapeHtml(loyaltyNote)}</p>` : ""}</div>${statusControl}</article>`;
   }).join("");
 }
 $("orderSearch").addEventListener("input", renderOrders);
@@ -440,6 +445,7 @@ document.querySelectorAll("[data-tab]").forEach(button => button.addEventListene
 function printableInvoice(order) {
   const lines = (order.items || []).map(item => `<tr><td>${escapeHtml(item.name)}${item.isFreeOffer || item.isLoyaltyReward ? " <small>(FREE)</small>" : ""}<br><small>Qty ${Number(item.qty) || 0} × ${money(item.price)}</small></td><td>${money((Number(item.price) || 0) * (Number(item.qty) || 0))}</td></tr>`).join("");
   const orderId = order.id || order.orderId;
+  const orderNumber = readableOrderNumber(order);
   const customer = order.customerName || "Walk-in customer";
   const address = order.orderType === "pickup"
     ? "Pickup at CRAVING HEAVEN, Shop 10, Pearl Oasis Building, Pathanwadi, Malad East, Mumbai – 400097"
@@ -447,7 +453,7 @@ function printableInvoice(order) {
   const orderMode = order.orderType === "walk-in" ? "Walk-in" : order.orderType === "pickup" ? "Online pickup" : "Online delivery";
   const completionLabel = order.orderType === "walk-in" || order.orderType === "pickup" ? "completion" : "delivery";
   const discount = Number(order.discountAmount || 0);
-  $("invoice").innerHTML = `<div class="invoice-sheet"><h1>CRAVING HEAVEN</h1><p>Shop 10, Pearl Oasis Building, Pathanwadi, Malad East, Mumbai – 400097</p><p>7700929693</p><div class="invoice-rule"></div><div class="invoice-top"><span><b>Order</b><br>#${escapeHtml(String(orderId).slice(-7).toUpperCase())}</span><span><b>Date</b><br>${escapeHtml(orderDate(order.createdAt || new Date().toISOString()))}</span></div><p style="text-align:left"><b>${escapeHtml(orderMode)}</b><br>${escapeHtml(customer)}${order.mobile ? `<br>${escapeHtml(order.mobile)}` : ""}${address ? `<br>${escapeHtml(address)}` : ""}</p><table class="invoice-table"><thead><tr><th>Item</th><th>Amount</th></tr></thead><tbody>${lines}</tbody></table><div class="invoice-total"><span>Subtotal</span><span>${money(order.subtotal)}</span></div>${order.pointsRedeemed ? `<div class="invoice-total"><span>Craving Points redeemed (${Number(order.pointsRedeemed)})</span><span>−${money(order.pointsDiscount || 0)}</span></div>` : ""}${discount > Number(order.pointsDiscount || 0) ? `<div class="invoice-total"><span>Reward discount</span><span>−${money(discount - Number(order.pointsDiscount || 0))}</span></div>` : ""}${Number(order.deliveryCharge) ? `<div class="invoice-total"><span>Delivery</span><span>${money(order.deliveryCharge)}</span></div>` : ""}<div class="invoice-total grand"><span>Total</span><span>${money(order.total)}</span></div><div class="invoice-rule"></div><div class="invoice-total"><span>Payment</span><span>${escapeHtml(order.paymentMethod || "—")} · ${escapeHtml(order.paymentStatus || "pending")}</span></div>${order.loyaltyLinked ? `<p style="text-align:left">Craving Points: ${Number(order.pointsToAward || 0)} after ${completionLabel}. Reward progress is tracked on completed orders.</p>` : ""}<p class="invoice-thanks">Thank you. Made with quality, served with love!</p></div>`;
+  $("invoice").innerHTML = `<div class="invoice-sheet"><h1>CRAVING HEAVEN</h1><p>Shop 10, Pearl Oasis Building, Pathanwadi, Malad East, Mumbai – 400097</p><p>7700929693</p><div class="invoice-rule"></div><div class="invoice-top"><span><b>Order</b><br>${escapeHtml(orderNumber)}</span><span><b>Date</b><br>${escapeHtml(orderDate(order.createdAt || new Date().toISOString()))}</span></div><p style="text-align:left"><b>${escapeHtml(orderMode)}</b><br>${escapeHtml(customer)}${order.mobile ? `<br>${escapeHtml(order.mobile)}` : ""}${address ? `<br>${escapeHtml(address)}` : ""}</p><table class="invoice-table"><thead><tr><th>Item</th><th>Amount</th></tr></thead><tbody>${lines}</tbody></table><div class="invoice-total"><span>Subtotal</span><span>${money(order.subtotal)}</span></div>${order.pointsRedeemed ? `<div class="invoice-total"><span>Craving Points redeemed (${Number(order.pointsRedeemed)})</span><span>−${money(order.pointsDiscount || 0)}</span></div>` : ""}${discount > Number(order.pointsDiscount || 0) ? `<div class="invoice-total"><span>Reward discount</span><span>−${money(discount - Number(order.pointsDiscount || 0))}</span></div>` : ""}${Number(order.deliveryCharge) ? `<div class="invoice-total"><span>Delivery</span><span>${money(order.deliveryCharge)}</span></div>` : ""}<div class="invoice-total grand"><span>Total</span><span>${money(order.total)}</span></div><div class="invoice-rule"></div><div class="invoice-total"><span>Payment</span><span>${escapeHtml(order.paymentMethod || "—")} · ${escapeHtml(order.paymentStatus || "pending")}</span></div>${order.loyaltyLinked ? `<p style="text-align:left">Craving Points: ${Number(order.pointsToAward || 0)} after ${completionLabel}. Reward progress is tracked on completed orders.</p>` : ""}<p class="invoice-thanks">Thank you. Made with quality, served with love!</p></div>`;
   window.print();
 }
 ordersList.addEventListener("click", event => {
@@ -461,7 +467,7 @@ ordersList.addEventListener("click", event => {
     httpsCallable(functions, "staffMarkOrderPaid")({ orderId }).then(() => {
       order.paymentStatus = "paid";
       renderOrders();
-      $("orderStatusMessage").textContent = `Payment recorded for order #${orderId.slice(-7).toUpperCase()}.`;
+      $("orderStatusMessage").textContent = `Payment recorded for ${readableOrderNumber(order)}.`;
     }).catch(error => {
       paymentButton.disabled = false;
       paymentButton.textContent = "Mark paid";
@@ -779,7 +785,7 @@ $("saveWalkinButton").addEventListener("click", async () => {
       items: cart.map(item => ({ name: item.name, qty: item.qty }))
     };
     const result = await httpsCallable(functions, "createWalkInOrder")(walkinOrder);
-    const created = { id: result.data.orderId, ...walkinOrder, items: result.data.items || cart.map(item => ({ ...item, lineTotal: item.price * item.qty })), subtotal: Number(result.data.subtotal ?? result.data.total), discountAmount: Number(result.data.discountAmount || 0), pointsDiscount: Number(result.data.pointsDiscount || 0), pointsRedeemed: Number(result.data.pointsRedeemed || 0), deliveryCharge: 0, total: result.data.total, source: "walk-in", orderType: "walk-in", status: "new", loyaltyLinked: Boolean(result.data.loyaltyLinked), pointsToAward: Number(result.data.pointsToAward || 0), benefitTitle: result.data.benefitTitle || "", createdAt: new Date().toISOString() };
+    const created = { id: result.data.orderId, orderNumber: result.data.orderNumber || "", ...walkinOrder, items: result.data.items || cart.map(item => ({ ...item, lineTotal: item.price * item.qty })), subtotal: Number(result.data.subtotal ?? result.data.total), discountAmount: Number(result.data.discountAmount || 0), pointsDiscount: Number(result.data.pointsDiscount || 0), pointsRedeemed: Number(result.data.pointsRedeemed || 0), deliveryCharge: 0, total: result.data.total, source: "walk-in", orderType: "walk-in", status: "new", loyaltyLinked: Boolean(result.data.loyaltyLinked), pointsToAward: Number(result.data.pointsToAward || 0), benefitTitle: result.data.benefitTitle || "", createdAt: new Date().toISOString() };
     orders.unshift(created);
     pendingWalkinRequestId = null;
     cart = [];
@@ -791,7 +797,7 @@ $("saveWalkinButton").addEventListener("click", async () => {
     lastLookedUpMobile = "";
     lastLookupResult = null;
     renderWalkinBenefits();
-    orderMessage.textContent = `Order #${created.id.slice(-7).toUpperCase()} created.`;
+    orderMessage.textContent = `${readableOrderNumber(created)} created.`;
     printableInvoice(created);
     activeTab = "walkin";
     $("orderStatusMessage").textContent = created.loyaltyLinked

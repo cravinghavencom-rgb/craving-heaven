@@ -31,6 +31,28 @@ function mumbaiDateKey(now = new Date()) {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
+function orderNumberPrefix(source, orderType) {
+  if (source === "walk-in") return "WK";
+  return orderType === "pickup" ? "PK" : "DL";
+}
+
+function orderNumberDate(now = new Date()) {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "2-digit"
+  }).format(now).replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+}
+
+async function reserveOrderNumber(transaction, source, orderType) {
+  const prefix = orderNumberPrefix(source, orderType);
+  const now = new Date();
+  const date = orderNumberDate(now);
+  const counterRef = db.collection("orderCounters").doc(`${prefix}_${mumbaiDateKey(now)}`);
+  const snapshot = await transaction.get(counterRef);
+  const sequence = Math.max(0, Number(snapshot.data()?.sequence || 0)) + 1;
+  transaction.set(counterRef, { sequence, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  return `${prefix}-${date}-${String(sequence).padStart(3, "0")}`;
+}
+
 function getStoreHours(settings = {}) {
   const openingTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(settings.openingTime || "")
     ? settings.openingTime : DEFAULT_STORE_OPEN_TIME;
@@ -565,6 +587,7 @@ exports.adminGetCustomerDetails = onCall({ region: REGION }, async request => {
   const savedAddressKeys = new Set(savedAddresses.map(address => [address.address, address.landmark, address.area].map(value => String(value || "").trim().toLowerCase()).join("|")));
   const orderAddresses = orders.filter(order => order.orderType !== "pickup" && String(order.address || "").trim()).map(order => ({
     orderId: order.id,
+    orderNumber: String(order.orderNumber || ""),
     createdAt: order.createdAt,
     label: String(order.addressLabel || "").slice(0, 30),
     address: String(order.address || "").slice(0, 300),
@@ -822,6 +845,7 @@ exports.createOrder = onCall({ region: REGION }, async request => {
     const pointsToAward = (pointsMultiplier === 2 ? basePoints + Math.min(basePoints, Number(loyaltyReward.maxBonusPoints || 0)) : basePoints) + pointsBonus;
     const remainingRewards = loyaltyRewardTicketId ? availableRewards.filter(reward => reward.ticketId !== loyaltyRewardTicketId && !( !reward.ticketId && reward.id === loyaltyRewardTicketId)) : availableRewards;
 
+    const orderNumber = await reserveOrderNumber(transaction, "website", orderType);
     let addressSaved = false;
     if (orderType === "delivery") {
       const addresses = Array.isArray(profile.addresses) ? [...profile.addresses] : [];
@@ -848,6 +872,7 @@ exports.createOrder = onCall({ region: REGION }, async request => {
     }
 
     transaction.create(orderRef, {
+      orderNumber,
       uid,
       customerName,
       mobile: request.auth.token.phone_number,
@@ -885,7 +910,7 @@ exports.createOrder = onCall({ region: REGION }, async request => {
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
     }
-    const response = { orderId: orderRef.id, subtotal, discountAmount: totalDiscount, deliveryCharge, total, pointsRedeemed: requestedPoints, addressSaved, items: pricedItems };
+    const response = { orderId: orderRef.id, orderNumber, subtotal, discountAmount: totalDiscount, deliveryCharge, total, pointsRedeemed: requestedPoints, addressSaved, items: pricedItems };
     transaction.create(requestRef, { uid, orderId: orderRef.id, response, createdAt: FieldValue.serverTimestamp() });
     return response;
   });
@@ -900,6 +925,7 @@ exports.staffListOrders = onCall({ region: REGION }, async request => {
       const order = document.data();
       return {
         id: document.id,
+        orderNumber: String(order.orderNumber || ""),
         customerName: String(order.customerName || "Customer"),
         mobile: String(order.mobile || ""),
         address: String(order.address || ""),
@@ -1177,7 +1203,9 @@ exports.createWalkInOrder = onCall({ region: REGION }, async request => {
       ? availableRewards.filter(reward => reward.ticketId !== loyaltyRewardTicketId && !(!reward.ticketId && reward.id === loyaltyRewardTicketId))
       : availableRewards;
 
+    const orderNumber = await reserveOrderNumber(transaction, "walk-in", "walk-in");
     const order = {
+      orderNumber,
       uid: customerUid,
       customerName,
       mobile,
@@ -1214,7 +1242,7 @@ exports.createWalkInOrder = onCall({ region: REGION }, async request => {
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
     }
-    const response = { orderId: orderRef.id, subtotal, discountAmount: totalDiscount, pointsDiscount, total, pointsRedeemed: requestedPoints, loyaltyLinked: Boolean(customerUid), pointsToAward, benefitTitle: loyaltyReward?.title || (requestedPoints ? `${requestedPoints} Craving Points` : ""), items: pricedItems };
+    const response = { orderId: orderRef.id, orderNumber, subtotal, discountAmount: totalDiscount, pointsDiscount, total, pointsRedeemed: requestedPoints, loyaltyLinked: Boolean(customerUid), pointsToAward, benefitTitle: loyaltyReward?.title || (requestedPoints ? `${requestedPoints} Craving Points` : ""), items: pricedItems };
     transaction.create(requestRef, { orderId: orderRef.id, response, createdAt: FieldValue.serverTimestamp() });
     return response;
   });

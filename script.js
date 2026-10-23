@@ -795,7 +795,9 @@ function handlePlaceOrderClick() {
       ordersContent.innerHTML = orders.map(order => {
         const orderItems = Array.isArray(order.items) ? order.items.map(item => `${esc(item.name || "Item")} × ${Number(item.qty || 1)}`).join(" · ") : "Order details unavailable";
         const orderMode = order.orderType === "pickup" ? "Store pickup" : "Delivery";
-        return `<article class="order-history-card"><div class="order-history-head"><div><span class="order-history-date">${esc(orderHistoryDate(order.createdAt))} · ${orderMode}</span><h2>Order #${esc(order.id.slice(-7).toUpperCase())}</h2></div><span class="order-status-pill">${esc(String(order.status || "Received"))}</span></div><p>${orderItems}</p><div class="order-history-total"><span>ORDER TOTAL</span><strong>${money(order.total || order.subtotal || 0)}</strong></div></article>`;
+        const orderPrefix = order.orderType === "pickup" ? "PK" : "DL";
+        const orderNumber = order.orderNumber || `${orderPrefix}-${String(order.id).slice(-4).toUpperCase()}`;
+        return `<article class="order-history-card"><div class="order-history-head"><div><span class="order-history-date">${esc(orderHistoryDate(order.createdAt))} · ${orderMode}</span><h2>Order ${esc(orderNumber)}</h2></div><span class="order-status-pill">${esc(String(order.status || "Received"))}</span></div><p>${orderItems}</p><div class="order-history-total"><span>ORDER TOTAL</span><strong>${money(order.total || order.subtotal || 0)}</strong></div></article>`;
       }).join("");
     } catch (error) {
       console.error("Could not load customer orders:", error);
@@ -987,13 +989,13 @@ const orderSuccessId =
 const orderSuccessNote = document.getElementById("orderSuccessNote");
 
 
-function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false, addressLabel = "") {
+function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false, addressLabel = "", displayOrderNumber = "") {
 
   if (!orderSuccessOverlay) return;
 
   if (orderSuccessId) {
-    orderSuccessId.textContent =
-      `#${orderId}`;
+    const prefix = orderType === "pickup" ? "PK" : "DL";
+    orderSuccessId.textContent = displayOrderNumber || `${prefix}-${String(orderId).slice(-4).toUpperCase()}`;
   }
   if (orderSuccessNote) {
     orderSuccessNote.textContent = orderType === "pickup"
@@ -1405,7 +1407,7 @@ async function continueToOrder() {
     closeCheckout();
     closeCart();
     render();
-    openOrderSuccess(order.orderId, pickup ? "pickup" : "delivery", order.addressSaved === true, checkoutAddressLabel?.value || "");
+    openOrderSuccess(order.orderId, pickup ? "pickup" : "delivery", order.addressSaved === true, checkoutAddressLabel?.value || "", order.orderNumber || "");
     refreshAccountScreens(window.firebaseAuth?.currentUser || null);
   } catch (error) {
     console.error("Order creation failed:", error);
