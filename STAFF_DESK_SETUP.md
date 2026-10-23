@@ -2,6 +2,8 @@
 
 The staff desk is available at `/staff.html`. It supports Firebase phone OTP login, viewing and updating the latest 100 online and walk-in orders, creating walk-in orders from the server-priced menu, and printing an 80 mm receipt from the browser. Entering a customer's verified website-account phone number looks up their saved name and current Craving Points and rewards. The walk-in order is attached to that account; points and reward milestones are credited when staff mark the order delivered. Combos earn points at the configured half rate. A customer's first online order can include a free Classic Crunchy Burger when it contains at least one paid regular-menu item; combos or extras alone do not qualify.
 
+Online ordering is OFF by default and must be started by staff from the **Online status** tab. A start is valid only for the current Mumbai calendar day and only during store hours; the schedule never turns ordering on by itself. Staff can stop ordering at any time or pause it temporarily during a rush. Walk-in orders are unaffected. The server checks this state when accepting every online order, so hiding or disabling checkout in the browser alone cannot bypass it.
+
 ## Enable staff access
 
 Staff access is denied by default. The Functions check the Firebase Authentication custom claim `staff: true`; the staff page cannot grant access to itself. Firestore rules continue to prevent direct order reads and writes from the browser.

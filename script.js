@@ -4,7 +4,7 @@ const REWARD_EXCLUDED_NAMES = new Set((MENU_DATA.extras?.items || []).map(item =
 const FREE_DELIVERY_THRESHOLD = 300;
 const DELIVERY_CHARGE = 30;
 const ONLINE_CHECKOUT_ENABLED = true;
-let orderAvailability = { isOpen: false, paused: false, acceptingOnlineOrders: false };
+let orderAvailability = { isOpen: false, paused: false, staffEnabled: false, acceptingOnlineOrders: false };
 let orderAvailabilityReady = false;
 // =========================================================
 // FIREBASE PUSH NOTIFICATIONS
@@ -418,7 +418,9 @@ recaptchaVerifier =
     placeOrderButton.setAttribute("aria-disabled", "true");
     placeOrderButton.textContent = !orderAvailabilityReady
       ? "CHECKING ORDER STATUS"
-      : orderAvailability.paused
+      : !orderAvailability.staffEnabled
+        ? "ONLINE ORDERING OFF"
+        : orderAvailability.paused
         ? "ONLINE ORDERS PAUSED"
         : "ONLINE ORDERS CLOSED";
     return;
@@ -1289,7 +1291,9 @@ function validateCheckoutForm() {
 async function continueToOrder() {
   checkoutMessage.textContent = "";
   if (!orderAvailabilityReady || !orderAvailability.acceptingOnlineOrders) {
-    checkoutMessage.textContent = orderAvailability.paused
+    checkoutMessage.textContent = !orderAvailability.staffEnabled
+      ? "We’re getting ready to serve you! Online ordering will open when our team is ready. Please check back soon—we’d love to make your favourites!"
+      : orderAvailability.paused
       ? "We’re preparing a rush of fresh orders right now. Please check back in a little while—we’d love to serve you soon!"
       : "We’re closed for now, but we’ll be back soon with your favourites. Please check back a little later!";
     return;
@@ -2832,7 +2836,7 @@ function updateOpeningHours() {
   const cartDotEl = document.getElementById("cartOpeningHoursDot");
   const mainNotice = document.getElementById("onlineOrderNotice");
   const cartNotice = document.getElementById("cartOrderAvailabilityNotice");
-  const isOpen = orderAvailability.isOpen;
+  const isOpen = orderAvailability.acceptingOnlineOrders;
   const label = isOpen ? "OPEN" : "CLOSED";
   for (const [status, dot] of [[statusEl, dotEl], [cartStatusEl, cartDotEl]]) {
     if (!status || !dot) continue;
@@ -2843,7 +2847,9 @@ function updateOpeningHours() {
     dot.classList.toggle("is-closed", !isOpen);
   }
   const notice = orderAvailabilityReady
-    ? orderAvailability.paused
+    ? !orderAvailability.staffEnabled
+      ? "We’re getting ready to serve you! Online ordering will open when our team is ready. Please check back soon—we’d love to make your favourites!"
+      : orderAvailability.paused
       ? "We’re preparing a rush of fresh orders right now. Please check back in a little while—we’d love to serve you soon!"
       : isOpen ? "" : "We’re closed for now, but we’ll be back soon with your favourites. Please check back a little later!"
     : "Unable to confirm online order status. Please refresh and try again.";
@@ -2868,6 +2874,7 @@ async function refreshOrderingAvailability() {
     orderAvailability = {
       isOpen: data.isOpen === true,
       paused: data.paused === true,
+      staffEnabled: data.staffEnabled === true,
       acceptingOnlineOrders: data.acceptingOnlineOrders === true
     };
     orderAvailabilityReady = true;

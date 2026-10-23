@@ -21,6 +21,14 @@ const DELIVERY_AREAS = new Set([
 ]);
 const ORDERING_STATUS_REF = () => db.collection("restaurantSettings").doc("onlineOrdering");
 
+function mumbaiDateKey(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit"
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 function isStoreOpenNow(now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hourCycle: "h23"
@@ -33,21 +41,42 @@ function isStoreOpenNow(now = new Date()) {
 
 async function readOrderingStatus() {
   const snapshot = await ORDERING_STATUS_REF().get();
-  const paused = snapshot.exists && snapshot.data()?.paused === true;
+  const settings = snapshot.exists ? snapshot.data() : {};
+  const paused = settings.paused === true;
+  const staffEnabled = settings.enabled === true && settings.enabledForDate === mumbaiDateKey();
   const isOpen = isStoreOpenNow();
+  const acceptingOnlineOrders = isOpen && staffEnabled && !paused;
   return {
     isOpen,
     paused,
-    acceptingOnlineOrders: isOpen && !paused,
-    message: !isOpen
-      ? "Online ordering is closed right now. Please check back later."
+    staffEnabled,
+    acceptingOnlineOrders,
+    message: !staffEnabled
+      ? "Online ordering is off until staff starts taking orders. Please check back soon."
       : paused
         ? "High order volume: we’re temporarily not taking online orders. Please try again shortly."
+        : !isOpen
+      ? "Online ordering is closed right now. Please check back later."
         : "Online ordering is open."
   };
 }
 
 exports.getOrderingStatus = onCall({ region: REGION }, async () => readOrderingStatus());
+
+exports.staffSetOnlineOrderingEnabled = onCall({ region: REGION }, async request => {
+  const staffUid = await requireStaff(request);
+  if (typeof request.data?.enabled !== "boolean") {
+    throw new HttpsError("invalid-argument", "Choose whether online ordering should be on or off.");
+  }
+  await ORDERING_STATUS_REF().set({
+    enabled: request.data.enabled,
+    enabledForDate: request.data.enabled ? mumbaiDateKey() : null,
+    paused: false,
+    updatedBy: staffUid,
+    updatedAt: FieldValue.serverTimestamp()
+  }, { merge: true });
+  return readOrderingStatus();
+});
 
 exports.staffSetOnlineOrderingPaused = onCall({ region: REGION }, async request => {
   const staffUid = await requireStaff(request);
@@ -215,10 +244,14 @@ exports.createOrder = onCall({ region: REGION }, async request => {
     if (existingRequest.exists) return existingRequest.data().response;
 
     const orderingStatusSnapshot = await transaction.get(orderingStatusRef);
+    const orderingSettings = orderingStatusSnapshot.exists ? orderingStatusSnapshot.data() : {};
     if (!isStoreOpenNow()) {
       throw new HttpsError("failed-precondition", "Online ordering is closed right now. Please check back later.");
     }
-    if (orderingStatusSnapshot.exists && orderingStatusSnapshot.data()?.paused === true) {
+    if (orderingSettings.enabled !== true || orderingSettings.enabledForDate !== mumbaiDateKey()) {
+      throw new HttpsError("failed-precondition", "Online ordering is off until our team starts taking orders. Please check back soon.");
+    }
+    if (orderingSettings.paused === true) {
       throw new HttpsError("failed-precondition", "High order volume: online ordering is temporarily paused. Please try again shortly.");
     }
 

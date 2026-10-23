@@ -27,8 +27,8 @@
       <section id="availabilityPanel" class="panel availability-panel" hidden aria-labelledby="availabilityTitle">
         <p class="eyebrow">CUSTOMER ORDERING</p><h2 id="availabilityTitle">Online ordering status</h2>
         <p id="staffAvailabilitySummary" class="availability-summary" aria-live="polite">Checking current status…</p>
-        <p id="staffAvailabilityMessage" class="muted">Online orders follow the store schedule. You can pause them during busy periods; walk-in orders will remain available.</p>
-        <div class="availability-actions"><button id="pauseOnlineOrdersButton" class="pause-orders-button" type="button">Pause online orders for rush</button><button id="resumeOnlineOrdersButton" class="resume-orders-button" type="button" hidden>Resume online orders</button><button id="refreshAvailabilityButton" class="quiet-button" type="button">Refresh status</button></div>
+        <p id="staffAvailabilityMessage" class="muted">Online ordering stays off until staff starts it. Staff must start it again each day; store hours alone never turn it on.</p>
+        <div class="availability-actions"><button id="startOnlineOrdersButton" class="resume-orders-button" type="button">Start taking online orders</button><button id="stopOnlineOrdersButton" class="pause-orders-button" type="button" hidden>Stop taking online orders</button><button id="pauseOnlineOrdersButton" class="pause-orders-button" type="button" hidden>Pause for rush</button><button id="resumeOnlineOrdersButton" class="resume-orders-button" type="button" hidden>Resume after rush</button><button id="refreshAvailabilityButton" class="quiet-button" type="button">Refresh status</button></div>
         <p id="availabilityActionMessage" class="message" role="status"></p>
       </section>
       <section id="newOrderPanel" class="panel" hidden>

@@ -276,21 +276,27 @@ function renderOrderingStatus(data) {
   const status = data || {};
   const summary = $("staffAvailabilitySummary");
   const message = $("staffAvailabilityMessage");
-  summary.textContent = status.paused
+  summary.textContent = status.paused && status.staffEnabled
     ? "ONLINE ORDERS PAUSED · HIGH ORDER VOLUME"
-    : status.isOpen
+    : status.acceptingOnlineOrders
       ? "ONLINE ORDERS OPEN"
-      : "ONLINE ORDERS CLOSED";
+      : status.staffEnabled
+        ? "STAFF STARTED · WAITING FOR STORE HOURS"
+        : "ONLINE ORDERS OFF · STAFF START REQUIRED";
   summary.classList.toggle("is-paused", status.paused === true);
-  summary.classList.toggle("is-open", status.paused !== true && status.isOpen === true);
-  summary.classList.toggle("is-closed", status.paused !== true && status.isOpen !== true);
-  message.textContent = status.paused
+  summary.classList.toggle("is-open", status.acceptingOnlineOrders === true);
+  summary.classList.toggle("is-closed", status.acceptingOnlineOrders !== true && status.paused !== true);
+  message.textContent = !status.staffEnabled
+    ? "Online ordering stays off until a staff member starts it. A start lasts for today only, so it will never switch on automatically when store hours begin another day. Walk-in orders remain available."
+    : status.paused
     ? "Customers cannot place website delivery or pickup orders while this rush pause is active. Walk-in orders remain available."
     : status.isOpen
-      ? "Online orders are open. Pause them if the kitchen gets too busy."
-      : "Online orders are closed outside the store schedule. They will open automatically at the next opening time.";
-  $("pauseOnlineOrdersButton").hidden = status.paused === true;
-  $("resumeOnlineOrdersButton").hidden = status.paused !== true;
+      ? "Online orders are open. Stop them at any time; they will stay off until staff starts them again."
+      : "Online ordering is started for today and will be available only during store hours. It will not carry over to another day.";
+  $("startOnlineOrdersButton").hidden = status.staffEnabled === true;
+  $("stopOnlineOrdersButton").hidden = status.staffEnabled !== true;
+  $("pauseOnlineOrdersButton").hidden = status.staffEnabled !== true || status.paused === true;
+  $("resumeOnlineOrdersButton").hidden = status.staffEnabled !== true || status.paused !== true;
 }
 
 async function loadOrderingStatus() {
@@ -325,6 +331,26 @@ async function setOnlineOrdersPaused(paused, button) {
   }
 }
 
+async function setOnlineOrdersEnabled(enabled, button) {
+  button.disabled = true;
+  $("availabilityActionMessage").textContent = enabled ? "Starting online ordering…" : "Stopping online ordering…";
+  try {
+    const result = await httpsCallable(functions, "staffSetOnlineOrderingEnabled")({ enabled });
+    renderOrderingStatus(result.data || {});
+    $("availabilityActionMessage").textContent = enabled
+      ? "Online ordering is started for today. Customers can order only during store hours."
+      : "Online ordering is off. It will stay off until staff starts it again.";
+  } catch (error) {
+    $("availabilityActionMessage").textContent = error.code === "functions/permission-denied"
+      ? "Staff access is required to change online ordering."
+      : error.message?.replace(/^FirebaseError:\s*/i, "") || "Could not update online order status. Please retry.";
+  } finally {
+    button.disabled = false;
+  }
+}
+
+$("startOnlineOrdersButton").addEventListener("click", event => setOnlineOrdersEnabled(true, event.currentTarget));
+$("stopOnlineOrdersButton").addEventListener("click", event => setOnlineOrdersEnabled(false, event.currentTarget));
 $("pauseOnlineOrdersButton").addEventListener("click", event => setOnlineOrdersPaused(true, event.currentTarget));
 $("resumeOnlineOrdersButton").addEventListener("click", event => setOnlineOrdersPaused(false, event.currentTarget));
 $("refreshAvailabilityButton").addEventListener("click", loadOrderingStatus);
