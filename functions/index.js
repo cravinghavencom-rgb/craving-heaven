@@ -1447,8 +1447,31 @@ exports.createOrder = onCall({ region: REGION }, async request => {
 
 exports.staffListOrders = onCall({ region: REGION }, async request => {
   await requireStaff(request);
-  const snapshot = await db.collection("orders").orderBy("createdAt", "desc").limit(100).get();
+  const dateKey = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) ? String(value) : "";
+  const mumbaiToday = mumbaiDateKey();
+  const startKey = dateKey(request.data?.startDate) || mumbaiToday;
+  const endKey = dateKey(request.data?.endDate) || startKey;
+  const [sy, sm, sd] = startKey.split("-").map(Number);
+  const [ey, em, ed] = endKey.split("-").map(Number);
+  const start = new Date(Date.UTC(sy, sm - 1, sd) - 330 * 60 * 1000);
+  const end = new Date(Date.UTC(ey, em - 1, ed + 1) - 330 * 60 * 1000);
+  const startValid = [start.getUTCFullYear(), String(start.getUTCMonth() + 1).padStart(2, "0"), String(start.getUTCDate()).padStart(2, "0")].join("-") === startKey;
+  const endDate = new Date(Date.UTC(ey, em - 1, ed));
+  const endValid = [endDate.getUTCFullYear(), String(endDate.getUTCMonth() + 1).padStart(2, "0"), String(endDate.getUTCDate()).padStart(2, "0")].join("-") === endKey;
+  const requestedDays = (end.getTime() - start.getTime()) / 86400000;
+  if (!startValid || !endValid || !Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || startKey > endKey || requestedDays > 366) {
+    throw new HttpsError("invalid-argument", "Choose a valid date range of 366 days or less.");
+  }
+  const snapshot = await db.collection("orders")
+    .where("createdAt", ">=", start)
+    .where("createdAt", "<", end)
+    .orderBy("createdAt", "desc")
+    .limit(500)
+    .get();
   return {
+    startDate: startKey,
+    endDate: endKey,
+    truncated: snapshot.size === 500,
     orders: snapshot.docs.map(document => {
       const order = document.data();
       return {

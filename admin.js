@@ -23,6 +23,16 @@ const functions = getFunctions(app, "asia-south1");
 if (useEmulator) connectFunctionsEmulator(functions, hostname, 9402);
 
 const $ = id => document.getElementById(id);
+const gameTestDialog = $("adminGameTestDialog");
+$("closeAdminGameTest").addEventListener("click", () => {
+  gameTestDialog.close();
+  $("adminGameTestFrame").src = "about:blank";
+  sessionStorage.removeItem("cravingDashAdminTest");
+});
+window.addEventListener("message", event => {
+  if (event.origin !== location.origin || event.source !== $("adminGameTestFrame").contentWindow || event.data?.type !== "craving-dash-admin-test-close") return;
+  $("closeAdminGameTest").click();
+});
 const call = (name, data = {}) => httpsCallable(functions, name)(data).then(result => result.data);
 const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
 const money = value => `₹${Number(value || 0).toLocaleString("en-IN")}`;
@@ -229,7 +239,8 @@ function renderGameEditor() {
       try {
         const response = await call("adminStartCravingDashTest", { stageId: button.dataset.gameTest });
         sessionStorage.setItem("cravingDashAdminTest", JSON.stringify(response));
-        location.href = `${location.origin}/?gameTest=1`;
+        $("adminGameTestFrame").src = `/?gameTest=1&v=${Date.now()}`;
+        gameTestDialog.showModal();
       } catch (error) { message($("gameConfigMessage"), friendlyError(error), "error"); button.disabled = false; button.textContent = "Test saved stage"; }
     });
   });

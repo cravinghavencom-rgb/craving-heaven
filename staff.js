@@ -41,12 +41,14 @@ const logoutButton = $("logoutButton");
 const ordersPanel = $("ordersPanel");
 const newOrderPanel = $("newOrderPanel");
 const salesPanel = $("salesPanel");
+const historyPanel = $("historyPanel");
 const availabilityPanel = $("availabilityPanel");
 const ordersList = $("ordersList");
 const orderMessage = $("orderMessage");
 let verifier = null;
 let confirmation = null;
 let orders = [];
+let historyOrders = [];
 let knownOnlineOrderIds = null;
 let ordersLoading = false;
 let orderSoundEnabled = false;
@@ -184,6 +186,90 @@ async function loadOrders() {
   }
 }
 
+function mumbaiDateKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+  const part = type => parts.find(value => value.type === type)?.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+function shiftDateKey(key, days) {
+  const [year, month, day] = key.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+function historyDateRange() {
+  const mode = $("historyPeriod").value;
+  const today = mumbaiDateKey();
+  if (mode === "custom") return { startDate: $("historyStart").value, endDate: $("historyEnd").value };
+  if (mode === "yesterday") return { startDate: shiftDateKey(today, -1), endDate: shiftDateKey(today, -1) };
+  if (mode === "week") {
+    const weekday = new Date(`${today}T00:00:00Z`).getUTCDay();
+    const monday = shiftDateKey(today, -((weekday + 6) % 7));
+    return { startDate: monday, endDate: today };
+  }
+  if (mode === "month") return { startDate: `${today.slice(0, 7)}-01`, endDate: today };
+  return { startDate: today, endDate: today };
+}
+function updateHistoryDateControls() {
+  const custom = $("historyPeriod").value === "custom";
+  $("historyStartWrap").hidden = !custom;
+  $("historyEndWrap").hidden = !custom;
+}
+async function loadOrderHistory() {
+  const range = historyDateRange();
+  if (!range.startDate || !range.endDate || range.startDate > range.endDate) {
+    $("historyStatusMessage").textContent = "Choose a valid start and end date.";
+    return;
+  }
+  $("historyApply").disabled = true;
+  $("historyStatusMessage").textContent = "Loading order history…";
+  try {
+    const result = await httpsCallable(functions, "staffListOrders")(range);
+    historyOrders = Array.isArray(result.data?.orders) ? result.data.orders : [];
+    const areaSelect = $("historyArea");
+    const selectedArea = areaSelect.value;
+    const areas = [...new Set(historyOrders.map(order => String(order.area || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    areaSelect.innerHTML = '<option value="all">All areas</option>' + areas.map(area => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`).join("");
+    if (areas.includes(selectedArea)) areaSelect.value = selectedArea;
+    const total = historyOrders.length;
+    $("historyStatusMessage").textContent = `${total} order${total === 1 ? "" : "s"} · ${range.startDate} to ${range.endDate}${result.data?.truncated ? " · Showing up to 500; narrow the dates to see more." : ""}`;
+    renderHistoryOrders();
+  } catch (error) {
+    $("historyStatusMessage").textContent = error.code === "functions/permission-denied" ? "Staff access is required to view order history." : "Order history could not load. Check the dates and connection, then retry.";
+    $("historyOrdersList").innerHTML = '<p class="muted">Could not load these records.</p>';
+  } finally {
+    $("historyApply").disabled = false;
+  }
+}
+function renderHistoryOrders() {
+  const source = $("historySource").value;
+  const status = $("historyStatus").value;
+  const payment = $("historyPayment").value;
+  const area = $("historyArea").value;
+  const query = $("historySearch").value.trim().toLowerCase();
+  const shown = historyOrders.filter(order => {
+    if (source !== "all" && (source === "walk-in" ? order.source !== "walk-in" : order.source === "walk-in")) return false;
+    if (status !== "all" && String(order.status || "new").toLowerCase() !== status) return false;
+    if (payment !== "all" && String(order.paymentStatus || "pending").toLowerCase() !== payment) return false;
+    if (area !== "all" && String(order.area || "") !== area) return false;
+    return !query || [order.id, readableOrderNumber(order), order.customerName, order.mobile, order.area, order.address, ...(order.items || []).map(item => item.name)].some(value => String(value || "").toLowerCase().includes(query));
+  });
+  if (!shown.length) {
+    $("historyOrdersList").innerHTML = '<div class="cart-empty">No orders match these history filters.</div>';
+    return;
+  }
+  $("historyOrdersList").innerHTML = shown.map(order => {
+    const mode = order.source === "walk-in" ? "Walk-in" : order.orderType === "pickup" ? "Online pickup" : "Online delivery";
+    const items = (order.items || []).map(item => `${escapeHtml(item.name)} × ${Number(item.qty) || 1}`).join(" · ");
+    const address = order.orderType === "pickup" ? "Store pickup" : [order.addressLabel, order.address, order.landmark ? `Near ${order.landmark}` : "", order.area].filter(Boolean).join(", ");
+    return `<article class="history-order-card"><div><strong>${escapeHtml(readableOrderNumber(order))}</strong><span class="status-badge">${escapeHtml(order.status || "new")}</span></div><p>${escapeHtml(orderDate(order.createdAt))} · ${escapeHtml(mode)} · ${escapeHtml(order.paymentStatus || "pending")} · ${escapeHtml(order.paymentMethod || "—")}</p><p><b>${escapeHtml(order.customerName || "Customer")}</b>${order.mobile ? ` · ${escapeHtml(order.mobile)}` : ""} <strong class="history-total">${money(order.total)}</strong></p><p>${items || "No item details"}</p>${address ? `<details><summary>View address / pickup details</summary><p>${escapeHtml(address)}</p></details>` : ""}</article>`;
+  }).join("");
+}
+$("historyPeriod").addEventListener("change", updateHistoryDateControls);
+$("historyApply").addEventListener("click", loadOrderHistory);
+["historySource", "historyStatus", "historyPayment", "historyArea"].forEach(id => $(id).addEventListener("change", renderHistoryOrders));
+$("historySearch").addEventListener("input", renderHistoryOrders);
+updateHistoryDateControls();
+
 function playOrderChime() {
   if (!orderSoundEnabled || !orderAudioContext) return;
   const notes = [
@@ -276,7 +362,7 @@ async function loadTodaySales() {
 }
 
 $("refreshButton").addEventListener("click", () => {
-  loadOrders();
+  if (activeTab === "history") loadOrderHistory(); else loadOrders();
   loadTodaySales();
   loadOrderingStatus();
 });
@@ -406,7 +492,7 @@ function renderOrders() {
   if (!shown.length) {
     const kind = activeTab === "walkin" ? "walk-in" : "online";
     const filterLabel = activeStatusFilter === "all" ? "" : ` with status “${activeStatusFilter}”`;
-    ordersList.innerHTML = `<div class="cart-empty">No ${kind} orders${filterLabel} found in the latest 100 orders.</div>`;
+    ordersList.innerHTML = `<div class="cart-empty">No ${kind} orders${filterLabel} have been placed today.</div>`;
     return;
   }
   ordersList.innerHTML = shown.map(order => {
@@ -441,10 +527,12 @@ document.querySelectorAll("[data-tab]").forEach(button => button.addEventListene
   activeTab = button.dataset.tab;
   document.querySelectorAll("[data-tab]").forEach(tab => tab.classList.toggle("active", tab === button));
   ordersPanel.hidden = activeTab === "new" || activeTab === "sales" || activeTab === "availability";
+  historyPanel.hidden = activeTab !== "history";
   newOrderPanel.hidden = activeTab !== "new";
   salesPanel.hidden = activeTab !== "sales";
   availabilityPanel.hidden = activeTab !== "availability";
   if (activeTab === "sales") loadTodaySales();
+  if (activeTab === "history") loadOrderHistory();
   if (activeTab === "availability") loadOrderingStatus();
   renderOrders();
 }));

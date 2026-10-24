@@ -39,6 +39,18 @@ input:focus, select:focus { border-color: #c49452; box-shadow: 0 0 0 3px #c49452
 .primary-button:hover { background: #941018; transform: translateY(-1px); }
 .primary-button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
 .quiet-button { background: white; color: #493d35; border: 1px solid #ded5cd; padding: 10px 14px; }
+.history-filters { display:flex; align-items:end; flex-wrap:wrap; gap:10px; margin:4px 0 14px; padding:13px; border:1px solid #eee7e1; border-radius:12px; background:#fcfaf7; }
+.history-filters label { display:grid; gap:5px; color:#75685e; font-size:10px; font-weight:800; letter-spacing:.04em; }
+.history-filters select,.history-filters input { min-height:39px; min-width:145px; padding:8px 10px; border:1px solid #e5dcd3; border-radius:9px; background:#fff; color:#302721; font:inherit; }
+.history-date-field[hidden] { display:none; }
+.history-order-card { display:grid; gap:7px; padding:15px 16px; border:1px solid #eee7e1; border-radius:12px; background:#fffdfa; color:#5d5148; font-size:12px; }
+.history-order-card>div { display:flex; align-items:center; gap:9px; }
+.history-order-card>div>strong { color:#382c24; font-size:14px; }
+.history-order-card p { margin:0; line-height:1.5; overflow-wrap:anywhere; }
+.history-order-card .history-total { float:right; color:#241a15; font-size:15px; }
+.history-order-card details { margin-top:2px; padding-top:7px; border-top:1px solid #f0e9e2; }
+.history-order-card summary { color:#805b2e; cursor:pointer; font-weight:750; }
+.history-order-card details p { padding:7px 0 2px; }
 .secondary-button { background: #2d241f; color: white; border: 0; padding: 0 18px; min-height: 44px; }
 .text-button { background: transparent; border: 0; color: var(--red); margin-top: 12px; padding: 8px 0; }
 .message { min-height: 20px; color: var(--red); font-size: 13px; }
@@ -234,6 +246,10 @@ input:focus,select:focus { border-color:#bd8f52; box-shadow:0 0 0 3px #bd8f521a;
   .tabs { padding:2px 2px 6px; }
   .tab { border-radius:999px; }
   .tab-new { margin-left:0; }
+  .history-filters { align-items:stretch; }
+  .history-filters label { flex:1 1 145px; }
+  .history-filters select,.history-filters input { width:100%; min-width:0; }
+  .history-filters>button { width:100%; }
 }
 .availability-panel h2 { margin:0; font-size:23px; letter-spacing:-.035em; }
 .availability-summary { display:inline-flex; margin:16px 0 8px; padding:10px 13px; border:1px solid #e8ded4; border-radius:999px; background:#f8f5f1; color:#53453b; font-size:12px; font-weight:900; letter-spacing:.04em; }

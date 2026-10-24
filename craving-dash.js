@@ -145,7 +145,12 @@
     if (welcome?.open) welcome.addEventListener("close", show, { once: true }); else window.setTimeout(show, 1800);
   }
   document.addEventListener("click", event => {
-    if (event.target.closest("[data-game-admin-exit]")) { location.href = `${location.origin}/admin.html`; return; }
+    if (event.target.closest("[data-game-admin-exit]")) {
+      sessionStorage.removeItem("cravingDashAdminTest");
+      if (window.parent !== window) window.parent.postMessage({ type: "craving-dash-admin-test-close" }, location.origin);
+      else location.href = `${location.origin}/admin.html`;
+      return;
+    }
     if (event.target.closest("[data-game-login]")) { signIn(); return; }
     if (event.target.closest("[data-game-start]")) { beginRound(); return; }
     if (event.target.closest("[data-game-serve]")) { collect(true); return; }
