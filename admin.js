@@ -133,7 +133,7 @@ async function loadCustomerDetails(uid, mobile) {
     const pastAddressCards = (detail.orderAddresses || []).map((address, index) => addressCard(address, `Delivery destination ${index + 1}`)).join("");
     panel.innerHTML = `<div class="detail-top"><div><span class="eyebrow">CUSTOMER ACCOUNT</span><h3>${escapeHtml(detail.name)}</h3><p>${escapeHtml(detail.mobile || mobile)}</p></div><a class="button button-quiet" target="_blank" rel="noopener" href="https://wa.me/91${escapeHtml(mobileDigits(detail.mobile || mobile))}">Open WhatsApp</a></div>
       <div class="detail-stats"><span class="detail-chip">✦ ${Number(detail.points || 0)} Craving Points</span><span class="detail-chip">${Number(detail.completedOrders || 0)} completed orders</span><span class="detail-chip">${(detail.availableRewards || []).length} available rewards</span></div>
-      ${detail.uid ? `<section class="customer-access-control"><div><strong>Account access · ${detail.customerBlocked ? "Blocked" : "Active"}</strong><small>${detail.customerBlocked ? "This customer cannot sign in, read account data, or place online orders." : "Block sign-in and online ordering for this customer. You can restore access here."}</small></div>${detail.customerBlockManaged ? `<button id="customerBlockButton" class="button button-quiet" type="button">Restore customer access</button>` : detail.accountDisabled ? `<span class="role-pill">Already disabled</span>` : `<button id="customerBlockButton" class="button button-danger" type="button">Block customer</button>`}<p id="customerAccessMessage" class="message" role="status"></p></section>` : ""}
+      ${detail.uid ? `<section class="customer-access-control"><div><strong>Account access · ${detail.customerBlocked ? "Blocked" : "Active"}</strong><small>${detail.customerBlocked ? "This customer cannot sign in, read account data, or place online orders." : "Block sign-in and online ordering for this customer. You can restore access here."}</small></div><div class="customer-access-actions">${detail.customerBlockManaged ? `<button id="customerBlockButton" class="button button-quiet" type="button">Restore customer access</button>` : detail.accountDisabled ? `<span class="role-pill">Already disabled</span>` : `<button id="customerBlockButton" class="button button-danger" type="button">Block customer</button>`}<button id="customerDeleteButton" class="button button-danger" type="button">Delete customer account</button></div><small class="customer-delete-note">Permanently removes login, saved addresses, points, and rewards. Past orders stay for reporting with personal contact details removed.</small><p id="customerAccessMessage" class="message" role="status"></p></section>` : ""}
       <h3>Saved addresses</h3><div class="customer-address-list">${savedAddressCards || '<p class="muted">No saved addresses yet.</p>'}</div>
       ${pastAddressCards ? `<h3>Other delivery destinations from orders</h3><div class="customer-address-list">${pastAddressCards}</div>` : ""}
       <h3>Order history ${detail.historyLimited ? "(recent 1,000)" : ""}</h3><div class="order-history">${detail.orders.length ? detail.orders.map(order => { const prefix = order.source === "walk-in" ? "WK" : order.orderType === "pickup" ? "PK" : "DL"; const orderNumber = order.orderNumber || `${prefix}-${String(order.id).slice(-4).toUpperCase()}`; return `<article class="history-order"><strong>Order ${escapeHtml(orderNumber)} · ${escapeHtml(order.status || "new")} · ${money(order.total)}</strong><p>${dateText(order.createdAt)} · ${escapeHtml(order.source === "walk-in" ? "Walk-in" : (order.orderType || "delivery"))}<br>${escapeHtml((order.items || []).map(item => `${item.name} × ${item.qty}`).join(" · "))}</p></article>`; }).join("") : "<p class='empty-cell'>No order history found.</p>"}</div>`;
@@ -150,6 +150,21 @@ async function loadCustomerDetails(uid, mobile) {
         const status = $("customerAccessMessage");
         if (status) message(status, friendlyError(error), "error");
         blockButton.disabled = false;
+      }
+    });
+    const deleteButton = $("customerDeleteButton");
+    if (deleteButton) deleteButton.addEventListener("click", async () => {
+      const typedConfirmation = window.prompt(`This permanently deletes ${detail.name || detail.mobile}'s login, saved addresses, Craving Points, and rewards. Past orders will remain with personal contact details removed. Type DELETE to continue.`);
+      if (typedConfirmation !== "DELETE") return;
+      deleteButton.disabled = true;
+      try {
+        const result = await call("adminDeleteCustomerAccount", { mobile: detail.mobile || mobile });
+        panel.innerHTML = `<p class="message success">${escapeHtml(result.message)}</p><p class="muted">The customer account has been removed. Historical order totals and items remain available for reporting.</p>`;
+        await loadCustomers();
+      } catch (error) {
+        const status = $("customerAccessMessage");
+        if (status) message(status, friendlyError(error), "error");
+        deleteButton.disabled = false;
       }
     });
   } catch (error) { panel.innerHTML = `<p class="message error">${escapeHtml(friendlyError(error))}</p><form id="customerLookupForm" class="lookup-form"><input id="customerLookupMobile" inputmode="tel" placeholder="10-digit mobile number"><button class="button button-primary" type="submit">Look up</button></form>`; $("customerLookupForm").addEventListener("submit", event => { event.preventDefault(); loadCustomerDetails("", $("customerLookupMobile").value); }); }

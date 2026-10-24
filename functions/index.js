@@ -1,5 +1,5 @@
 const { initializeApp } = require("firebase-admin/app");
-const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue, Timestamp, FieldPath } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
@@ -698,6 +698,127 @@ exports.adminSetCustomerBlocked = onCall({ region: REGION }, async request => {
     createdAt: FieldValue.serverTimestamp()
   });
   return { uid: user.uid, mobile, blocked, message: blocked ? "Customer access blocked." : "Customer access restored." };
+});
+
+exports.adminDeleteCustomerAccount = onCall({ region: REGION, timeoutSeconds: 540 }, async request => {
+  const adminUid = await requireAdmin(request);
+  const mobile = normalizeIndianMobile(request.data?.mobile);
+  if (!mobile) throw new HttpsError("invalid-argument", "Enter a valid Indian mobile number.");
+
+  let user = null;
+  try {
+    user = await getAuth().getUserByPhoneNumber(mobile);
+  } catch (error) {
+    if (error.code !== "auth/user-not-found") {
+      console.error("Could not load customer for account deletion", error);
+      throw new HttpsError("unavailable", "Customer account could not be loaded.");
+    }
+  }
+  if (user?.customClaims?.admin === true || user?.customClaims?.staff === true) {
+    throw new HttpsError("failed-precondition", "Team accounts cannot be deleted from customer controls. Change team access in the Access tab.");
+  }
+
+  const uid = user?.uid || "";
+  if (uid) {
+    // Keep a minimal tombstone so a previously issued ID token remains blocked by Firestore rules.
+    await db.collection("customerBlocks").doc(uid).set({
+      blocked: true,
+      deleted: true,
+      deletedBy: adminUid,
+      deletedAt: FieldValue.serverTimestamp()
+    });
+    if (!user.disabled) await getAuth().updateUser(uid, { disabled: true });
+    await getAuth().revokeRefreshTokens(uid);
+  }
+
+  const matchingOrderRefs = new Map();
+  const findOrderRefs = async (field, value) => {
+    if (!value) return;
+    let cursor = null;
+    while (true) {
+      let query = db.collection("orders").where(field, "==", value).orderBy(FieldPath.documentId()).limit(400);
+      if (cursor) query = query.startAfter(cursor);
+      const page = await query.get();
+      if (page.empty) break;
+      page.docs.forEach(document => matchingOrderRefs.set(document.id, document.ref));
+      cursor = page.docs[page.docs.length - 1];
+      if (page.size < 400) break;
+    }
+  };
+  await Promise.all([findOrderRefs("mobile", mobile), findOrderRefs("uid", uid)]);
+
+  const personalOrderFields = ["uid", "mobile", "customerName", "address", "addressLabel", "landmark"];
+  let anonymizedOrders = 0;
+  const orderRefs = [...matchingOrderRefs.values()];
+  for (let start = 0; start < orderRefs.length; start += 400) {
+    const batch = db.batch();
+    orderRefs.slice(start, start + 400).forEach(ref => {
+      batch.update(ref, Object.fromEntries(personalOrderFields.map(field => [field, FieldValue.delete()])));
+    });
+    await batch.commit();
+    anonymizedOrders += Math.min(400, orderRefs.length - start);
+  }
+
+  if (uid) {
+    const auditCollections = [
+      { name: "adminCustomerBlockChanges", field: "customerUid", update: { customerUid: FieldValue.delete(), mobile: FieldValue.delete() } },
+      { name: "adminAccessChanges", field: "targetUid", update: { targetUid: FieldValue.delete(), mobile: FieldValue.delete() } },
+      { name: "adminAdjustments", field: "customerUid", update: { customerUid: FieldValue.delete(), mobile: FieldValue.delete(), response: FieldValue.delete(), reason: "Customer account deleted; identifying details removed." } }
+    ];
+    for (const audit of auditCollections) {
+      const auditSnapshot = await db.collection(audit.name).where(audit.field, "==", uid).get();
+      for (let start = 0; start < auditSnapshot.docs.length; start += 400) {
+        const batch = db.batch();
+        auditSnapshot.docs.slice(start, start + 400).forEach(document => batch.update(document.ref, audit.update));
+        await batch.commit();
+      }
+    }
+  }
+
+  if (uid) {
+    const loyaltyRef = db.collection("loyaltyAccounts").doc(uid);
+    let cursor = null;
+    while (true) {
+      let query = loyaltyRef.collection("entries").orderBy(FieldPath.documentId()).limit(400);
+      if (cursor) query = query.startAfter(cursor);
+      const page = await query.get();
+      if (page.empty) break;
+      const batch = db.batch();
+      page.docs.forEach(document => batch.delete(document.ref));
+      await batch.commit();
+      cursor = page.docs[page.docs.length - 1];
+      if (page.size < 400) break;
+    }
+    const requestSnapshot = await db.collection("orderRequests").where("uid", "==", uid).get();
+    for (let start = 0; start < requestSnapshot.docs.length; start += 400) {
+      const batch = db.batch();
+      requestSnapshot.docs.slice(start, start + 400).forEach(document => batch.delete(document.ref));
+      await batch.commit();
+    }
+    await Promise.all([
+      db.collection("customerProfiles").doc(uid).delete(),
+      loyaltyRef.delete()
+    ]);
+    try {
+      await getAuth().deleteUser(uid);
+    } catch (error) {
+      console.error("Customer data was removed but Auth account deletion failed", error);
+      throw new HttpsError("internal", "Customer data was removed, but login cleanup did not finish. Retry account deletion or contact support.");
+    }
+  }
+
+  await db.collection("adminCustomerDeletionAudits").add({
+    adminUid,
+    accountDeleted: Boolean(uid),
+    anonymizedOrders,
+    deletedAt: FieldValue.serverTimestamp()
+  });
+  return {
+    deleted: true,
+    accountDeleted: Boolean(uid),
+    anonymizedOrders,
+    message: `Customer account data and rewards were deleted. ${anonymizedOrders} historical order${anonymizedOrders === 1 ? " was" : "s were"} retained without customer contact details.`
+  };
 });
 
 function mumbaiMidnight(dateKey) {
