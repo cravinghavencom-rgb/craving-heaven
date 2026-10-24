@@ -764,7 +764,7 @@ function addCatalogItem(index) {
 function renderWalkinCart() {
   const cartNode = $("walkinCart");
   if (!cart.length) cartNode.innerHTML = '<div class="cart-empty">Choose a dish to start this order.</div>';
-  else cartNode.innerHTML = cart.map((item, index) => `<div class="walkin-line"><div><strong>${escapeHtml(item.name)}</strong><small>${money(item.price)} each</small></div><strong class="line-total">${money(item.price * item.qty)}</strong><div class="line-controls"><button type="button" data-qty="-1" data-index="${index}" aria-label="Remove one">−</button><span>${item.qty}</span><button type="button" data-qty="1" data-index="${index}" aria-label="Add one">+</button></div><button type="button" class="remove-line" data-remove="${index}">Remove</button></div>`).join("");
+  else cartNode.innerHTML = cart.map((item, index) => `<div class="walkin-line"><div class="walkin-line-main"><div class="walkin-item-copy"><strong>${escapeHtml(item.name)}</strong><small>${money(item.price)} each</small></div><div class="line-controls" aria-label="Quantity for ${escapeHtml(item.name)}"><button type="button" data-cart-action="decrease" data-index="${index}" aria-label="Decrease ${escapeHtml(item.name)} quantity">−</button><output aria-live="polite">${Number(item.qty) || 0}</output><button type="button" data-cart-action="increase" data-index="${index}" aria-label="Increase ${escapeHtml(item.name)} quantity">+</button></div></div><div class="walkin-line-footer"><strong class="line-total">${money(item.price * item.qty)}</strong><button type="button" class="remove-line" data-remove="${index}">Remove item</button></div></div>`).join("");
   const total = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
   $("cartItemCount").textContent = `${cart.reduce((sum, item) => sum + item.qty, 0)} items`;
   $("walkinTotal").textContent = money(total);
@@ -772,15 +772,20 @@ function renderWalkinCart() {
   renderWalkinBenefits();
 }
 $("walkinCart").addEventListener("click", event => {
-  const qtyButton = event.target.closest("[data-qty]");
-  const removeButton = event.target.closest("[data-remove]");
-  if (qtyButton) {
-    const index = Number(qtyButton.dataset.index);
-    cart[index].qty += Number(qtyButton.dataset.qty);
-    if (cart[index].qty <= 0) cart.splice(index, 1);
+  const target = event.target instanceof Element ? event.target : null;
+  const quantityButton = target?.closest("[data-cart-action]");
+  const removeButton = target?.closest("[data-remove]");
+  if (quantityButton) {
+    const index = Number(quantityButton.dataset.index);
+    if (!Number.isInteger(index) || index < 0 || index >= cart.length) return;
+    const change = quantityButton.dataset.cartAction === "increase" ? 1 : -1;
+    cart[index].qty = Math.max(0, (Number(cart[index].qty) || 0) + change);
+    if (cart[index].qty === 0) cart.splice(index, 1);
     renderWalkinCart();
   } else if (removeButton) {
-    cart.splice(Number(removeButton.dataset.remove), 1);
+    const index = Number(removeButton.dataset.remove);
+    if (!Number.isInteger(index) || index < 0 || index >= cart.length) return;
+    cart.splice(index, 1);
     renderWalkinCart();
   }
 });

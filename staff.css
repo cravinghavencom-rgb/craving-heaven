@@ -74,6 +74,7 @@ input:focus, select:focus { border-color: #c49452; box-shadow: 0 0 0 3px #c49452
 .customer-fields, .payment-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 0 22px; }
 .menu-picker-heading, .check-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .menu-picker-heading h3, .check-heading h3 { font-size: 17px; letter-spacing: -.025em; margin: 0; }
+.menu-picker-hint { margin:5px 0 0; font-size:11px; }
 .menu-count, .cart-count { color: #83766d; font-size: 11px; }
 .menu-filters { display: grid; grid-template-columns: minmax(145px,.7fr) minmax(180px,1.3fr); gap: 9px; margin-bottom: 11px; }
 .menu-results { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; max-height: 490px; overflow: auto; padding: 1px 4px 1px 1px; }
@@ -88,13 +89,26 @@ input:focus, select:focus { border-color: #c49452; box-shadow: 0 0 0 3px #c49452
 .check-heading { margin-bottom: 4px; }
 .walkin-cart { margin: 10px 0 16px; max-height: 290px; overflow: auto; }
 .cart-empty { padding: 18px; border: 1px dashed #ded4cb; border-radius: 10px; color: #80766f; text-align: center; font-size: 13px; }
-.walkin-line { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 8px; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee6df; }
+.walkin-line { display:grid; gap:7px; padding:12px 0; border-bottom:1px solid #eee6df; }
+.walkin-line-main,.walkin-line-footer { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.walkin-item-copy { min-width:0; flex:1; }
 .walkin-line strong { font-size: 12px; }
 .walkin-line small { display: block; color: #83786f; margin-top: 3px; font-size: 10px; }
-.line-controls { display: flex; align-items: center; gap: 6px; }
-.line-controls button { width: 28px; height: 28px; border: 1px solid #ddd2c8; border-radius: 8px; background: white; font-weight: 800; }
-.remove-line { grid-column: 1/-1; justify-self: start; border: 0; background: transparent; color: var(--red); font-size: 10px; font-weight: 750; padding: 2px 0; }
+.line-controls { display:flex; flex:none; align-items:center; gap:7px; padding:3px; border:1px solid #e6d9cb; border-radius:11px; background:#fff; }
+.line-controls button { width:34px; height:34px; border:0; border-radius:8px; background:#f5eee5; color:#49372c; font-size:19px; line-height:1; font-weight:700; touch-action:manipulation; }
+.line-controls button:last-child { background:var(--red); color:#fff; }
+.line-controls button:active { transform:scale(.95); }
+.line-controls output { min-width:22px; text-align:center; color:var(--ink); font-size:14px; font-weight:850; }
+.walkin-line-footer { min-height:21px; }
+.walkin-line .line-total { color:#33241b; }
+.remove-line { border:0; background:transparent; color:#8a7262; font-size:10px; font-weight:750; padding:3px 0; }
+.walkin-customer-fields { display:grid; grid-template-columns:1fr; gap:9px; margin:16px 0 10px; padding:13px; border:1px solid #eee4da; border-radius:12px; background:#fff; }
+.customer-step-label,.payment-step-label { grid-column:1/-1; margin:0; color:#806039; font-size:9px; }
+.customer-step-label span { color:#92867a; font-weight:600; letter-spacing:0; }
+.walkin-customer-fields label { display:flex; flex-direction:column; gap:6px; color:#72675f; font-size:10px; font-weight:800; }
+.walkin-customer-fields input { min-height:40px; }
 .current-check .payment-fields { margin: 12px 0; gap: 8px; }
+.payment-step-label { margin-bottom:0; }
 .current-check .payment-fields label { font-size: 9px; }
 .current-check .payment-fields select { font-size: 12px; }
 .order-total { display: flex; justify-content: space-between; border-top: 1px solid #ded4cb; padding: 14px 0; margin-top: 10px; font-size: 14px; }
@@ -144,10 +158,9 @@ input:focus, select:focus { border-color: #c49452; box-shadow: 0 0 0 3px #c49452
   .customer-fields,.payment-fields { grid-template-columns: 1fr; }
   .menu-filters { grid-template-columns: 1fr; }
   .menu-results { grid-template-columns: 1fr; max-height: 300px; }
-  .walkin-line { grid-template-columns: minmax(0,1fr) auto; }
-  .walkin-line .line-total { grid-column: 1; }
-  .line-controls { grid-column: 2; grid-row: 1/3; }
-  .remove-line { grid-column: 1; }
+  .walkin-line-main { gap:7px; }
+  .line-controls { gap:4px; }
+  .line-controls button { width:34px; height:34px; }
   .phone-row { flex-wrap: wrap; }
   .phone-row input { min-width: 130px; }
   .phone-row .primary-button { flex: 1; }
