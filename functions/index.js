@@ -201,6 +201,25 @@ async function requireAdmin(request) {
   return request.auth.uid;
 }
 
+async function requireActiveCustomer(request) {
+  const uid = request.auth?.uid;
+  if (!uid || !request.auth.token.phone_number) {
+    throw new HttpsError("unauthenticated", "Sign in with your mobile number to continue.");
+  }
+  let user;
+  try {
+    user = await getAuth().getUser(uid);
+  } catch (error) {
+    console.error("Could not verify current customer account", error);
+    throw new HttpsError("permission-denied", "Customer account could not be verified.");
+  }
+  const block = await db.collection("customerBlocks").doc(uid).get();
+  if (user.disabled || block.exists) {
+    throw new HttpsError("permission-denied", "This customer account is blocked. Please contact CRAVING HEAVEN.");
+  }
+  return uid;
+}
+
 exports.adminUpdateRestaurantSettings = onCall({ region: REGION }, async request => {
   const adminUid = await requireAdmin(request);
   const data = request.data || {};
@@ -589,9 +608,10 @@ exports.adminGetCustomerDetails = onCall({ region: REGION }, async request => {
   catch (error) { if (error.code !== "auth/user-not-found") throw new HttpsError("unavailable", "Could not look up this customer account."); }
   const queries = [db.collection("orders").where("mobile", "==", mobile).orderBy("createdAt", "desc").limit(1000)];
   if (user) queries.unshift(db.collection("orders").where("uid", "==", user.uid).orderBy("createdAt", "desc").limit(1000));
-  const [profileSnapshot, loyaltySnapshot, ...orderSnapshots] = await Promise.all([
+  const [profileSnapshot, loyaltySnapshot, blockSnapshot, ...orderSnapshots] = await Promise.all([
     user ? db.collection("customerProfiles").doc(user.uid).get() : Promise.resolve(null),
     user ? db.collection("loyaltyAccounts").doc(user.uid).get() : Promise.resolve(null),
+    user ? db.collection("customerBlocks").doc(user.uid).get() : Promise.resolve(null),
     ...queries.map(query => query.get())
   ]);
   const orderMap = new Map();
@@ -612,6 +632,10 @@ exports.adminGetCustomerDetails = onCall({ region: REGION }, async request => {
   })).filter(address => !savedAddressKeys.has([address.address, address.landmark, address.area].map(value => String(value || "").trim().toLowerCase()).join("|")));
   return {
     found: Boolean(user || orders.length), mobile,
+    uid: user?.uid || "",
+    accountDisabled: user?.disabled === true,
+    customerBlocked: Boolean(user && (user.disabled || blockSnapshot?.exists)),
+    customerBlockManaged: blockSnapshot?.data()?.blocked === true,
     name: String(profile.name || user?.displayName || orders.find(order => order.customerName)?.customerName || "Customer").slice(0, 80),
     addresses: safeFirestoreData(savedAddresses),
     orderAddresses: safeFirestoreData(orderAddresses),
@@ -621,6 +645,59 @@ exports.adminGetCustomerDetails = onCall({ region: REGION }, async request => {
     orders,
     historyLimited: orders.length >= 1000
   };
+});
+
+exports.adminSetCustomerBlocked = onCall({ region: REGION }, async request => {
+  const adminUid = await requireAdmin(request);
+  const mobile = normalizeIndianMobile(request.data?.mobile);
+  const blocked = request.data?.blocked;
+  if (!mobile || typeof blocked !== "boolean") {
+    throw new HttpsError("invalid-argument", "Choose a valid customer number and block status.");
+  }
+  let user;
+  try {
+    user = await getAuth().getUserByPhoneNumber(mobile);
+  } catch (error) {
+    if (error.code === "auth/user-not-found") throw new HttpsError("not-found", "No signed-in customer account exists for this number.");
+    console.error("Could not find customer to update block status", error);
+    throw new HttpsError("unavailable", "Customer account could not be loaded.");
+  }
+  if (user.customClaims?.admin === true || user.customClaims?.staff === true) {
+    throw new HttpsError("failed-precondition", "Team accounts cannot be blocked from the customer controls. Change team access in the Access tab.");
+  }
+
+  const blockRef = db.collection("customerBlocks").doc(user.uid);
+  const prior = await blockRef.get();
+  if (blocked) {
+    if (!prior.exists || prior.data()?.blocked !== true) {
+      await blockRef.set({
+        uid: user.uid,
+        mobile,
+        blocked: true,
+        previousDisabled: user.disabled === true,
+        blockedBy: adminUid,
+        blockedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+    if (!user.disabled) await getAuth().updateUser(user.uid, { disabled: true });
+    await getAuth().revokeRefreshTokens(user.uid);
+  } else {
+    if (!prior.exists || prior.data()?.blocked !== true) {
+      throw new HttpsError("failed-precondition", "This account has no customer block to reverse.");
+    }
+    const restoreDisabled = prior.data()?.previousDisabled === true;
+    await getAuth().updateUser(user.uid, { disabled: restoreDisabled });
+    await blockRef.delete();
+  }
+  await db.collection("adminCustomerBlockChanges").add({
+    adminUid,
+    customerUid: user.uid,
+    mobile,
+    action: blocked ? "blocked" : "unblocked",
+    createdAt: FieldValue.serverTimestamp()
+  });
+  return { uid: user.uid, mobile, blocked, message: blocked ? "Customer access blocked." : "Customer access restored." };
 });
 
 function mumbaiMidnight(dateKey) {
@@ -732,9 +809,7 @@ exports.adminAdjustCustomerBenefits = onCall({ region: REGION }, async request =
 });
 
 exports.createOrder = onCall({ region: REGION }, async request => {
-  if (!request.auth?.uid || !request.auth.token.phone_number) {
-    throw new HttpsError("unauthenticated", "Sign in with your mobile number to place an order.");
-  }
+  const activeCustomerUid = await requireActiveCustomer(request);
   const data = request.data || {};
   const orderType = data.orderType === undefined ? "delivery" : data.orderType;
   if (!["delivery", "pickup"].includes(orderType)) {
@@ -762,7 +837,7 @@ exports.createOrder = onCall({ region: REGION }, async request => {
   const rewardConfig = businessConfig.rewards;
   const priceByName = buildPriceByName(businessConfig.menu, businessConfig.combos);
   const { pricedItems, subtotal, eligibleSubtotal, regularPointSubtotal, comboPointSubtotal, freeOffer } = validateAndPriceItems(data.items, businessConfig.menu, businessConfig.combos);
-  const uid = request.auth.uid;
+  const uid = activeCustomerUid;
   const accountRef = db.collection("loyaltyAccounts").doc(uid);
   const profileRef = db.collection("customerProfiles").doc(uid);
   const requestRef = db.collection("orderRequests").doc(`${uid}_${requestId}`);
