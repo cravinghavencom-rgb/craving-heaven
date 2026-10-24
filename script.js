@@ -1119,7 +1119,7 @@ function renderCheckoutSummary() {
       ? 0
       : DELIVERY_CHARGE;
 
-  const promotionDiscount = selectedReward?.kind === "discount" ? selectedReward.amount : 0;
+  const promotionDiscount = (selectedReward?.kind === "discount" ? selectedReward.amount : 0) + gameRewardDiscount(selectedReward, eligibleSubtotal);
     const pointsDiscount = selectedPointsToRedeem / REWARDS_CONFIG.pointsPerRedemptionRupees * 10;
   const total = Math.max(0, subtotal - promotionDiscount - pointsDiscount + delivery);
 
@@ -1175,7 +1175,7 @@ function renderCheckoutSummary() {
       </strong>
     </div>
 
-    ${promotionDiscount > 0 ? `<div class="checkout-summary-item"><span>OFFER SAVINGS</span><strong>−${money(promotionDiscount)}</strong></div>` : ""}
+    ${promotionDiscount > 0 ? `<div class="checkout-summary-item"><span>${selectedReward?.kind === "percent-discount" ? `GAME REWARD · ${Number(selectedReward.percent)}% OFF REGULAR ITEMS` : "OFFER SAVINGS"}</span><strong>−${money(promotionDiscount)}</strong></div>` : ""}
     ${selectedReward?.kind === "free-delivery" ? `<div class="checkout-summary-item"><span>ROYAL REWARDS · DELIVERY</span><strong>−${money(DELIVERY_CHARGE)}</strong></div>` : ""}
     ${pointsDiscount > 0 ? `<div class="checkout-summary-item"><span>CRAVING POINTS REDEEMED (${selectedPointsToRedeem})</span><strong>−${money(pointsDiscount)}</strong></div>` : ""}
     ${selectedReward?.kind === "bonus-points" ? `<div class="checkout-summary-item"><span>CRAVING POINTS BONUS</span><strong>+${selectedReward.points}</strong></div>` : ""}
@@ -1769,7 +1769,7 @@ function estimatePointsForCurrentOrder(selectedReward = getSelectedMilestoneRewa
     return totals;
   }, { regularSubtotal: 0, comboSubtotal: 0 });
 
-  const promotionDiscount = selectedReward?.kind === "discount" ? selectedReward.amount : 0;
+  const promotionDiscount = (selectedReward?.kind === "discount" ? selectedReward.amount : 0) + gameRewardDiscount(selectedReward, eligibleSubtotal);
   const pointsDiscount = selectedPointsToRedeem / REWARDS_CONFIG.pointsPerRedemptionRupees * 10;
   const regularPoints = Math.floor(Math.max(0, regularSubtotal - promotionDiscount - pointsDiscount) / REWARDS_CONFIG.pointRateRegularRupees);
   const comboPoints = Math.floor(comboSubtotal / REWARDS_CONFIG.pointRateComboRupees);
@@ -1831,7 +1831,14 @@ function getSelectedMilestoneReward() {
     const expiry = reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt);
     if (Number.isNaN(expiry.getTime()) || expiry.getTime() <= Date.now()) return null;
   }
-  return REWARDS_CONFIG.rewardById[reward.id] || (reward.source === "craving-dash" && reward.kind === "free-item" ? reward : null);
+  return REWARDS_CONFIG.rewardById[reward.id] || (reward.source === "craving-dash" && ["free-item", "percent-discount"].includes(reward.kind) ? reward : null);
+}
+
+function gameRewardDiscount(reward = getSelectedMilestoneReward(), eligibleSubtotal = getOfferEligibleSubtotal()) {
+  if (reward?.source !== "craving-dash" || reward.kind !== "percent-discount" || eligibleSubtotal < Number(reward.minimum || 0)) return 0;
+  const amount = Math.floor(eligibleSubtotal * Number(reward.percent || 0) / 100);
+  const cap = Number(reward.maxDiscount || 0);
+  return Math.max(0, Math.min(amount, cap > 0 ? cap : eligibleSubtotal));
 }
 
 function hasComboInCart() {
@@ -1872,10 +1879,11 @@ function selectFreeOffer(offerId) {
 
 function selectMilestoneReward(rewardId) {
   const ticket = currentLoyaltyAccount.availableRewards?.find(item => (item.ticketId || item.id) === rewardId);
-  const definition = ticket ? (REWARDS_CONFIG.rewardById[ticket.id] || (ticket.source === "craving-dash" && ticket.kind === "free-item" ? ticket : null)) : null;
+  const definition = ticket ? (REWARDS_CONFIG.rewardById[ticket.id] || (ticket.source === "craving-dash" && ["free-item", "percent-discount"].includes(ticket.kind) ? ticket : null)) : null;
   if (!definition || !ticket) return;
   const eligibleSubtotal = getOfferEligibleSubtotal();
   if (eligibleSubtotal < Number(definition.minimum || 0)) return;
+  if (definition.kind === "percent-discount" && gameRewardDiscount(definition, eligibleSubtotal) <= 0) return;
   if (definition.kind === "free-delivery" && getPaidSubtotal() >= FREE_DELIVERY_THRESHOLD) return;
   removeSelectedFreeOffer();
   selectedPointsToRedeem = 0;
@@ -1936,7 +1944,7 @@ function renderCart() {
   const totalQty = cart.reduce((sum, item) => sum + item.qty, 0) + (selectedReward?.kind === "free-item" || selectedWelcomeOffer ? 1 : 0);
 
   const delivery = selectedReward?.kind === "free-delivery" || subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_CHARGE;
-  const promotionDiscount = selectedReward?.kind === "discount" ? selectedReward.amount : 0;
+  const promotionDiscount = (selectedReward?.kind === "discount" ? selectedReward.amount : 0) + gameRewardDiscount(selectedReward, offerEligibleSubtotal);
   const pointsDiscount = selectedPointsToRedeem / REWARDS_CONFIG.pointsPerRedemptionRupees * 10;
   const total = Math.max(0, subtotal - promotionDiscount - pointsDiscount + delivery);
 
@@ -2129,14 +2137,14 @@ ${esc(offer.freeItem)}
     const expiry = reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt);
     return !Number.isNaN(expiry.getTime()) && expiry.getTime() > Date.now();
   }).slice(0, 1).map(reward => {
-    const definition = REWARDS_CONFIG.rewardById[reward.id] || (reward.source === "craving-dash" && reward.kind === "free-item" ? reward : null);
+    const definition = REWARDS_CONFIG.rewardById[reward.id] || (reward.source === "craving-dash" && ["free-item", "percent-discount"].includes(reward.kind) ? reward : null);
     if (!definition) return "";
     const rewardTicketId = reward.ticketId || reward.id;
     const chosen = selectedMilestoneRewardId === rewardTicketId;
     const remaining = Math.max(0, Number(definition.minimum || 0) - offerEligibleSubtotal);
-    const eligible = remaining === 0 && !(definition.kind === "free-delivery" && subtotal >= FREE_DELIVERY_THRESHOLD);
-    const rewardDescription = definition.kind === "free-item" ? `${definition.item} free${reward.source === "craving-dash" ? " · expires 48 hours after earning" : ""}` : definition.kind === "free-delivery" ? "Free delivery" : definition.kind === "discount" ? `${money(definition.amount)} off` : definition.kind === "bonus-points" ? `${definition.points} Craving Points on delivery` : `Double Craving Points, up to ${definition.maxBonusPoints} extra`;
-    const statusNote = remaining > 0 ? `Add ${money(remaining)} in regular menu items to use this reward.` : definition.kind === "free-delivery" && subtotal >= FREE_DELIVERY_THRESHOLD ? "Your order already qualifies for free delivery." : "";
+    const eligible = remaining === 0 && !(definition.kind === "free-delivery" && subtotal >= FREE_DELIVERY_THRESHOLD) && !(definition.kind === "percent-discount" && gameRewardDiscount(definition, offerEligibleSubtotal) <= 0);
+    const rewardDescription = definition.kind === "free-item" ? `${definition.item} free${reward.source === "craving-dash" ? " · expires 48 hours after earning" : ""}` : definition.kind === "percent-discount" ? `${Number(definition.percent)}% off eligible regular menu items${Number(definition.maxDiscount) ? ` · up to ${money(definition.maxDiscount)}` : ""} · expires after 48 hours` : definition.kind === "free-delivery" ? "Free delivery" : definition.kind === "discount" ? `${money(definition.amount)} off` : definition.kind === "bonus-points" ? `${definition.points} Craving Points on delivery` : `Double Craving Points, up to ${definition.maxBonusPoints} extra`;
+    const statusNote = remaining > 0 ? `Add ${money(remaining)} in regular menu items to use this reward.` : definition.kind === "percent-discount" && gameRewardDiscount(definition, offerEligibleSubtotal) <= 0 ? "Add regular menu items to use this discount; combos, extras, and delivery are excluded." : definition.kind === "percent-discount" ? "Discount applies to regular menu items only. Combos, extras, and delivery are excluded." : definition.kind === "free-delivery" && subtotal >= FREE_DELIVERY_THRESHOLD ? "Your order already qualifies for free delivery." : "";
     const expiryLabel = reward.expiresAt ? ` · use by ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt))}` : "";
     return `<article class="cart-reward-choice ${chosen ? "is-selected" : ""}"><div><strong>${esc(definition.title)}</strong><small>${esc(rewardDescription)} · ${esc(definition.detail || "")}${esc(expiryLabel)}</small>${statusNote ? `<small class="reward-remaining">${esc(statusNote)}</small>` : ""}</div><button type="button" data-select-loyalty-reward="${esc(rewardTicketId)}" ${!eligible ? "disabled" : ""}>${chosen ? "SELECTED" : eligible ? "USE REWARD" : "LOCKED"}</button></article>`;
   }).filter(Boolean).join("");
@@ -2184,7 +2192,7 @@ ${esc(offer.freeItem)}
       </strong>
     </div>
 
-    ${promotionDiscount > 0 ? `<div class="sum-row sum-discount"><span>OFFER SAVINGS</span><strong>−${money(promotionDiscount)}</strong></div>` : ""}
+    ${promotionDiscount > 0 ? `<div class="sum-row sum-discount"><span>${selectedReward?.kind === "percent-discount" ? `GAME REWARD · ${Number(selectedReward.percent)}% OFF REGULAR ITEMS` : "OFFER SAVINGS"}</span><strong>−${money(promotionDiscount)}</strong></div>` : ""}
     ${selectedReward?.kind === "free-delivery" ? `<div class="sum-row sum-discount"><span>REWARD DELIVERY SAVING</span><strong>${money(DELIVERY_CHARGE)}</strong></div>` : ""}
     ${pointsDiscount > 0 ? `<div class="sum-row sum-discount"><span>CRAVING POINTS REDEEMED</span><strong>−${money(pointsDiscount)}</strong></div>` : ""}
     ${selectedReward?.kind === "bonus-points" ? `<div class="sum-row sum-discount"><span>CRAVING POINTS BONUS</span><strong>+${selectedReward.points}</strong></div>` : ""}
