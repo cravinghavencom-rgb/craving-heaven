@@ -28,7 +28,7 @@ const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, ch => ({ "&"
 const money = value => `₹${Number(value || 0).toLocaleString("en-IN")}`;
 const mobileDigits = value => String(value || "").replace(/\D/g, "").replace(/^91(?=[6-9]\d{9}$)/, "").slice(-10);
 const dateText = value => value ? new Date(value).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—";
-let verifier = null, confirmation = null, currentUser = null, menu = {}, combos = [], rewards = [], customers = [], analyticsRange = "today", orderingStatus = null;
+let verifier = null, confirmation = null, currentUser = null, menu = {}, combos = [], rewards = [], gameConfig = { enabled: false, campaignId: "campaign-v1", stages: [] }, customers = [], analyticsRange = "today", orderingStatus = null;
 
 function message(el, text, state = "") { el.textContent = text; el.className = `message ${state}`.trim(); }
 function resetRecaptcha() { if (verifier) verifier.clear(); verifier = null; $("adminRecaptcha").replaceChildren(); }
@@ -187,9 +187,68 @@ $("accessForm").addEventListener("submit", async event => {
 async function loadBusinessConfig() {
   try {
     const config = await call("adminGetBusinessConfig"); menu = config.menu || {}; combos = config.combos || []; rewards = config.rewards?.journey || [];
-    renderMenuEditor(); renderRewardEditor(); renderBenefitRewardOptions();
-  } catch (error) { message($("menuMessage"), friendlyError(error), "error"); message($("rewardsMessage"), friendlyError(error), "error"); }
+    gameConfig = config.cravingDash || { enabled: false, campaignId: "campaign-v1", stages: [] };
+    renderMenuEditor(); renderRewardEditor(); renderBenefitRewardOptions(); renderGameEditor();
+  } catch (error) { message($("menuMessage"), friendlyError(error), "error"); message($("rewardsMessage"), friendlyError(error), "error"); message($("gameConfigMessage"), friendlyError(error), "error"); }
 }
+
+function gameFoodOptions(selected) {
+  const allowed = ["burgers", "french-fries", "wraps", "strips"];
+  const names = allowed.flatMap(key => (menu[key]?.items || []).flatMap(item => item.options?.length ? item.options.map(option => option.name) : [item.name]));
+  return '<option value="">Select a menu item</option>' + names.map(name => `<option value="${escapeHtml(name)}" ${name === selected ? "selected" : ""}>${escapeHtml(name)}</option>`).join("");
+}
+function renderGameEditor() {
+  if (!$ ("gameStageEditor")) return;
+  $("gameEnabled").checked = gameConfig.enabled === true;
+  $("gameCampaignId").value = gameConfig.campaignId || "campaign-v1";
+  const stages = Array.isArray(gameConfig.stages) ? gameConfig.stages : [];
+  $("gameStageEditor").innerHTML = stages.length ? stages.map((stage, index) => `<article class="card game-stage-row" data-game-stage-index="${index}">
+    <div class="game-stage-top"><strong>STAGE ${index + 1}</strong><label><input class="game-stage-enabled" type="checkbox" ${stage.enabled !== false ? "checked" : ""}> Enabled</label><div><button type="button" class="text-button" data-game-move="-1" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" class="text-button" data-game-move="1" ${index === stages.length - 1 ? "disabled" : ""}>↓</button><button type="button" class="remove-button" data-game-remove>Remove</button></div></div>
+    <div class="game-stage-fields"><label>Stage ID<input class="game-stage-id" maxlength="40" value="${escapeHtml(stage.id)}" placeholder="stage-1"></label><label>Title<input class="game-stage-title" maxlength="60" value="${escapeHtml(stage.title)}" placeholder="First order dash"></label><label>Target score<input class="game-stage-score" type="number" min="1" max="12" value="${Number(stage.targetScore || 1)}"></label>
+    <label class="game-stage-instructions">Player instructions<textarea class="game-stage-instructions-input" maxlength="240" rows="2">${escapeHtml(stage.instructions || "Swipe the tray to collect the requested foods and avoid the wrong orders.")}</textarea></label>
+    <label>Reward type<select class="game-stage-kind"><option value="points" ${stage.reward?.kind === "points" ? "selected" : ""}>Craving Points</option><option value="free-item" ${stage.reward?.kind === "free-item" ? "selected" : ""}>Free menu item · 48-hour voucher</option></select></label>
+    <label class="game-points-field">Points<input class="game-stage-points" type="number" min="1" max="10000" value="${Number(stage.reward?.points || 100)}"></label>
+    <label class="game-item-field">Free item<select class="game-stage-item">${gameFoodOptions(stage.reward?.item || "")}</select></label><label class="game-minimum-field">Minimum eligible food spend<input class="game-stage-minimum" type="number" min="0" max="5000" value="${Number(stage.reward?.minimum || 0)}"><small>Combos, dips, and extras don’t count.</small></label></div>
+    <div class="game-stage-preview"><strong>${escapeHtml(stage.title || "Stage title")}</strong><span>${stage.reward?.kind === "points" ? `${Number(stage.reward.points || 0)} Craving Points` : `Free ${escapeHtml(stage.reward?.item || "menu item")} · expires in 48 hours`}</span></div>
+  </article>`).join("") : '<div class="card empty-cell">No stages yet. Add stages and save the lineup before enabling the game.</div>';
+  $("gameStageEditor").querySelectorAll(".game-stage-row").forEach(row => {
+    const toggle = () => { const points = row.querySelector(".game-stage-kind").value === "points"; row.querySelector(".game-points-field").hidden = !points; row.querySelector(".game-item-field").hidden = points; row.querySelector(".game-minimum-field").hidden = points; };
+    row.querySelector(".game-stage-kind").addEventListener("change", toggle); toggle();
+    row.querySelectorAll("input,select,textarea").forEach(input => input.addEventListener("input", updateGamePreview));
+    row.querySelectorAll("[data-game-move]").forEach(button => button.addEventListener("click", () => { const current = readGameEditor(); const at = Number(row.dataset.gameStageIndex), to = at + Number(button.dataset.gameMove); [current.stages[at], current.stages[to]] = [current.stages[to], current.stages[at]]; gameConfig = current; renderGameEditor(); }));
+    row.querySelector("[data-game-remove]").addEventListener("click", () => { gameConfig = readGameEditor(); gameConfig.stages.splice(Number(row.dataset.gameStageIndex), 1); renderGameEditor(); });
+  });
+  $("gameEnabled").onchange = updateGamePreview; $("gameCampaignId").oninput = updateGamePreview;
+  updateGamePreview();
+}
+function readGameEditor() {
+  return {
+    enabled: $("gameEnabled").checked,
+    campaignId: $("gameCampaignId").value.trim(),
+    stages: [...$("gameStageEditor").querySelectorAll(".game-stage-row")].map((row, index) => {
+      const kind = row.querySelector(".game-stage-kind").value;
+      const stage = { id: row.querySelector(".game-stage-id").value.trim(), order: index + 1, title: row.querySelector(".game-stage-title").value.trim(), instructions: row.querySelector(".game-stage-instructions-input").value.trim(), targetScore: Number(row.querySelector(".game-stage-score").value), enabled: row.querySelector(".game-stage-enabled").checked };
+      stage.reward = kind === "points" ? { kind, points: Number(row.querySelector(".game-stage-points").value) } : { kind, item: row.querySelector(".game-stage-item").value, minimum: Number(row.querySelector(".game-stage-minimum").value) };
+      return stage;
+    })
+  };
+}
+function updateGamePreview() {
+  const first = readGameEditor().stages[0];
+  $("gamePreviewTitle").textContent = first?.title || "Craving Dash";
+  $("gamePreviewText").textContent = first ? `${first.instructions} Clear the stage by scoring ${first.targetScore}.` : "Add a stage to preview its instructions and reward here.";
+  $("gamePreviewReward").textContent = !first ? "No reward configured" : first.reward.kind === "points" ? `${first.reward.points} Craving Points · added directly to the account` : `${first.reward.item || "Choose a menu item"} free · expires 48 hours after earning · minimum eligible spend ₹${first.reward.minimum}`;
+}
+$("addGameStage").addEventListener("click", () => {
+  const current = readGameEditor(); current.stages.push({ id: `stage-${current.stages.length + 1}-${crypto.randomUUID().slice(0, 5)}`, order: current.stages.length + 1, title: `Stage ${current.stages.length + 1}`, instructions: "Swipe the tray to collect the requested foods and avoid the wrong orders.", targetScore: 3, enabled: true, reward: { kind: "points", points: 100 } });
+  gameConfig = current; renderGameEditor();
+});
+$("saveGameConfig").addEventListener("click", async event => {
+  const button = event.currentTarget; button.disabled = true;
+  try { const next = readGameEditor(); const result = await call("adminSaveCravingDashConfig", { cravingDash: next }); gameConfig = next; renderGameEditor(); message($("gameConfigMessage"), `Saved to Firebase · ${result.stages} stages${result.enabled ? " · game is on" : " · game remains paused"}.`, "success"); }
+  catch (error) { message($("gameConfigMessage"), friendlyError(error), "error"); }
+  finally { button.disabled = false; }
+});
 function renderMenuEditor() {
   const categories = Object.entries(menu);
   $("newItemCategory").innerHTML = categories.map(([id, section]) => `<option value="${escapeHtml(id)}">${escapeHtml(section.title)}</option>`).join("");

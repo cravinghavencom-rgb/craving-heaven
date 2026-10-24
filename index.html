@@ -7,7 +7,7 @@
   <meta name="description" content="CRAVING HEAVEN — Chicken, burgers, wraps, wings, strips, popcorn, fries and combos.">
   <title>CRAVING HEAVEN | Chicken & Burgers</title>
   <link rel="icon" type="image/png" href="images/logo.png">
-  <link rel="stylesheet" href="style.css?v=20261023-checkout-address-label">
+  <link rel="stylesheet" href="style.css?v=20261024-craving-dash">
   <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-GD2EPLFYZP">
 </script>
@@ -48,11 +48,25 @@
     <button class="first-visit-flyer-cta" type="button" data-first-visit-menu>EXPLORE THE MENU <span aria-hidden="true">→</span></button>
     <span class="first-visit-flyer-foot">FIRST ONLINE ORDER ONLY</span>
   </dialog>
+  <dialog class="game-promo-dialog" id="gamePromoDialog" aria-labelledby="gamePromoTitle">
+    <button type="button" class="game-promo-close" aria-label="Close Craving Dash invitation">×</button>
+    <span class="game-promo-kicker">A TASTY LITTLE CHALLENGE</span><div class="game-promo-food" aria-hidden="true">🍔 🍟 🌯 🍗</div>
+    <h2 id="gamePromoTitle">Play Craving Dash.<br><em>Win real rewards.</em></h2>
+    <p>Fill the ticket with your Craving Heaven favourites. Clear stages for Craving Points or a free food voucher.</p>
+    <button type="button" class="game-promo-cta" data-screen="game">PLAY & WIN <span aria-hidden="true">→</span></button>
+    <small>Sign in with your mobile number to save progress and claim prizes.</small>
+  </dialog>
 
   <main>
     <section id="screen-home" class="app-screen is-active" data-app-screen="home" aria-label="Home, offers and combos">
       <div class="home-dashboard-cards" aria-label="Explore CRAVING HEAVEN">
         <div id="homeComboCard"></div>
+        <article class="home-dashboard-card home-card-game">
+          <span class="home-card-icon" aria-hidden="true">🍔</span>
+          <strong>PLAY & WIN REAL REWARDS</strong>
+          <small>Swipe the serving tray, fill the ticket, and win Craving Points or a free food voucher.</small>
+          <button type="button" class="home-card-action" data-screen="game">PLAY CRAVING DASH <b aria-hidden="true">→</b></button>
+        </article>
         <article class="home-dashboard-card home-card-rewards">
           <span class="home-card-icon" aria-hidden="true">✦</span>
           <strong>CRAVING POINTS</strong>
@@ -74,6 +88,11 @@
         </div>
         <button id="enableOfferNotifications">🔔 GET OFFERS</button>
       </div>
+    </section>
+
+    <section id="screen-game" class="app-screen account-screen craving-dash-screen" data-app-screen="game" aria-labelledby="cravingDashTitle" hidden>
+      <div class="account-heading"><span class="section-kicker">PLAY & WIN · CRAVING HEAVEN</span><h1 id="cravingDashTitle">Craving Dash</h1><p>Fill the food ticket before time runs out. Clear stages to win real Craving Points or menu-item vouchers.</p></div>
+      <div id="cravingDashContent" class="craving-dash-content"><div class="game-loading">Loading your game…</div></div>
     </section>
 
     <section id="screen-offers" class="app-screen account-screen" data-app-screen="offers" aria-labelledby="comboMenuTitle" hidden>
@@ -156,6 +175,7 @@
     <button type="button" class="customer-nav-button is-active" data-screen="home" aria-current="page"><span aria-hidden="true">⌂</span><small>Home</small></button>
     <button type="button" class="customer-nav-button" data-screen="menu"><span aria-hidden="true">☰</span><small>Menu</small></button>
     <button type="button" class="customer-nav-button" data-screen="offers"><span aria-hidden="true">✦</span><small>Combos</small></button>
+    <button type="button" class="customer-nav-button" data-screen="game"><span aria-hidden="true">🍔</span><small>Play</small></button>
     <button type="button" class="customer-nav-button" data-screen="rewards"><span aria-hidden="true">★</span><small>Rewards</small></button>
     <button type="button" class="customer-nav-button" data-screen="orders"><span aria-hidden="true">▤</span><small>Orders</small></button>
     <button type="button" class="customer-nav-button" data-screen="profile"><span aria-hidden="true">●</span><small>Profile</small></button>
@@ -713,6 +733,7 @@ window.firebaseMessaging = firebaseMessaging;
 
 <script src="rewards-config.js?v=20261021-first-order-gift"></script>
 <script src="menu.js?v=20261023-remove-cheese-slice"></script>
-<script src="script.js?v=20261023-staff-order-tools"></script>
+<script src="script.js?v=20261024-craving-dash"></script>
+<script src="craving-dash.js?v=20261024-craving-dash-v3"></script>
 </body>
 </html>

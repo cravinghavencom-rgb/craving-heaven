@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow">
   <title>Admin Desk | CRAVING HEAVEN</title>
   <link rel="icon" type="image/png" href="images/logo.png">
-  <link rel="stylesheet" href="admin.css?v=20261024-customer-delete">
+  <link rel="stylesheet" href="admin.css?v=20261024-craving-dash">
 </head>
 <body>
   <header class="admin-header">
@@ -26,7 +26,7 @@
     <section id="adminApp" hidden>
       <div class="page-heading"><div><span class="eyebrow">BUSINESS OVERVIEW</span><h1>Admin Desk</h1><p class="muted">Signed in as <strong id="adminSignedInAs"></strong></p></div><span class="secure-badge">🔒 Admin-only workspace</span></div>
       <nav class="admin-tabs" role="tablist" aria-label="Admin sections">
-        <button class="admin-tab active" data-admin-tab="dashboard">Overview</button><button class="admin-tab" data-admin-tab="customers">Customers</button><button class="admin-tab" data-admin-tab="access">Access</button><button class="admin-tab" data-admin-tab="menu">Menu</button><button class="admin-tab" data-admin-tab="rewards">Rewards</button><button class="admin-tab" data-admin-tab="benefits">Customer benefits</button><button class="admin-tab" data-admin-tab="messages">WhatsApp</button>
+        <button class="admin-tab active" data-admin-tab="dashboard">Overview</button><button class="admin-tab" data-admin-tab="customers">Customers</button><button class="admin-tab" data-admin-tab="access">Access</button><button class="admin-tab" data-admin-tab="menu">Menu</button><button class="admin-tab" data-admin-tab="rewards">Rewards</button><button class="admin-tab" data-admin-tab="game">Game Rewards</button><button class="admin-tab" data-admin-tab="benefits">Customer benefits</button><button class="admin-tab" data-admin-tab="messages">WhatsApp</button>
       </nav>
 
       <section class="admin-section" data-admin-section="dashboard">
@@ -76,6 +76,15 @@
         <p id="rewardsMessage" class="message" role="status"></p><div id="rewardEditor" class="reward-editor"></div>
       </section>
 
+      <section class="admin-section" data-admin-section="game" hidden>
+        <div class="section-heading"><div><span class="eyebrow">CRAVING DASH</span><h2>Play & Win stages</h2><p class="muted">Set each stage’s score and prize. A free-item voucher expires 48 hours after it is earned. No prizes are active until you save and enable the game.</p></div></div>
+        <article class="card form-card game-config-card"><label class="game-enable-row"><input id="gameEnabled" type="checkbox"> Enable Craving Dash and allow customers to play</label><label>Campaign ID<input id="gameCampaignId" maxlength="60" placeholder="e.g. craving-dash-2026-01"></label><p class="footnote">Changing the campaign ID resets the active stage sequence for new rounds. Previously earned points and vouchers remain on customer accounts.</p></article>
+        <div id="gameStageEditor" class="game-stage-editor"></div>
+        <div class="game-editor-actions"><button id="addGameStage" class="button button-quiet" type="button">＋ Add stage</button><button id="saveGameConfig" class="button button-primary" type="button">Save game settings</button></div>
+        <p id="gameConfigMessage" class="message" role="status"></p>
+        <div class="card game-preview"><span class="eyebrow">CUSTOMER PREVIEW</span><h3 id="gamePreviewTitle">Craving Dash</h3><p id="gamePreviewText">Add a stage to preview its instructions and reward here.</p><strong id="gamePreviewReward">No reward configured</strong></div>
+      </section>
+
       <section class="admin-section" data-admin-section="benefits" hidden>
         <div class="section-heading"><div><span class="eyebrow">MANUAL ACCOUNT ADJUSTMENT</span><h2>Give points or a reward</h2><p class="muted">Every adjustment records the administrator, reason, and an audit entry on the customer account.</p></div></div>
         <form id="benefitForm" class="card form-card benefit-form"><label>Customer mobile number<input id="benefitMobile" inputmode="tel" required placeholder="10-digit number"></label><label>Craving Points change<input id="benefitPoints" type="number" min="-10000" max="10000" step="1" value="0"><small>Use a negative number to correct or remove points.</small></label><label>Extra reward<select id="benefitReward"><option value="">No extra reward</option></select></label><label>Reason for audit log<textarea id="benefitReason" minlength="5" maxlength="250" required placeholder="Why are you adjusting this customer account?"></textarea></label><button class="button button-primary" type="submit">Apply customer benefit</button><p id="benefitMessage" class="message" role="status"></p></form>
@@ -87,6 +96,6 @@
       </section>
     </section>
   </main>
-  <script type="module" src="admin.js?v=20261024-customer-delete"></script>
+  <script type="module" src="admin.js?v=20261024-craving-dash"></script>
 </body>
 </html>
