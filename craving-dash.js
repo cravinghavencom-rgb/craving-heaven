@@ -43,7 +43,14 @@
     }
     root.innerHTML = `<div class="game-loading">Loading your stage and rewards…</div>`;
     try { gameState = await callable("getCravingDashState"); render(); }
-    catch (error) { root.innerHTML = `<article class="game-panel"><h2>We couldn’t load your game</h2><p>${escapeHtml(error.message || "Check your connection and try again.")}</p><button class="game-secondary" type="button" data-game-refresh>TRY AGAIN</button></article>`; }
+    catch (error) {
+      if (error?.code === "functions/unauthenticated" || /unauthenticated/i.test(String(error?.message || ""))) {
+        gameState = null;
+        root.innerHTML = `<article class="game-panel game-sign-in"><span class="game-hero-icon">🍟</span><h2>Sign in to save your prizes</h2><p>Sign in with your mobile number to play Craving Dash and receive rewards in your account.</p><button type="button" class="game-primary" data-game-login>SIGN IN TO PLAY <span>→</span></button></article>`;
+        return;
+      }
+      root.innerHTML = `<article class="game-panel"><h2>We couldn’t load your game</h2><p>${escapeHtml(error.message || "Check your connection and try again.")}</p><button class="game-secondary" type="button" data-game-refresh>TRY AGAIN</button></article>`;
+    }
   }
   function renderRound() {
     const object = activeRound.objects[nextObject];
