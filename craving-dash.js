@@ -6,7 +6,7 @@
   const emojiFor = name => /burger/i.test(name) ? "🍔" : /fries/i.test(name) ? "🍟" : /wrap/i.test(name) ? "🌯" : "🍗";
   const dateText = value => new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(new Date(value));
   const promoDialog = document.getElementById("gamePromoDialog");
-  let gameState = null, activeRound = null, roundTimer = null, nextObject = 0, submitting = false, actionPending = false, adminTestMode = false, adminTestStageId = "";
+  let gameState = null, activeRound = null, roundTimer = null, nextObject = 0, submitting = false, actionPending = false, adminTestMode = false, adminTestStageId = "", gameAvailabilityKnown = false, gameEnabled = false;
   const callable = (name, data = {}) => {
     const fn = window.FirebaseFunctionsAPI?.httpsCallable;
     if (!fn || !window.firebaseFunctions) throw new Error("The game service is still connecting. Please try again in a moment.");
@@ -37,6 +37,12 @@
       ${(gameState.nextStages || []).length ? `<section class="game-next-stages"><h3>Your next stages</h3>${gameState.nextStages.map(item => `<article class="game-locked-stage"><span>🔒</span><div><strong>Stage ${item.order} · ${escapeHtml(item.title)}</strong><small>${escapeHtml(rewardText(item.reward))}</small></div><b>LOCKED</b></article>`).join("")}</section>` : ""}`;
   }
   async function refreshState() {
+    if (!gameAvailabilityKnown) { root.innerHTML = `<div class="game-loading">Checking whether Craving Dash is available…</div>`; return; }
+    if (!gameEnabled) {
+      gameState = { enabled: false };
+      root.innerHTML = `<article class="game-panel game-unavailable"><span class="game-hero-icon">🍔</span><span class="game-tag">COMING SOON</span><h2>Craving Dash is getting ready</h2><p>We’re preparing the next round of tasty challenges. Come back soon!</p><button class="game-secondary" type="button" data-screen="home">BACK HOME</button></article>`;
+      return;
+    }
     if (!window.firebaseAuth?.currentUser) {
       gameState = null;
       root.innerHTML = `<article class="game-panel game-sign-in"><span class="game-hero-icon">🍟</span><h2>Save your game and your prizes</h2><p>Sign in with your mobile number to play Craving Dash, keep your stage progress, and receive rewards in your account.</p><button type="button" class="game-primary" data-game-login>SIGN IN TO PLAY <span>→</span></button></article>`;
@@ -182,13 +188,20 @@
     }
     try {
       const publicConfig = await callable("getPublicBusinessConfig");
-      if (!publicConfig.cravingDash?.enabled) return;
-      if (window.firebaseAuth?.currentUser) { await refreshState(); maybeShowPromo(); }
+      gameAvailabilityKnown = true;
+      gameEnabled = publicConfig.cravingDash?.enabled === true;
+      if (!gameEnabled) { await refreshState(); return; }
+      if (window.firebaseAuth?.currentUser) { if (document.getElementById("screen-game")?.classList.contains("is-active")) await refreshState(); maybeShowPromo(); }
       else {
         gameState = { enabled: true, campaignId: publicConfig.cravingDash.campaignId };
+        if (document.getElementById("screen-game")?.classList.contains("is-active")) await refreshState();
         maybeShowPromo();
       }
-    } catch (_) { /* Site remains usable when the game endpoint is unavailable. */ }
+    } catch (_) {
+      gameAvailabilityKnown = true;
+      gameEnabled = false;
+      root.innerHTML = `<article class="game-panel game-unavailable"><span class="game-hero-icon">🍔</span><h2>Craving Dash isn’t available right now</h2><p>We couldn’t check the game status. Please refresh and try again soon.</p><button class="game-secondary" type="button" data-screen="home">BACK HOME</button></article>`;
+    }
   });
   window.addEventListener("craving-heaven:show-game", () => { if (!adminTestMode) refreshState(); });
 })();

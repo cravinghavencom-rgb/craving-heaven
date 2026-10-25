@@ -25,7 +25,11 @@
 .game-stage-preview { display:flex; justify-content:space-between; gap:12px; margin-top:12px; padding:11px; border-radius:10px; background:#faf4ef; font-size:12px; }
 .game-stage-preview span { color:#6e5c52; text-align:right; }
 .game-stage-preview button { flex:0 0 auto; }
-.game-editor-actions { display:flex; justify-content:space-between; gap:10px; margin-top:15px; }
+.game-editor-actions { display:flex; align-items:end; flex-wrap:wrap; justify-content:flex-start; gap:10px; margin-top:15px; }
+.game-test-stage-label { display:grid; gap:6px; color:#6d5c51; font-size:11px; font-weight:800; }
+.game-test-stage-label select { min-width:190px; min-height:42px; padding:8px 11px; border:1px solid #dfd5ce; border-radius:10px; background:#fff; color:#302721; font:inherit; }
+.game-live-status { display:inline-flex; width:max-content; max-width:100%; margin-bottom:13px; padding:9px 12px; border:1px solid #efdbbf; border-radius:999px; background:#fff7e9; color:#845a24; font-size:10px; font-weight:900; letter-spacing:.06em; }
+.game-live-status.is-live { border-color:#cce4d0; background:#eff8ef; color:#2f713d; }
 .admin-game-test-dialog { width:min(1040px,96vw); height:min(850px,94vh); max-width:none; max-height:none; padding:0; border:0; border-radius:18px; overflow:hidden; background:#f7f3ed; box-shadow:0 24px 80px rgba(20,12,8,.4); }
 .admin-game-test-dialog::backdrop { background:rgba(28,19,15,.72); backdrop-filter:blur(4px); }
 .admin-game-test-heading { height:54px; display:flex; align-items:center; justify-content:space-between; padding:0 15px 0 20px; background:#fff; border-bottom:1px solid #eadfd4; color:#4a3428; font-size:11px; letter-spacing:.1em; }
@@ -35,5 +39,5 @@
 .game-preview p { color:#6e5c52; line-height:1.5; }
 .game-preview>strong { color:#9e261b; }
 @media(max-width:700px) { .game-stage-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }.game-stage-instructions { grid-column:1/-1; }.game-stage-preview { flex-direction:column; }.game-stage-preview span { text-align:left; } }
-@media(max-width:430px) { .game-stage-fields { grid-template-columns:1fr; }.game-stage-top { flex-wrap:wrap; }.game-stage-instructions { grid-column:auto; }.game-editor-actions { flex-direction:column; }.game-editor-actions button { width:100%; } }
+@media(max-width:430px) { .game-stage-fields { grid-template-columns:1fr; }.game-stage-top { flex-wrap:wrap; }.game-stage-instructions { grid-column:auto; }.game-editor-actions { align-items:stretch; flex-direction:column; }.game-editor-actions button,.game-test-stage-label select { width:100%; } }
 @media(max-width:600px) { .admin-game-test-dialog { width:100vw; height:100dvh; max-height:none; border-radius:0; }.admin-game-test-heading { padding-left:14px; } }

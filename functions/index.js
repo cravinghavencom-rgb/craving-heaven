@@ -303,9 +303,12 @@ async function readBusinessConfig() {
     ? rewardsSnapshot.data().journey : REWARDS.journey;
   const rewards = { ...REWARDS, journey: savedRewards };
   rewards.rewardById = Object.fromEntries(savedRewards.filter(item => item?.id).map(item => [item.id, item]));
-  const cravingDash = gameSnapshot.exists && gameSnapshot.data()?.cravingDash && typeof gameSnapshot.data().cravingDash === "object"
-    ? gameSnapshot.data().cravingDash : { enabled: false, campaignId: "", stages: [] };
-  return { menu: removeDiscontinuedMenuItems(menu), combos, rewards, cravingDash };
+  const savedCravingDash = gameSnapshot.exists && gameSnapshot.data()?.cravingDash && typeof gameSnapshot.data().cravingDash === "object"
+    ? gameSnapshot.data().cravingDash : { enabled: false, published: false, campaignId: "", stages: [] };
+  const cravingDash = { ...savedCravingDash, enabled: savedCravingDash.published === true && savedCravingDash.enabled === true };
+  const cravingDashDraft = gameSnapshot.exists && gameSnapshot.data()?.cravingDashDraft && typeof gameSnapshot.data().cravingDashDraft === "object"
+    ? gameSnapshot.data().cravingDashDraft : { ...cravingDash, enabled: false };
+  return { menu: removeDiscontinuedMenuItems(menu), combos, rewards, cravingDash, cravingDashDraft, cravingDashHasUnpublishedChanges: gameSnapshot.data()?.cravingDashHasUnpublishedChanges === true };
 }
 
 function buildPriceByName(menuData, combos) {
@@ -521,7 +524,7 @@ exports.getPublicBusinessConfig = onCall({ region: REGION }, async () => publicB
 exports.adminGetBusinessConfig = onCall({ region: REGION }, async request => {
   await requireAdmin(request);
   const config = await readBusinessConfig();
-  return { ...publicBusinessConfig(config), cravingDash: config.cravingDash };
+  return { ...publicBusinessConfig(config), cravingDash: config.cravingDashDraft, cravingDashLive: config.cravingDash.enabled === true, cravingDashHasUnpublishedChanges: config.cravingDashHasUnpublishedChanges };
 });
 
 exports.adminSaveMenuCatalog = onCall({ region: REGION }, async request => {
@@ -615,20 +618,54 @@ function validateCravingDashConfig(raw, menu, combos = []) {
 exports.adminSaveCravingDashConfig = onCall({ region: REGION, enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const adminUid = await requireAdmin(request);
   const config = await readBusinessConfig();
-  const cravingDash = validateCravingDashConfig(request.data?.cravingDash, config.menu, config.combos);
+  const cravingDash = { ...validateCravingDashConfig(request.data?.cravingDash, config.menu, config.combos), enabled: false };
   const ref = CRAVING_DASH_CONFIG_REF();
   const prior = await ref.get();
   const auditRef = db.collection("adminAuditLogs").doc();
   await db.runTransaction(async transaction => {
-    transaction.set(ref, { cravingDash, updatedBy: adminUid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    transaction.set(ref, { cravingDashDraft: cravingDash, cravingDashHasUnpublishedChanges: true, draftUpdatedBy: adminUid, draftUpdatedAt: FieldValue.serverTimestamp() }, { merge: true });
     transaction.create(auditRef, {
-      type: "craving-dash-config", adminUid,
-      before: { enabled: prior.data()?.cravingDash?.enabled === true, stages: Array.isArray(prior.data()?.cravingDash?.stages) ? prior.data().cravingDash.stages.length : 0 },
-      after: { enabled: cravingDash.enabled, stages: cravingDash.stages.length, campaignId: cravingDash.campaignId },
+      type: "craving-dash-draft", adminUid,
+      before: { live: prior.data()?.cravingDash?.published === true && prior.data()?.cravingDash?.enabled === true, stages: Array.isArray(prior.data()?.cravingDashDraft?.stages) ? prior.data().cravingDashDraft.stages.length : 0 },
+      after: { live: prior.data()?.cravingDash?.published === true && prior.data()?.cravingDash?.enabled === true, stages: cravingDash.stages.length, campaignId: cravingDash.campaignId },
       createdAt: FieldValue.serverTimestamp()
     });
   });
-  return { saved: true, enabled: cravingDash.enabled, stages: cravingDash.stages.length };
+  return { saved: true, enabled: prior.data()?.cravingDash?.published === true && prior.data()?.cravingDash?.enabled === true, stages: cravingDash.stages.length };
+});
+
+exports.adminSetCravingDashLive = onCall({ region: REGION, enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
+  const adminUid = await requireAdmin(request);
+  const shouldBeLive = request.data?.enabled === true;
+  const config = await readBusinessConfig();
+  const ref = CRAVING_DASH_CONFIG_REF();
+  const prior = await ref.get();
+  const auditRef = db.collection("adminAuditLogs").doc();
+  let next;
+  if (shouldBeLive) {
+    const validated = validateCravingDashConfig(request.data?.cravingDash, config.menu, config.combos);
+    if (!validated.stages.some(stage => stage.enabled)) throw new HttpsError("failed-precondition", "Add and enable at least one stage before making Craving Dash live.");
+    next = { ...validated, enabled: true, published: true };
+  } else {
+    next = { ...config.cravingDash, enabled: false, published: false };
+  }
+  const draft = shouldBeLive ? { ...next, enabled: false } : config.cravingDashDraft;
+  await db.runTransaction(async transaction => {
+    transaction.set(ref, {
+      cravingDash: next,
+      ...(draft ? { cravingDashDraft: draft } : {}),
+      cravingDashHasUnpublishedChanges: shouldBeLive ? false : prior.data()?.cravingDashHasUnpublishedChanges === true,
+      updatedBy: adminUid,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    transaction.create(auditRef, {
+      type: "craving-dash-publish", adminUid,
+      before: { live: prior.data()?.cravingDash?.published === true && prior.data()?.cravingDash?.enabled === true },
+      after: { live: shouldBeLive, campaignId: next.campaignId, stages: next.stages.length },
+      createdAt: FieldValue.serverTimestamp()
+    });
+  });
+  return { enabled: shouldBeLive, stages: next.stages.filter(stage => stage.enabled).length, campaignId: next.campaignId };
 });
 
 function gameStageFoods(menu) {
@@ -651,9 +688,10 @@ function publicGameReward(reward) {
 }
 
 exports.getCravingDashState = onCall({ region: REGION, enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
-  const uid = await requireActiveCustomer(request);
   const config = await readBusinessConfig();
   const game = config.cravingDash || { enabled: false, stages: [] };
+  if (game.enabled !== true) return { enabled: false, campaignId: String(game.campaignId || ""), points: 0, completedStageIds: [], completedStages: 0, totalStages: 0, currentStage: null, nextStages: [], availableRewards: [] };
+  const uid = await requireActiveCustomer(request);
   const progressRef = db.collection("cravingDashAccounts").doc(uid);
   const [progressSnapshot, loyaltySnapshot] = await Promise.all([
     progressRef.get(), db.collection("loyaltyAccounts").doc(uid).get()
@@ -681,10 +719,10 @@ exports.getCravingDashState = onCall({ region: REGION, enforceAppCheck: ENFORCE_
 });
 
 exports.startCravingDashStage = onCall({ region: REGION, enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
-  const uid = await requireActiveCustomer(request);
   const config = await readBusinessConfig();
   const game = config.cravingDash || {};
   if (game.enabled !== true) throw new HttpsError("failed-precondition", "Craving Dash is paused right now. Please check again soon.");
+  const uid = await requireActiveCustomer(request);
   const stages = (Array.isArray(game.stages) ? game.stages : []).filter(stage => stage.enabled !== false).sort((a, b) => a.order - b.order);
   const progressRef = db.collection("cravingDashAccounts").doc(uid);
   const progressSnapshot = await progressRef.get();
@@ -709,7 +747,7 @@ exports.adminStartCravingDashTest = onCall({ region: REGION, enforceAppCheck: EN
   const adminUid = await requireAdmin(request);
   const stageId = String(request.data?.stageId || "");
   const config = await readBusinessConfig();
-  const game = config.cravingDash || {};
+  const game = config.cravingDashDraft || config.cravingDash || {};
   const stages = (Array.isArray(game.stages) ? game.stages : []).sort((a, b) => a.order - b.order);
   const stage = stages.find(item => item.id === stageId);
   if (!stage) throw new HttpsError("not-found", "Save this stage configuration before starting its test.");

@@ -38,7 +38,7 @@ const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, ch => ({ "&"
 const money = value => `₹${Number(value || 0).toLocaleString("en-IN")}`;
 const mobileDigits = value => String(value || "").replace(/\D/g, "").replace(/^91(?=[6-9]\d{9}$)/, "").slice(-10);
 const dateText = value => value ? new Date(value).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—";
-let verifier = null, confirmation = null, currentUser = null, menu = {}, combos = [], rewards = [], gameConfig = { enabled: false, campaignId: "campaign-v1", stages: [] }, customers = [], analyticsRange = "today", orderingStatus = null;
+let verifier = null, confirmation = null, currentUser = null, menu = {}, combos = [], rewards = [], gameConfig = { enabled: false, campaignId: "campaign-v1", stages: [] }, gameIsLive = false, gameHasUnpublishedChanges = false, customers = [], analyticsRange = "today", orderingStatus = null;
 
 function message(el, text, state = "") { el.textContent = text; el.className = `message ${state}`.trim(); }
 function resetRecaptcha() { if (verifier) verifier.clear(); verifier = null; $("adminRecaptcha").replaceChildren(); }
@@ -198,6 +198,8 @@ async function loadBusinessConfig() {
   try {
     const config = await call("adminGetBusinessConfig"); menu = config.menu || {}; combos = config.combos || []; rewards = config.rewards?.journey || [];
     gameConfig = config.cravingDash || { enabled: false, campaignId: "campaign-v1", stages: [] };
+    gameIsLive = config.cravingDashLive === true;
+    gameHasUnpublishedChanges = config.cravingDashHasUnpublishedChanges === true;
     renderMenuEditor(); renderRewardEditor(); renderBenefitRewardOptions(); renderGameEditor();
   } catch (error) { message($("menuMessage"), friendlyError(error), "error"); message($("rewardsMessage"), friendlyError(error), "error"); message($("gameConfigMessage"), friendlyError(error), "error"); }
 }
@@ -213,8 +215,12 @@ function gameRewardDescription(reward = {}) {
 }
 function renderGameEditor() {
   if (!$ ("gameStageEditor")) return;
-  $("gameEnabled").checked = gameConfig.enabled === true;
   $("gameCampaignId").value = gameConfig.campaignId || "campaign-v1";
+  $("gameLiveStatus").textContent = gameIsLive
+    ? (gameHasUnpublishedChanges ? "LIVE · UNSAVED DRAFT CHANGES ARE NOT PUBLIC" : "LIVE · CUSTOMERS CAN SIGN IN AND PLAY")
+    : "COMING SOON · CUSTOMER PLAY IS OFF";
+  $("gameLiveStatus").classList.toggle("is-live", gameIsLive);
+  updateGamePublishButton();
   const stages = Array.isArray(gameConfig.stages) ? gameConfig.stages : [];
   $("gameStageEditor").innerHTML = stages.length ? stages.map((stage, index) => `<article class="card game-stage-row" data-game-stage-index="${index}">
     <div class="game-stage-top"><strong>STAGE ${index + 1}</strong><label><input class="game-stage-enabled" type="checkbox" ${stage.enabled !== false ? "checked" : ""}> Enabled</label><div><button type="button" class="text-button" data-game-move="-1" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" class="text-button" data-game-move="1" ${index === stages.length - 1 ? "disabled" : ""}>↓</button><button type="button" class="remove-button" data-game-remove>Remove</button></div></div>
@@ -226,30 +232,29 @@ function renderGameEditor() {
     <label class="game-percent-field">Discount percent<input class="game-stage-percent" type="number" min="1" max="100" value="${Number(stage.reward?.percent || 10)}"></label>
     <label class="game-minimum-field">Minimum eligible food spend<input class="game-stage-minimum" type="number" min="0" max="5000" value="${Number(stage.reward?.minimum || 0)}"><small>Only regular menu items count; combos, extras, and delivery are excluded.</small></label>
     <label class="game-cap-field">Maximum discount (₹)<input class="game-stage-cap" type="number" min="0" max="10000" value="${Number(stage.reward?.maxDiscount || 0)}"><small>Enter 0 for no rupee cap.</small></label></div>
-    <div class="game-stage-preview"><strong>${escapeHtml(stage.title || "Stage title")}</strong><span>${escapeHtml(gameRewardDescription(stage.reward))}</span><button type="button" class="secondary-button" data-game-test="${escapeHtml(stage.id)}">Test saved stage</button></div>
+    <div class="game-stage-preview"><strong>${escapeHtml(stage.title || "Stage title")}</strong><span>${escapeHtml(gameRewardDescription(stage.reward))}</span></div>
   </article>`).join("") : '<div class="card empty-cell">No stages yet. Add stages and save the lineup before enabling the game.</div>';
   $("gameStageEditor").querySelectorAll(".game-stage-row").forEach(row => {
     const toggle = () => { const kind = row.querySelector(".game-stage-kind").value; row.querySelector(".game-points-field").hidden = kind !== "points"; row.querySelector(".game-item-field").hidden = kind !== "free-item"; row.querySelector(".game-minimum-field").hidden = kind === "points"; row.querySelector(".game-percent-field").hidden = kind !== "percent-discount"; row.querySelector(".game-cap-field").hidden = kind !== "percent-discount"; };
     row.querySelector(".game-stage-kind").addEventListener("change", toggle); toggle();
-    row.querySelectorAll("input,select,textarea").forEach(input => input.addEventListener("input", updateGamePreview));
-    row.querySelectorAll("[data-game-move]").forEach(button => button.addEventListener("click", () => { const current = readGameEditor(); const at = Number(row.dataset.gameStageIndex), to = at + Number(button.dataset.gameMove); [current.stages[at], current.stages[to]] = [current.stages[to], current.stages[at]]; gameConfig = current; renderGameEditor(); }));
-    row.querySelector("[data-game-remove]").addEventListener("click", () => { gameConfig = readGameEditor(); gameConfig.stages.splice(Number(row.dataset.gameStageIndex), 1); renderGameEditor(); });
-    row.querySelector("[data-game-test]").addEventListener("click", async event => {
-      const button = event.currentTarget; button.disabled = true; button.textContent = "Starting test…";
-      try {
-        const response = await call("adminStartCravingDashTest", { stageId: button.dataset.gameTest });
-        sessionStorage.setItem("cravingDashAdminTest", JSON.stringify(response));
-        $("adminGameTestFrame").src = `/?gameTest=1&v=${Date.now()}`;
-        gameTestDialog.showModal();
-      } catch (error) { message($("gameConfigMessage"), friendlyError(error), "error"); button.disabled = false; button.textContent = "Test saved stage"; }
-    });
+    row.querySelectorAll("input,select,textarea").forEach(input => input.addEventListener("input", () => { gameHasUnpublishedChanges = true; updateGamePublishButton(); updateGamePreview(); }));
+    row.querySelectorAll("[data-game-move]").forEach(button => button.addEventListener("click", () => { const current = readGameEditor(); const at = Number(row.dataset.gameStageIndex), to = at + Number(button.dataset.gameMove); [current.stages[at], current.stages[to]] = [current.stages[to], current.stages[at]]; gameConfig = current; gameHasUnpublishedChanges = true; renderGameEditor(); }));
+    row.querySelector("[data-game-remove]").addEventListener("click", () => { gameConfig = readGameEditor(); gameConfig.stages.splice(Number(row.dataset.gameStageIndex), 1); gameHasUnpublishedChanges = true; renderGameEditor(); });
   });
-  $("gameEnabled").onchange = updateGamePreview; $("gameCampaignId").oninput = updateGamePreview;
+  const testSelect = $("gameTestStage"), selectedStage = testSelect.value;
+  testSelect.innerHTML = stages.map((stage, index) => `<option value="${escapeHtml(stage.id)}">Stage ${index + 1} · ${escapeHtml(stage.title || stage.id)}</option>`).join("") || '<option value="">Add a stage to begin</option>';
+  if (stages.some(stage => stage.id === selectedStage)) testSelect.value = selectedStage;
+  $("startGameTestButton").disabled = !stages.length;
+  $("toggleGameLiveButton").disabled = !gameIsLive && !stages.some(stage => stage.enabled !== false);
+  $("gameCampaignId").oninput = () => { gameHasUnpublishedChanges = true; updateGamePublishButton(); updateGamePreview(); };
   updateGamePreview();
+}
+function updateGamePublishButton() {
+  $("toggleGameLiveButton").textContent = gameIsLive ? (gameHasUnpublishedChanges ? "Publish live updates" : "Take game offline") : "Make game live";
 }
 function readGameEditor() {
   return {
-    enabled: $("gameEnabled").checked,
+    enabled: true,
     campaignId: $("gameCampaignId").value.trim(),
     stages: [...$("gameStageEditor").querySelectorAll(".game-stage-row")].map((row, index) => {
       const kind = row.querySelector(".game-stage-kind").value;
@@ -275,12 +280,38 @@ function updateGamePreview() {
 }
 $("addGameStage").addEventListener("click", () => {
   const current = readGameEditor(); current.stages.push({ id: `stage-${current.stages.length + 1}-${crypto.randomUUID().slice(0, 5)}`, order: current.stages.length + 1, title: `Stage ${current.stages.length + 1}`, instructions: "Swipe the tray to collect the requested foods and avoid the wrong orders.", targetScore: 3, enabled: true, reward: { kind: "points", points: 100 } });
-  gameConfig = current; renderGameEditor();
+  gameConfig = current; gameHasUnpublishedChanges = true; renderGameEditor();
 });
-$("saveGameConfig").addEventListener("click", async event => {
+$("startGameTestButton").addEventListener("click", async event => {
   const button = event.currentTarget; button.disabled = true;
-  try { const next = readGameEditor(); const result = await call("adminSaveCravingDashConfig", { cravingDash: next }); next.enabled = result.enabled === true; gameConfig = next; renderGameEditor(); message($("gameConfigMessage"), `Saved to Firebase · ${result.stages} stages${result.enabled ? " · game is on" : " · game remains paused"}.`, "success"); }
+  try {
+    const stageId = $("gameTestStage").value;
+    if (!stageId) throw new Error("Add a stage and choose which one to test.");
+    const draft = readGameEditor();
+    await call("adminSaveCravingDashConfig", { cravingDash: draft });
+    const response = await call("adminStartCravingDashTest", { stageId });
+    sessionStorage.setItem("cravingDashAdminTest", JSON.stringify(response));
+    gameConfig = { ...draft, enabled: false };
+    gameHasUnpublishedChanges = true;
+    renderGameEditor();
+    $("adminGameTestFrame").src = `/?gameTest=1&v=${Date.now()}`;
+    gameTestDialog.showModal();
+    message($("gameConfigMessage"), "Draft saved. Test mode won’t award points, issue rewards, or change customer progress.", "success");
+  }
   catch (error) { message($("gameConfigMessage"), friendlyError(error), "error"); }
+  finally { button.disabled = false; }
+});
+$("toggleGameLiveButton").addEventListener("click", async event => {
+  const button = event.currentTarget; button.disabled = true;
+  const publish = !gameIsLive || gameHasUnpublishedChanges;
+  try {
+    const result = await call("adminSetCravingDashLive", { enabled: publish, ...(publish ? { cravingDash: readGameEditor() } : {}) });
+    gameIsLive = result.enabled === true;
+    gameHasUnpublishedChanges = publish ? false : gameHasUnpublishedChanges;
+    gameConfig = { ...readGameEditor(), enabled: false };
+    renderGameEditor();
+    message($("gameConfigMessage"), gameIsLive ? `Craving Dash is live with ${result.stages} enabled stages. Customers can now sign in and play.` : "Craving Dash is offline. Customers will see Coming soon and won’t be asked to sign in for the game.", "success");
+  } catch (error) { message($("gameConfigMessage"), friendlyError(error), "error"); }
   finally { button.disabled = false; }
 });
 function renderMenuEditor() {
