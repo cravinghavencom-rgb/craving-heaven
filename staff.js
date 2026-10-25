@@ -176,10 +176,18 @@ async function loadOrders() {
     while (knownOnlineOrderIds.size > 500) knownOnlineOrderIds.delete(knownOnlineOrderIds.values().next().value);
     orders = nextOrders;
     renderOrders();
+    const onlineToday = nextOrders.filter(order => order.source !== "walk-in").length;
+    const walkInToday = nextOrders.length - onlineToday;
+    $("orderStatusMessage").textContent = `${onlineToday} online · ${walkInToday} walk-in · refreshed ${new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit" }).format(new Date())}`;
     if (incomingOnlineOrders.length) {
       announceNewOnlineOrders(incomingOnlineOrders);
     }
   } catch (error) {
+    orders = [];
+    renderOrders();
+    $("orderStatusMessage").textContent = error.code === "functions/permission-denied"
+      ? "Staff access is required to load today’s orders. Ask an administrator to check this account."
+      : "Today’s orders could not load. Check your connection, then use Refresh data to try again.";
     ordersList.innerHTML = `<p class="message">${escapeHtml(error.code === "functions/permission-denied" ? "Staff access is required. Sign out and ask the administrator to check your account." : "Orders could not load. Check the connection and try again.")}</p>`;
   } finally {
     ordersLoading = false;
@@ -227,9 +235,14 @@ async function loadOrderHistory() {
     historyOrders = Array.isArray(result.data?.orders) ? result.data.orders : [];
     const areaSelect = $("historyArea");
     const selectedArea = areaSelect.value;
-    const areas = [...new Set(historyOrders.map(order => String(order.area || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const areas = [...new Set(historyOrders.map(order => String(order.area || (order.orderType === "pickup" ? "Store pickup" : "Walk-in counter") || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     areaSelect.innerHTML = '<option value="all">All areas</option>' + areas.map(area => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`).join("");
     if (areas.includes(selectedArea)) areaSelect.value = selectedArea;
+    const itemSelect = $("historyItem");
+    const selectedItem = itemSelect.value;
+    const itemNames = [...new Set(historyOrders.flatMap(order => (order.items || []).map(item => String(item.name || "").trim())).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    itemSelect.innerHTML = '<option value="all">All items</option>' + itemNames.map(item => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join("");
+    if (itemNames.includes(selectedItem)) itemSelect.value = selectedItem;
     const total = historyOrders.length;
     $("historyStatusMessage").textContent = `${total} order${total === 1 ? "" : "s"} · ${range.startDate} to ${range.endDate}${result.data?.truncated ? " · Showing up to 500; narrow the dates to see more." : ""}`;
     renderHistoryOrders();
@@ -245,18 +258,34 @@ function renderHistoryOrders() {
   const status = $("historyStatus").value;
   const payment = $("historyPayment").value;
   const area = $("historyArea").value;
+  const item = $("historyItem").value;
+  const timeStart = $("historyTimeStart").value;
+  const timeEnd = $("historyTimeEnd").value;
   const query = $("historySearch").value.trim().toLowerCase();
   const shown = historyOrders.filter(order => {
     if (source !== "all" && (source === "walk-in" ? order.source !== "walk-in" : order.source === "walk-in")) return false;
     if (status !== "all" && String(order.status || "new").toLowerCase() !== status) return false;
     if (payment !== "all" && String(order.paymentStatus || "pending").toLowerCase() !== payment) return false;
-    if (area !== "all" && String(order.area || "") !== area) return false;
+    const location = String(order.area || (order.orderType === "pickup" ? "Store pickup" : "Walk-in counter"));
+    if (area !== "all" && location !== area) return false;
+    if (item !== "all" && !(order.items || []).some(line => String(line.name || "") === item)) return false;
+    if ((timeStart || timeEnd) && !order.createdAt) return false;
+    if ((timeStart || timeEnd) && order.createdAt) {
+      const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(order.createdAt));
+      const time = `${parts.find(part => part.type === "hour")?.value || "00"}:${parts.find(part => part.type === "minute")?.value || "00"}`;
+      if (timeStart && timeEnd && timeStart <= timeEnd && (time < timeStart || time > timeEnd)) return false;
+      if (timeStart && timeEnd && timeStart > timeEnd && time < timeStart && time > timeEnd) return false;
+      if (timeStart && !timeEnd && time < timeStart) return false;
+      if (!timeStart && timeEnd && time > timeEnd) return false;
+    }
     return !query || [order.id, readableOrderNumber(order), order.customerName, order.mobile, order.area, order.address, ...(order.items || []).map(item => item.name)].some(value => String(value || "").toLowerCase().includes(query));
   });
   if (!shown.length) {
     $("historyOrdersList").innerHTML = '<div class="cart-empty">No orders match these history filters.</div>';
+    $("historyExport").disabled = true;
     return;
   }
+  $("historyExport").disabled = false;
   $("historyOrdersList").innerHTML = shown.map(order => {
     const mode = order.source === "walk-in" ? "Walk-in" : order.orderType === "pickup" ? "Online pickup" : "Online delivery";
     const items = (order.items || []).map(item => `${escapeHtml(item.name)} × ${Number(item.qty) || 1}`).join(" · ");
@@ -264,9 +293,65 @@ function renderHistoryOrders() {
     return `<article class="history-order-card"><div><strong>${escapeHtml(readableOrderNumber(order))}</strong><span class="status-badge">${escapeHtml(order.status || "new")}</span></div><p>${escapeHtml(orderDate(order.createdAt))} · ${escapeHtml(mode)} · ${escapeHtml(order.paymentStatus || "pending")} · ${escapeHtml(order.paymentMethod || "—")}</p><p><b>${escapeHtml(order.customerName || "Customer")}</b>${order.mobile ? ` · ${escapeHtml(order.mobile)}` : ""} <strong class="history-total">${money(order.total)}</strong></p><p>${items || "No item details"}</p>${address ? `<details><summary>View address / pickup details</summary><p>${escapeHtml(address)}</p></details>` : ""}</article>`;
   }).join("");
 }
+function excelXmlEscape(value) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+}
+function downloadHistoryExcel() {
+  const source = $("historySource").value;
+  const status = $("historyStatus").value;
+  const payment = $("historyPayment").value;
+  const area = $("historyArea").value;
+  const item = $("historyItem").value;
+  const query = $("historySearch").value.trim().toLowerCase();
+  const timeStart = $("historyTimeStart").value;
+  const timeEnd = $("historyTimeEnd").value;
+  const shown = historyOrders.filter(order => {
+    if (source !== "all" && (source === "walk-in" ? order.source !== "walk-in" : order.source === "walk-in")) return false;
+    if (status !== "all" && String(order.status || "new").toLowerCase() !== status) return false;
+    if (payment !== "all" && String(order.paymentStatus || "pending").toLowerCase() !== payment) return false;
+    const location = String(order.area || (order.orderType === "pickup" ? "Store pickup" : "Walk-in counter"));
+    if (area !== "all" && location !== area) return false;
+    if (item !== "all" && !(order.items || []).some(line => String(line.name || "") === item)) return false;
+    if ((timeStart || timeEnd) && !order.createdAt) return false;
+    if ((timeStart || timeEnd) && order.createdAt) {
+      const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(order.createdAt));
+      const time = `${parts.find(part => part.type === "hour")?.value || "00"}:${parts.find(part => part.type === "minute")?.value || "00"}`;
+      if (timeStart && timeEnd && timeStart <= timeEnd && (time < timeStart || time > timeEnd)) return false;
+      if (timeStart && timeEnd && timeStart > timeEnd && time < timeStart && time > timeEnd) return false;
+      if (timeStart && !timeEnd && time < timeStart) return false;
+      if (!timeStart && timeEnd && time > timeEnd) return false;
+    }
+    return !query || [order.id, readableOrderNumber(order), order.customerName, order.mobile, location, order.address, ...(order.items || []).map(line => line.name)].some(value => String(value || "").toLowerCase().includes(query));
+  });
+  if (!shown.length) return;
+  const headers = ["Date", "Time (IST)", "Order ID", "Type", "Status", "Customer", "Mobile", "Area / location", "Address", "Payment method", "Payment status", "Items", "Subtotal (₹)", "Discount (₹)", "Delivery (₹)", "Order total (₹)"];
+  const textCell = value => `<Cell><Data ss:Type="String">${excelXmlEscape(value)}</Data></Cell>`;
+  const numberCell = value => `<Cell><Data ss:Type="Number">${Number(value) || 0}</Data></Cell>`;
+  const rows = [`<Row>${headers.map(textCell).join("")}</Row>`, ...shown.map(order => {
+    const date = order.createdAt ? new Date(order.createdAt) : null;
+    const dateText = date ? new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(date) : "";
+    const timeText = date ? new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(date) : "";
+    const mode = order.source === "walk-in" ? "Walk-in" : order.orderType === "pickup" ? "Online pickup" : "Online delivery";
+    const place = order.area || (order.orderType === "pickup" ? "Store pickup" : "Walk-in counter");
+    const address = order.orderType === "pickup" ? "Store pickup" : [order.addressLabel, order.address, order.landmark, order.area].filter(Boolean).join(", ");
+    const items = (order.items || []).map(line => `${line.name} × ${Number(line.qty) || 1}`).join(" | ");
+    return `<Row>${[dateText, timeText, readableOrderNumber(order), mode, order.status || "new", order.customerName || "Customer", order.mobile || "", place, address, order.paymentMethod || "", order.paymentStatus || "pending", items].map(textCell).join("")}${[order.subtotal, order.discountAmount, order.deliveryCharge, order.total].map(numberCell).join("")}</Row>`;
+  })];
+  const xml = `<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Orders"><Table>${rows.join("")}</Table></Worksheet></Workbook>`;
+  const blob = new Blob(["\ufeff", xml], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `craving-heaven-orders-${mumbaiDateKey()}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+$("historyExport").addEventListener("click", downloadHistoryExcel);
 $("historyPeriod").addEventListener("change", updateHistoryDateControls);
 $("historyApply").addEventListener("click", loadOrderHistory);
-["historySource", "historyStatus", "historyPayment", "historyArea"].forEach(id => $(id).addEventListener("change", renderHistoryOrders));
+["historySource", "historyStatus", "historyPayment", "historyArea", "historyItem", "historyTimeStart", "historyTimeEnd"].forEach(id => $(id).addEventListener("change", renderHistoryOrders));
 $("historySearch").addEventListener("input", renderHistoryOrders);
 updateHistoryDateControls();
 
@@ -526,7 +611,7 @@ document.querySelectorAll("[data-tab]").forEach(button => button.addEventListene
   if (editingWalkinOrderId) cancelWalkinItemAddition(false);
   activeTab = button.dataset.tab;
   document.querySelectorAll("[data-tab]").forEach(tab => tab.classList.toggle("active", tab === button));
-  ordersPanel.hidden = activeTab === "new" || activeTab === "sales" || activeTab === "availability";
+  ordersPanel.hidden = activeTab !== "online" && activeTab !== "walkin";
   historyPanel.hidden = activeTab !== "history";
   newOrderPanel.hidden = activeTab !== "new";
   salesPanel.hidden = activeTab !== "sales";
