@@ -183,12 +183,14 @@ async function loadOrders() {
       announceNewOnlineOrders(incomingOnlineOrders);
     }
   } catch (error) {
+    console.error("Staff order inbox request failed:", error);
     orders = [];
     renderOrders();
+    const failureCode = String(error.code || error.name || "unknown").replace(/^functions\//, "");
     $("orderStatusMessage").textContent = error.code === "functions/permission-denied"
       ? "Staff access is required to load today’s orders. Ask an administrator to check this account."
-      : "Today’s orders could not load. Check your connection, then use Refresh data to try again.";
-    ordersList.innerHTML = `<p class="message">${escapeHtml(error.code === "functions/permission-denied" ? "Staff access is required. Sign out and ask the administrator to check your account." : "Orders could not load. Check the connection and try again.")}</p>`;
+      : `Today’s orders could not load (${escapeHtml(failureCode)}). Check your connection, then use Refresh data to try again.`;
+    ordersList.innerHTML = `<p class="message">${escapeHtml(error.code === "functions/permission-denied" ? "Staff access is required. Sign out and ask the administrator to check your account." : `Orders could not load (${failureCode}). Check your connection and try again.`)}</p>`;
   } finally {
     ordersLoading = false;
   }

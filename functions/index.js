@@ -1491,9 +1491,10 @@ exports.staffListOrders = onCall({ region: REGION }, async request => {
   const endKey = dateKey(request.data?.endDate) || startKey;
   const [sy, sm, sd] = startKey.split("-").map(Number);
   const [ey, em, ed] = endKey.split("-").map(Number);
-  const start = new Date(Date.UTC(sy, sm - 1, sd) - 330 * 60 * 1000);
+  const startDate = new Date(Date.UTC(sy, sm - 1, sd));
+  const start = new Date(startDate.getTime() - 330 * 60 * 1000);
   const end = new Date(Date.UTC(ey, em - 1, ed + 1) - 330 * 60 * 1000);
-  const startValid = [start.getUTCFullYear(), String(start.getUTCMonth() + 1).padStart(2, "0"), String(start.getUTCDate()).padStart(2, "0")].join("-") === startKey;
+  const startValid = [startDate.getUTCFullYear(), String(startDate.getUTCMonth() + 1).padStart(2, "0"), String(startDate.getUTCDate()).padStart(2, "0")].join("-") === startKey;
   const endDate = new Date(Date.UTC(ey, em - 1, ed));
   const endValid = [endDate.getUTCFullYear(), String(endDate.getUTCMonth() + 1).padStart(2, "0"), String(endDate.getUTCDate()).padStart(2, "0")].join("-") === endKey;
   const requestedDays = (end.getTime() - start.getTime()) / 86400000;
