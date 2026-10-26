@@ -304,7 +304,7 @@ async function readBusinessConfig() {
   const rewards = { ...REWARDS, journey: savedRewards };
   rewards.rewardById = Object.fromEntries(savedRewards.filter(item => item?.id).map(item => [item.id, item]));
   const savedCravingDash = gameSnapshot.exists && gameSnapshot.data()?.cravingDash && typeof gameSnapshot.data().cravingDash === "object"
-    ? gameSnapshot.data().cravingDash : { enabled: false, published: false, campaignId: "", stages: [] };
+    ? gameSnapshot.data().cravingDash : { enabled: false, published: false, campaignId: "", checkpoints: [], defaultReward: null };
   const cravingDash = { ...savedCravingDash, enabled: savedCravingDash.published === true && savedCravingDash.enabled === true };
   const cravingDashDraft = gameSnapshot.exists && gameSnapshot.data()?.cravingDashDraft && typeof gameSnapshot.data().cravingDashDraft === "object"
     ? gameSnapshot.data().cravingDashDraft : { ...cravingDash, enabled: false };
@@ -326,16 +326,18 @@ function buildPriceByName(menuData, combos) {
 
 function publicBusinessConfig(config) {
   const { rewardById, ...rewards } = config.rewards;
+  const publicReward = reward => !reward ? null : reward.kind === "points"
+    ? { kind: "points", points: Number(reward.points), expiryHours: 48 }
+    : reward.kind === "percent-discount"
+      ? { kind: "percent-discount", percent: Number(reward.percent), minimum: Number(reward.minimum || 0), maxDiscount: Number(reward.maxDiscount || 0), expiryHours: 48 }
+      : { kind: "free-item", item: String(reward.item || ""), minimum: Number(reward.minimum || 0), expiryHours: 48 };
   const cravingDash = {
     enabled: config.cravingDash?.enabled === true,
     campaignId: String(config.cravingDash?.campaignId || ""),
-    stages: (Array.isArray(config.cravingDash?.stages) ? config.cravingDash.stages : []).filter(stage => stage.enabled !== false).map(stage => ({
-      id: String(stage.id), order: Number(stage.order), title: String(stage.title), instructions: String(stage.instructions), targetScore: Number(stage.targetScore),
-      reward: stage.reward?.kind === "points"
-        ? { kind: "points", points: Number(stage.reward.points) }
-        : stage.reward?.kind === "percent-discount"
-          ? { kind: "percent-discount", percent: Number(stage.reward.percent), minimum: Number(stage.reward.minimum || 0), maxDiscount: Number(stage.reward.maxDiscount || 0), expiryHours: 48 }
-          : { kind: "free-item", item: String(stage.reward?.item || ""), minimum: Number(stage.reward?.minimum || 0), expiryHours: 48 }
+    roundTargetScore: Number(config.cravingDash?.roundTargetScore || 50),
+    defaultReward: publicReward(config.cravingDash?.defaultReward),
+    checkpoints: (Array.isArray(config.cravingDash?.checkpoints) ? config.cravingDash.checkpoints : []).filter(item => item.enabled !== false).map(item => ({
+      id: String(item.id), title: String(item.title), level: Number(item.level), everyLevels: Number(item.everyLevels || 0), minScore: Number(item.minScore || 0), reward: publicReward(item.reward)
     }))
   };
   return { menu: config.menu, combos: config.combos, rewards, cravingDash };
@@ -594,54 +596,49 @@ function gameRewardItemNames(menu, combos = []) {
 }
 
 function validateCravingDashConfig(raw, menu, combos = []) {
-  if (!raw || typeof raw !== "object" || !Array.isArray(raw.stages) || raw.stages.length > 30) {
-    throw new HttpsError("invalid-argument", "Add between zero and 30 game stages.");
-  }
-  const foods = [];
-  for (const key of ["burgers", "french-fries", "wraps", "strips"]) {
-    for (const item of menu[key]?.items || []) {
-      if (item.options?.length) foods.push(...item.options.map(option => String(option.name)));
-      else foods.push(String(item.name));
-    }
+  if (!raw || typeof raw !== "object" || !Array.isArray(raw.checkpoints || raw.stages) || (raw.checkpoints || raw.stages).length > 50) {
+    throw new HttpsError("invalid-argument", "Add up to 50 reward checkpoints.");
   }
   const rewardItems = gameRewardItemNames(menu, combos);
   const menuPrices = buildPriceByName(menu, combos);
+  const cleanReward = (reward, label) => {
+    if (reward?.kind === "points") {
+      const points = Number(reward.points);
+      if (!Number.isSafeInteger(points) || points < 1 || points > 10000) throw new HttpsError("invalid-argument", `${label} must award 1–10,000 Craving Points.`);
+      return { kind: "points", points };
+    }
+    if (reward?.kind === "free-item") {
+      const item = String(reward.item || "").trim(), minimum = Number(reward.minimum || 0);
+      if (!rewardItems.includes(item) || menuPrices.get(item) <= 0 || !Number.isSafeInteger(minimum) || minimum < 0 || minimum > 5000) throw new HttpsError("invalid-argument", `${label} must select an available menu item or combo and a minimum from ₹0 to ₹5,000.`);
+      return { kind: "free-item", item, minimum };
+    }
+    if (reward?.kind === "percent-discount") {
+      const percent = Number(reward.percent), minimum = Number(reward.minimum || 0), maxDiscount = Number(reward.maxDiscount || 0);
+      if (!Number.isSafeInteger(percent) || percent < 1 || percent > 100 || !Number.isSafeInteger(minimum) || minimum < 0 || minimum > 5000 || !Number.isSafeInteger(maxDiscount) || maxDiscount < 0 || maxDiscount > 10000) throw new HttpsError("invalid-argument", `${label} must have a 1–100% discount, a ₹0–₹5,000 minimum, and a ₹0–₹10,000 cap.`);
+      return { kind: "percent-discount", percent, minimum, maxDiscount };
+    }
+    throw new HttpsError("invalid-argument", `Choose points, a free item, or a percentage discount for ${label}.`);
+  };
   const ids = new Set();
-  const stages = raw.stages.map((stage, index) => {
-    const id = String(stage?.id || "").trim();
-    const title = String(stage?.title || "").trim();
-    const instructions = String(stage?.instructions || "").trim();
-    const targetScore = Number(stage?.targetScore);
-    if (!/^[a-z0-9][a-z0-9_-]{1,39}$/i.test(id) || ids.has(id) || title.length < 2 || title.length > 60 || instructions.length < 5 || instructions.length > 240 || !Number.isSafeInteger(targetScore) || targetScore < 1 || targetScore > 12) {
-      throw new HttpsError("invalid-argument", `Stage ${index + 1} has invalid details. Target score must be 1–12.`);
+  const checkpoints = (raw.checkpoints || raw.stages).map((checkpoint, index) => {
+    const id = String(checkpoint?.id || "").trim(), title = String(checkpoint?.title || "").trim();
+    const level = Number(checkpoint?.level ?? checkpoint?.order), everyLevels = Number(checkpoint?.everyLevels || 0), minScore = Number(checkpoint?.minScore || 0);
+    if (!/^[a-z0-9][a-z0-9_-]{1,39}$/i.test(id) || ids.has(id) || title.length < 2 || title.length > 60 || !Number.isSafeInteger(level) || level < 1 || level > 1000000 || !Number.isSafeInteger(everyLevels) || everyLevels < 0 || everyLevels > 1000000 || !Number.isSafeInteger(minScore) || minScore < 0 || minScore > 240) {
+      throw new HttpsError("invalid-argument", `Reward checkpoint ${index + 1} has invalid level, repeat interval, or score.`);
     }
     ids.add(id);
-    const reward = stage.reward || {};
-    let cleanReward;
-    if (reward.kind === "points") {
-      const points = Number(reward.points);
-      if (!Number.isSafeInteger(points) || points < 1 || points > 10000) throw new HttpsError("invalid-argument", `Stage ${index + 1} must award between 1 and 10,000 Craving Points.`);
-      cleanReward = { kind: "points", points };
-    } else if (reward.kind === "free-item") {
-      const item = String(reward.item || "").trim();
-      const minimum = Number(reward.minimum || 0);
-      if (!rewardItems.includes(item) || menuPrices.get(item) <= 0 || !Number.isSafeInteger(minimum) || minimum < 0 || minimum > 5000) {
-        throw new HttpsError("invalid-argument", `Stage ${index + 1} must select an available menu item or combo and a minimum spend from ₹0 to ₹5,000.`);
-      }
-      cleanReward = { kind: "free-item", item, minimum };
-    } else if (reward.kind === "percent-discount") {
-      const percent = Number(reward.percent), minimum = Number(reward.minimum || 0), maxDiscount = Number(reward.maxDiscount || 0);
-      if (!Number.isSafeInteger(percent) || percent < 1 || percent > 100 || !Number.isSafeInteger(minimum) || minimum < 0 || minimum > 5000 || !Number.isSafeInteger(maxDiscount) || maxDiscount < 0 || maxDiscount > 10000) {
-        throw new HttpsError("invalid-argument", `Stage ${index + 1} must have a 1–100% discount, minimum from ₹0 to ₹5,000, and maximum discount from ₹0 to ₹10,000.`);
-      }
-      cleanReward = { kind: "percent-discount", percent, minimum, maxDiscount };
-    } else throw new HttpsError("invalid-argument", `Choose Craving Points, a free menu item, or a bill discount for stage ${index + 1}.`);
-    return { id, order: index + 1, title, instructions, targetScore, enabled: stage.enabled !== false, reward: cleanReward };
+    return { id, title, level, everyLevels, minScore, enabled: checkpoint.enabled !== false, reward: cleanReward(checkpoint.reward, `checkpoint ${index + 1}`) };
   });
+  const roundTargetScore = Number(raw.roundTargetScore || 50);
+  if (!Number.isSafeInteger(roundTargetScore) || roundTargetScore < 10 || roundTargetScore > 240) throw new HttpsError("invalid-argument", "Set the round target between 10 and 240 points.");
+  const defaultReward = raw.defaultReward ? cleanReward(raw.defaultReward, "every-level reward") : null;
+  const hasPrize = Boolean(defaultReward || checkpoints.some(item => item.enabled));
   return {
-    enabled: raw.enabled === true && stages.some(stage => stage.enabled),
+    enabled: raw.enabled === true && hasPrize,
     campaignId: String(raw.campaignId || "").trim().slice(0, 60) || "campaign-v1",
-    stages
+    roundTargetScore,
+    defaultReward,
+    checkpoints
   };
 }
 
@@ -656,12 +653,12 @@ exports.adminSaveCravingDashConfig = onCall({ region: REGION, enforceAppCheck: E
     transaction.set(ref, { cravingDashDraft: cravingDash, cravingDashHasUnpublishedChanges: true, draftUpdatedBy: adminUid, draftUpdatedAt: FieldValue.serverTimestamp() }, { merge: true });
     transaction.create(auditRef, {
       type: "craving-dash-draft", adminUid,
-      before: { live: prior.data()?.cravingDash?.published === true && prior.data()?.cravingDash?.enabled === true, stages: Array.isArray(prior.data()?.cravingDashDraft?.stages) ? prior.data().cravingDashDraft.stages.length : 0 },
-      after: { live: prior.data()?.cravingDash?.published === true && prior.data()?.cravingDash?.enabled === true, stages: cravingDash.stages.length, campaignId: cravingDash.campaignId },
+      before: { live: prior.data()?.cravingDash?.published === true && prior.data()?.cravingDash?.enabled === true, checkpoints: Array.isArray(prior.data()?.cravingDashDraft?.checkpoints) ? prior.data().cravingDashDraft.checkpoints.length : 0 },
+      after: { live: prior.data()?.cravingDash?.published === true && prior.data()?.cravingDash?.enabled === true, checkpoints: cravingDash.checkpoints.length, campaignId: cravingDash.campaignId },
       createdAt: FieldValue.serverTimestamp()
     });
   });
-  return { saved: true, enabled: prior.data()?.cravingDash?.published === true && prior.data()?.cravingDash?.enabled === true, stages: cravingDash.stages.length };
+  return { saved: true, enabled: prior.data()?.cravingDash?.published === true && prior.data()?.cravingDash?.enabled === true, checkpoints: cravingDash.checkpoints.length };
 });
 
 exports.adminSetCravingDashLive = onCall({ region: REGION, enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
@@ -674,7 +671,7 @@ exports.adminSetCravingDashLive = onCall({ region: REGION, enforceAppCheck: ENFO
   let next;
   if (shouldBeLive) {
     const validated = validateCravingDashConfig(request.data?.cravingDash, config.menu, config.combos);
-    if (!validated.stages.some(stage => stage.enabled)) throw new HttpsError("failed-precondition", "Add and enable at least one stage before making Craving Dash live.");
+    if (!validated.defaultReward) throw new HttpsError("failed-precondition", "Set a reward for every cleared level before making Craving Run live. Level milestones can replace that reward on selected rounds.");
     next = { ...validated, enabled: true, published: true };
   } else {
     next = { ...config.cravingDash, enabled: false, published: false };
@@ -691,208 +688,169 @@ exports.adminSetCravingDashLive = onCall({ region: REGION, enforceAppCheck: ENFO
     transaction.create(auditRef, {
       type: "craving-dash-publish", adminUid,
       before: { live: prior.data()?.cravingDash?.published === true && prior.data()?.cravingDash?.enabled === true },
-      after: { live: shouldBeLive, campaignId: next.campaignId, stages: next.stages.length },
+      after: { live: shouldBeLive, campaignId: next.campaignId, checkpoints: next.checkpoints.length },
       createdAt: FieldValue.serverTimestamp()
     });
   });
-  return { enabled: shouldBeLive, stages: next.stages.filter(stage => stage.enabled).length, campaignId: next.campaignId };
+  return { enabled: shouldBeLive, checkpoints: next.checkpoints.filter(item => item.enabled).length, campaignId: next.campaignId };
 });
 
 function gameStageFoods(menu) {
   const foods = [];
-  for (const key of ["burgers", "french-fries", "wraps", "strips"]) {
-    for (const item of menu[key]?.items || []) {
-      if (item.options?.length) foods.push(...item.options.map(option => String(option.name)));
-      else foods.push(String(item.name));
-    }
+  for (const key of ["burgers", "french-fries", "wraps", "strips"]) for (const item of menu[key]?.items || []) {
+    if (item.options?.length) foods.push(...item.options.map(option => String(option.name)));
+    else foods.push(String(item.name));
   }
   return foods;
 }
-
 function publicGameReward(reward) {
-  return reward.kind === "points"
-    ? { kind: "points", points: Number(reward.points) }
-    : reward.kind === "percent-discount"
-      ? { kind: "percent-discount", percent: Number(reward.percent), minimum: Number(reward.minimum || 0), maxDiscount: Number(reward.maxDiscount || 0), expiryHours: 48 }
+  if (!reward) return null;
+  return reward.kind === "points" ? { kind: "points", points: Number(reward.points), expiryHours: 48 }
+    : reward.kind === "percent-discount" ? { kind: "percent-discount", percent: Number(reward.percent), minimum: Number(reward.minimum || 0), maxDiscount: Number(reward.maxDiscount || 0), expiryHours: 48 }
       : { kind: "free-item", item: String(reward.item || ""), minimum: Number(reward.minimum || 0), expiryHours: 48 };
+}
+function gameRewardForLevel(game, level) {
+  const checkpoint = (Array.isArray(game.checkpoints) ? game.checkpoints : [])
+    .filter(item => item.enabled !== false && Number(level) >= Number(item.level) && (Number(item.everyLevels || 0) ? (Number(level) - Number(item.level)) % Number(item.everyLevels) === 0 : Number(level) === Number(item.level)))
+    .sort((a, b) => Number(b.level) - Number(a.level))[0];
+  return checkpoint ? { reward: checkpoint.reward, title: checkpoint.title, minScore: Number(checkpoint.minScore || 0), checkpointId: checkpoint.id } :
+    game.defaultReward ? { reward: game.defaultReward, title: "Level clear reward", minScore: 0, checkpointId: "default" } : null;
+}
+function activeGamePointLots(account, now = Date.now()) {
+  return (Array.isArray(account?.gamePointLots) ? account.gamePointLots : []).filter(lot => Number(lot.points) > 0 && timestampMillis(lot.expiresAt) > now);
+}
+function availableCravingPoints(account, now = Date.now()) {
+  return Math.max(0, Number(account?.points || 0)) + activeGamePointLots(account, now).reduce((sum, lot) => sum + Math.max(0, Number(lot.points || 0)), 0);
+}
+function consumeCravingPoints(account, amount, now = Date.now()) {
+  let remaining = Number(amount || 0);
+  const lots = activeGamePointLots(account, now).sort((a, b) => timestampMillis(a.expiresAt) - timestampMillis(b.expiresAt)).map(lot => ({ ...lot }));
+  for (const lot of lots) {
+    if (!remaining) break;
+    const used = Math.min(remaining, Math.max(0, Number(lot.points || 0)));
+    lot.points -= used;
+    remaining -= used;
+  }
+  const gamePointLots = lots.filter(lot => Number(lot.points) > 0);
+  const permanentPoints = Math.max(0, Number(account?.points || 0) - remaining);
+  if (remaining > Number(account?.points || 0)) throw new HttpsError("failed-precondition", "Your Craving Points changed. Refresh the cart and try again.");
+  return { points: permanentPoints, gamePointLots };
+}
+function runnerObjects(menu, level) {
+  const foods = gameStageFoods(menu);
+  if (foods.length < 2) throw new HttpsError("failed-precondition", "The game food list is not available yet.");
+  const obstacleChance = Math.min(0.42, 0.25 + Math.max(0, Number(level) - 1) * 0.002);
+  return Array.from({ length: 24 }, (_, index) => {
+    const collectible = Math.random() >= obstacleChance;
+    return { id: `run-${index}`, kind: collectible ? "food" : "obstacle", lane: Math.floor(Math.random() * 3), name: collectible ? foods[Math.floor(Math.random() * foods.length)] : ["Sauce spill", "Delivery crate", "Fry box"][Math.floor(Math.random() * 3)] };
+  });
 }
 
 exports.getCravingDashState = onCall({ region: REGION, enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
-  const config = await readBusinessConfig();
-  const game = config.cravingDash || { enabled: false, stages: [] };
-  if (game.enabled !== true) return { enabled: false, campaignId: String(game.campaignId || ""), points: 0, completedStageIds: [], completedStages: 0, totalStages: 0, currentStage: null, nextStages: [], availableRewards: [] };
-  const uid = await requireActiveCustomer(request);
-  const progressRef = db.collection("cravingDashAccounts").doc(uid);
-  const [progressSnapshot, loyaltySnapshot] = await Promise.all([
-    progressRef.get(), db.collection("loyaltyAccounts").doc(uid).get()
-  ]);
-  const progress = progressSnapshot.exists ? progressSnapshot.data() : {};
-  const completed = progress.campaignId === String(game.campaignId || "campaign-v1") && Array.isArray(progress.completedStageIds) ? progress.completedStageIds : [];
-  const stages = (Array.isArray(game.stages) ? game.stages : []).filter(stage => stage.enabled !== false).sort((a, b) => a.order - b.order);
-  const next = stages.findIndex(stage => !completed.includes(stage.id));
-  const current = next >= 0 ? stages[next] : null;
-  const loyalty = loyaltySnapshot.exists ? loyaltySnapshot.data() : {};
-  const activeRewards = (Array.isArray(loyalty.availableRewards) ? loyalty.availableRewards : [])
-    .filter(reward => reward.source === "craving-dash" && (!reward.expiresAt || timestampMillis(reward.expiresAt) > Date.now()))
-    .map(reward => ({ ticketId: String(reward.ticketId), title: String(reward.title), kind: String(reward.kind || "free-item"), item: String(reward.item || ""), percent: Number(reward.percent || 0), maxDiscount: Number(reward.maxDiscount || 0), minimum: Number(reward.minimum || 0), expiresAt: new Date(timestampMillis(reward.expiresAt)).toISOString() }));
-  return {
-    enabled: game.enabled === true,
-    campaignId: String(game.campaignId || ""),
-    points: Math.max(0, Number(loyalty.points || 0)),
-    completedStageIds: completed,
-    completedStages: completed.length,
-    totalStages: stages.length,
-    currentStage: current ? { id: current.id, order: current.order, title: current.title, instructions: current.instructions, targetScore: current.targetScore, reward: publicGameReward(current.reward) } : null,
-    nextStages: current ? stages.filter(stage => stage.order > current.order).slice(0, 2).map(stage => ({ id: stage.id, order: stage.order, title: stage.title, reward: publicGameReward(stage.reward), locked: true })) : [],
-    availableRewards: activeRewards
-  };
+  const config = await readBusinessConfig(), game = config.cravingDash || {};
+  if (game.enabled !== true) return { enabled: false, campaignId: String(game.campaignId || ""), points: 0, level: 1, availableRewards: [] };
+  const uid = await requireActiveCustomer(request), progressRef = db.collection("cravingDashAccounts").doc(uid);
+  const [progressSnapshot, loyaltySnapshot] = await Promise.all([progressRef.get(), db.collection("loyaltyAccounts").doc(uid).get()]);
+  const progress = progressSnapshot.exists ? progressSnapshot.data() : {}, loyalty = loyaltySnapshot.exists ? loyaltySnapshot.data() : {};
+  const level = progress.campaignId === String(game.campaignId || "campaign-v1") ? Math.max(1, Number(progress.level || 0) + 1) : 1;
+  const prize = gameRewardForLevel(game, level);
+  const rewards = (Array.isArray(loyalty.availableRewards) ? loyalty.availableRewards : []).filter(item => ["craving-dash", "craving-runner"].includes(item.source) && timestampMillis(item.expiresAt) > Date.now())
+    .map(item => ({ ticketId: String(item.ticketId), title: String(item.title), kind: String(item.kind), item: String(item.item || ""), percent: Number(item.percent || 0), maxDiscount: Number(item.maxDiscount || 0), minimum: Number(item.minimum || 0), expiresAt: new Date(timestampMillis(item.expiresAt)).toISOString() }));
+  return { enabled: true, campaignId: String(game.campaignId || ""), level, roundTargetScore: Number(game.roundTargetScore || 50), points: availableCravingPoints(loyalty), gamePointLots: activeGamePointLots(loyalty).map(lot => ({ points: Number(lot.points), expiresAt: new Date(timestampMillis(lot.expiresAt)).toISOString() })), nextReward: prize ? { title: prize.title, kind: prize.reward?.kind, points: Number(prize.reward?.points || 0), item: String(prize.reward?.item || ""), percent: Number(prize.reward?.percent || 0), minimum: Number(prize.reward?.minimum || 0), maxDiscount: Number(prize.reward?.maxDiscount || 0), expiresInHours: 48, minScore: prize.minScore } : null, availableRewards: rewards };
 });
 
+async function createRunnerChallenge({ uid, game, menu, level, adminTest = false }) {
+  const objects = runnerObjects(menu, level), prize = gameRewardForLevel(game, level), challengeId = db.collection("cravingDashChallenges").doc().id;
+  const challengeRef = db.collection("cravingDashAccounts").doc(uid).collection("challenges").doc(challengeId), now = Date.now();
+  const targetScore = Number(game.roundTargetScore || 50);
+  await challengeRef.create({ uid, level, campaignId: String(game.campaignId || "campaign-v1"), targetScore, minRewardScore: Number(prize?.minScore || 0), reward: prize?.reward || null, rewardTitle: prize?.title || "", fallbackReward: prize?.checkpointId && prize.checkpointId !== "default" ? (game.defaultReward || null) : null, checkpointId: prize?.checkpointId || "", objects, nextActionIndex: 0, score: 0, lives: 3, lastActionAt: 0, startedAt: Timestamp.fromMillis(now), expiresAt: Timestamp.fromMillis(now + 90000), consumed: false, isAdminTest: adminTest });
+  return { adminTest, challengeId, level, title: `Level ${level}`, targetScore, reward: publicGameReward(prize?.reward), rewardTitle: prize?.title || "No checkpoint reward at this level", minRewardScore: Number(prize?.minScore || 0), objects, durationSeconds: 50, stepMs: Math.max(650, 1250 - Math.min(level, 75) * 8) };
+}
+
 exports.startCravingDashStage = onCall({ region: REGION, enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
-  const config = await readBusinessConfig();
-  const game = config.cravingDash || {};
-  if (game.enabled !== true) throw new HttpsError("failed-precondition", "Craving Dash is paused right now. Please check again soon.");
-  const uid = await requireActiveCustomer(request);
-  const stages = (Array.isArray(game.stages) ? game.stages : []).filter(stage => stage.enabled !== false).sort((a, b) => a.order - b.order);
-  const progressRef = db.collection("cravingDashAccounts").doc(uid);
-  const progressSnapshot = await progressRef.get();
-  const completed = progressSnapshot.data()?.campaignId === String(game.campaignId || "campaign-v1") && Array.isArray(progressSnapshot.data()?.completedStageIds) ? progressSnapshot.data().completedStageIds : [];
-  const stage = stages.find(item => !completed.includes(item.id));
-  if (!stage) throw new HttpsError("failed-precondition", "You have cleared all current Craving Dash stages.");
-  const challengeId = db.collection("cravingDashChallenges").doc().id;
-  const foods = gameStageFoods(config.menu);
-  if (foods.length < 2) throw new HttpsError("failed-precondition", "The game food list is not available yet.");
-  const roundFoods = foods.slice().sort(() => Math.random() - 0.5).slice(0, 12);
-  const objects = roundFoods.map((name, index) => {
-    const correct = index < stage.targetScore;
-    return { id: `food-${index}`, name, correct };
-  }).sort(() => Math.random() - 0.5).map((item, index) => ({ ...item, id: `food-${index}` }));
-  const challengeRef = progressRef.collection("challenges").doc(challengeId);
-  const now = Date.now();
-  await challengeRef.create({ uid, stageId: stage.id, campaignId: String(game.campaignId || "campaign-v1"), targetScore: Number(stage.targetScore), reward: stage.reward, objects, nextActionIndex: 0, score: 0, lastActionAt: 0, startedAt: Timestamp.fromMillis(now), expiresAt: Timestamp.fromMillis(now + 90000), consumed: false });
-  return { challengeId, stage: { id: stage.id, title: stage.title, instructions: stage.instructions, targetScore: stage.targetScore, reward: publicGameReward(stage.reward) }, ticket: objects.filter(item => item.correct).map(item => item.name), objects: objects.map(({ id, name }) => ({ id, name })), durationSeconds: 60 };
+  const config = await readBusinessConfig(), game = config.cravingDash || {};
+  if (game.enabled !== true) throw new HttpsError("failed-precondition", "Craving Run is paused right now. Please check again soon.");
+  const uid = await requireActiveCustomer(request), progressSnapshot = await db.collection("cravingDashAccounts").doc(uid).get();
+  const progress = progressSnapshot.data() || {}, level = progress.campaignId === String(game.campaignId || "campaign-v1") ? Math.max(1, Number(progress.level || 0) + 1) : 1;
+  return createRunnerChallenge({ uid, game, menu: config.menu, level });
 });
 
 exports.adminStartCravingDashTest = onCall({ region: REGION, enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
-  const adminUid = await requireAdmin(request);
-  const stageId = String(request.data?.stageId || "");
-  const config = await readBusinessConfig();
-  const game = config.cravingDashDraft || config.cravingDash || {};
-  const stages = (Array.isArray(game.stages) ? game.stages : []).sort((a, b) => a.order - b.order);
-  const stage = stages.find(item => item.id === stageId);
-  if (!stage) throw new HttpsError("not-found", "Save this stage configuration before starting its test.");
-  const foods = gameStageFoods(config.menu);
-  if (foods.length < 2) throw new HttpsError("failed-precondition", "The game food list is not available yet.");
-  const roundFoods = foods.slice().sort(() => Math.random() - 0.5).slice(0, 12);
-  while (roundFoods.length < 12) roundFoods.push(foods[roundFoods.length % foods.length]);
-  const objects = roundFoods.map((name, index) => ({ id: `food-${index}`, name, correct: index < Number(stage.targetScore) }))
-    .sort(() => Math.random() - 0.5).map((item, index) => ({ ...item, id: `food-${index}` }));
-  const challengeId = db.collection("cravingDashChallenges").doc().id;
-  const challengeRef = db.collection("cravingDashAccounts").doc(adminUid).collection("challenges").doc(challengeId);
-  const now = Date.now();
-  await challengeRef.create({ uid: adminUid, stageId: stage.id, campaignId: String(game.campaignId || "campaign-v1"), targetScore: Number(stage.targetScore), reward: stage.reward, objects, nextActionIndex: 0, score: 0, lastActionAt: 0, startedAt: Timestamp.fromMillis(now), expiresAt: Timestamp.fromMillis(now + 90000), consumed: false, isAdminTest: true });
-  return { adminTest: true, challengeId, stage: { id: stage.id, order: stage.order, title: stage.title, instructions: stage.instructions, targetScore: stage.targetScore, reward: publicGameReward(stage.reward) }, ticket: objects.filter(item => item.correct).map(item => item.name), objects: objects.map(({ id, name }) => ({ id, name })), durationSeconds: 60 };
+  const adminUid = await requireAdmin(request), config = await readBusinessConfig(), game = config.cravingDashDraft || config.cravingDash || {};
+  const level = Number(request.data?.level);
+  if (!Number.isSafeInteger(level) || level < 1 || level > 1000000) throw new HttpsError("invalid-argument", "Choose a test level from 1 to 1,000,000.");
+  return createRunnerChallenge({ uid: adminUid, game, menu: config.menu, level, adminTest: true });
 });
 
 exports.recordCravingDashAction = onCall({ region: REGION, enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
-  const adminTest = request.data?.adminTest === true;
-  const uid = adminTest ? await requireAdmin(request) : await requireActiveCustomer(request);
-  const challengeId = String(request.data?.challengeId || "");
-  const objectId = String(request.data?.objectId || "");
-  const action = request.data?.action;
-  const actionIndex = Number(request.data?.actionIndex);
-  const actionRequestId = String(request.data?.actionRequestId || "");
-  if (!/^[A-Za-z0-9_-]{18,40}$/.test(challengeId) || !/^food-\d{1,2}$/.test(objectId) || !["serve", "skip"].includes(action) || !Number.isSafeInteger(actionIndex) || actionIndex < 0 || actionIndex > 11 || !/^[A-Za-z0-9_-]{16,80}$/.test(actionRequestId)) {
-    throw new HttpsError("invalid-argument", "This game round is invalid. Start a new round.");
-  }
-  const progressRef = db.collection("cravingDashAccounts").doc(uid);
-  const challengeRef = progressRef.collection("challenges").doc(challengeId);
+  const adminTest = request.data?.adminTest === true, uid = adminTest ? await requireAdmin(request) : await requireActiveCustomer(request);
+  const challengeId = String(request.data?.challengeId || ""), actionIndex = Number(request.data?.actionIndex), lane = Number(request.data?.lane), jumped = request.data?.jumped === true, actionRequestId = String(request.data?.actionRequestId || "");
+  if (!/^[A-Za-z0-9_-]{18,40}$/.test(challengeId) || !Number.isSafeInteger(actionIndex) || actionIndex < 0 || actionIndex > 23 || !Number.isSafeInteger(lane) || lane < 0 || lane > 2 || !/^[A-Za-z0-9_-]{16,80}$/.test(actionRequestId)) throw new HttpsError("invalid-argument", "This runner action is invalid. Start a new round.");
+  const challengeRef = db.collection("cravingDashAccounts").doc(uid).collection("challenges").doc(challengeId);
   return db.runTransaction(async transaction => {
     const snapshot = await transaction.get(challengeRef);
-    if (!snapshot.exists) throw new HttpsError("not-found", "This game round has expired. Start again.");
+    if (!snapshot.exists) throw new HttpsError("not-found", "This runner round has expired. Start again.");
     const challenge = snapshot.data();
     if (challenge.lastActionRequestId === actionRequestId) return challenge.lastActionResult;
     const now = Date.now();
     if (challenge.uid !== uid || Boolean(challenge.isAdminTest) !== adminTest || challenge.consumed || now > timestampMillis(challenge.expiresAt)) throw new HttpsError("failed-precondition", "This game round is no longer active.");
-    if (actionIndex !== Number(challenge.nextActionIndex || 0)) throw new HttpsError("failed-precondition", "Your tray action is out of order. Please restart the round.");
-    if (now - Number(challenge.lastActionAt || 0) < 500) throw new HttpsError("resource-exhausted", "Take a moment to serve each food before the next swipe.");
-    const object = (Array.isArray(challenge.objects) ? challenge.objects : []).find(item => item.id === objectId);
-    if (!object || object.id !== `food-${actionIndex}`) throw new HttpsError("invalid-argument", "This food is not the next one in the round.");
-    const score = Math.max(0, Number(challenge.score || 0) + (action === "serve" ? (object.correct === true ? 1 : -1) : 0));
-    const result = { nextActionIndex: actionIndex + 1, score };
-    transaction.update(challengeRef, { nextActionIndex: actionIndex + 1, score, lastActionAt: now, lastActionRequestId: actionRequestId, lastActionResult: result });
+    if (actionIndex !== Number(challenge.nextActionIndex || 0)) throw new HttpsError("failed-precondition", "Runner action was out of order. Please restart the round.");
+    if (now - Number(challenge.lastActionAt || 0) < 500) throw new HttpsError("resource-exhausted", "Wait a moment before the next runner move.");
+    const object = challenge.objects?.[actionIndex];
+    if (!object || object.id !== `run-${actionIndex}`) throw new HttpsError("invalid-argument", "This runner object is invalid.");
+    let score = Math.max(0, Number(challenge.score || 0)), lives = Number(challenge.lives || 0), eventResult = "missed";
+    if (object.kind === "food" && lane === object.lane) { score += 10; eventResult = "collected"; }
+    else if (object.kind === "obstacle" && lane === object.lane && !jumped) { lives = Math.max(0, lives - 1); score = Math.max(0, score - 5); eventResult = "hit"; }
+    else if (object.kind === "obstacle" && (lane !== object.lane || jumped)) eventResult = "dodged";
+    const result = { nextActionIndex: actionIndex + 1, score, lives, eventResult };
+    transaction.update(challengeRef, { nextActionIndex: actionIndex + 1, score, lives, lastActionAt: now, lastActionRequestId: actionRequestId, lastActionResult: result });
     return result;
   });
 });
 
 exports.submitCravingDashStage = onCall({ region: REGION, enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
-  const adminTest = request.data?.adminTest === true;
-  const uid = adminTest ? await requireAdmin(request) : await requireActiveCustomer(request);
+  const adminTest = request.data?.adminTest === true, uid = adminTest ? await requireAdmin(request) : await requireActiveCustomer(request);
   const challengeId = String(request.data?.challengeId || "");
-  if (!/^[A-Za-z0-9_-]{18,40}$/.test(challengeId)) {
-    throw new HttpsError("invalid-argument", "This game round is invalid. Start a new round.");
-  }
-  const config = await readBusinessConfig();
-  const game = config.cravingDash || {};
-  const stages = (Array.isArray(game.stages) ? game.stages : []).filter(stage => stage.enabled !== false).sort((a, b) => a.order - b.order);
-  const accountRef = db.collection("loyaltyAccounts").doc(uid);
-  const progressRef = db.collection("cravingDashAccounts").doc(uid);
-  const challengeRef = progressRef.collection("challenges").doc(challengeId);
-  const auditRef = db.collection("gameRewardAudits").doc(challengeId);
+  if (!/^[A-Za-z0-9_-]{18,40}$/.test(challengeId)) throw new HttpsError("invalid-argument", "This runner round is invalid. Start a new round.");
+  const config = await readBusinessConfig(), game = adminTest ? (config.cravingDashDraft || config.cravingDash || {}) : (config.cravingDash || {});
+  const accountRef = db.collection("loyaltyAccounts").doc(uid), progressRef = db.collection("cravingDashAccounts").doc(uid), challengeRef = progressRef.collection("challenges").doc(challengeId), auditRef = db.collection("gameRewardAudits").doc(challengeId);
   return db.runTransaction(async transaction => {
     const [challengeSnapshot, progressSnapshot, accountSnapshot] = await Promise.all([transaction.get(challengeRef), transaction.get(progressRef), transaction.get(accountRef)]);
-    if (!challengeSnapshot.exists) throw new HttpsError("not-found", "This game round has expired. Start again.");
+    if (!challengeSnapshot.exists) throw new HttpsError("not-found", "This runner round has expired. Start again.");
     const challenge = challengeSnapshot.data();
     if (challenge.consumed) return challenge.result || { success: false, duplicate: true };
     const now = Date.now();
+    if (challenge.uid !== uid || Boolean(challenge.isAdminTest) !== adminTest || now > timestampMillis(challenge.expiresAt) || (Number(challenge.nextActionIndex || 0) !== 24 && Number(challenge.lives || 0) > 0)) throw new HttpsError("failed-precondition", "Finish the runner round before checking the result.");
+    const score = Math.max(0, Number(challenge.score || 0)), targetScore = Number(challenge.targetScore), lives = Number(challenge.lives || 0);
+    const won = lives > 0 && score >= targetScore, metRewardScore = score >= Number(challenge.minRewardScore || 0), prize = metRewardScore ? challenge.reward : challenge.fallbackReward;
     if (adminTest) {
-      if (challenge.uid !== uid || challenge.isAdminTest !== true || now < timestampMillis(challenge.startedAt) + 8000 || now > timestampMillis(challenge.expiresAt) || Number(challenge.nextActionIndex || 0) !== 12) {
-        throw new HttpsError("failed-precondition", "The admin test round is expired or incomplete. Start the stage test again.");
-      }
-      const score = Math.max(0, Number(challenge.score || 0));
-      const targetScore = Number(challenge.targetScore);
-      const result = { adminTest: true, success: score >= targetScore, score, targetScore, stageId: challenge.stageId, pointsAwarded: 0, rewardPreview: publicGameReward(challenge.reward) };
+      const result = { adminTest: true, success: won, score, targetScore, level: Number(challenge.level), pointsAwarded: 0, rewardPreview: won ? publicGameReward(prize) : null, rewardTitle: metRewardScore ? challenge.rewardTitle || "" : "Level clear reward" };
       transaction.update(challengeRef, { consumed: true, result, completedAt: FieldValue.serverTimestamp() });
       return result;
     }
-    if (challenge.isAdminTest === true) throw new HttpsError("permission-denied", "Admin test rounds can only be checked in admin test mode.");
-    if (now < timestampMillis(challenge.startedAt) + 8000 || now > timestampMillis(challenge.expiresAt) || challenge.uid !== uid || challenge.campaignId !== String(game.campaignId || "campaign-v1") || game.enabled !== true || Number(challenge.nextActionIndex || 0) !== 12) {
-      throw new HttpsError("failed-precondition", "This round is expired or was not completed in the allowed time. Start another round.");
-    }
-    const stage = stages.find(item => item.id === challenge.stageId);
-    const completed = progressSnapshot.data()?.campaignId === String(game.campaignId || "campaign-v1") && Array.isArray(progressSnapshot.data()?.completedStageIds) ? [...progressSnapshot.data().completedStageIds] : [];
-    if (!stage || completed.includes(stage.id)) throw new HttpsError("already-exists", "This stage has already been completed.");
-    const expectedStage = stages.find(item => !completed.includes(item.id));
-    if (!expectedStage || expectedStage.id !== stage.id) throw new HttpsError("failed-precondition", "Clear the stages in order.");
-    const score = Math.max(0, Number(challenge.score || 0));
-    const targetScore = Number(challenge.targetScore);
-    const prize = challenge.reward;
-    const won = score >= targetScore;
+    if (challenge.isAdminTest === true || game.enabled !== true || challenge.campaignId !== String(game.campaignId || "campaign-v1")) throw new HttpsError("failed-precondition", "This game campaign is no longer active.");
+    const progress = progressSnapshot.data() || {}, expectedLevel = progress.campaignId === String(game.campaignId || "campaign-v1") ? Number(progress.level || 0) + 1 : 1;
+    if (Number(challenge.level) !== expectedLevel) throw new HttpsError("failed-precondition", "Your next runner level changed. Refresh the game and try again.");
     const loyalty = accountSnapshot.exists ? accountSnapshot.data() : {};
-    const pointsBefore = Math.max(0, Number(loyalty.points || 0));
-    let rewardTicket = null;
-    let pointsAwarded = 0;
+    let rewardTicket = null, pointsAwarded = 0;
     if (won) {
-      completed.push(stage.id);
-      const issuedAt = Timestamp.fromMillis(now);
-      if (prize.kind === "points") {
+      const nextProgress = { campaignId: String(game.campaignId || "campaign-v1"), level: Number(challenge.level), updatedAt: FieldValue.serverTimestamp(), lastScore: score };
+      if (prize?.kind === "points") {
         pointsAwarded = Number(prize.points);
-        transaction.set(accountRef, { points: pointsBefore + pointsAwarded, totalEarned: Math.max(0, Number(loyalty.totalEarned || 0)) + pointsAwarded, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-        transaction.create(accountRef.collection("entries").doc(`game-${challengeId}`), { points: pointsAwarded, type: "craving-dash", reason: `Craving Dash · ${stage.title}`, gameStageId: stage.id, createdAt: FieldValue.serverTimestamp() });
-      } else if (prize.kind === "free-item") {
-        const expiresAt = Timestamp.fromMillis(now + 48 * 60 * 60 * 1000);
-        rewardTicket = { ticketId: `dash-${challengeId}`, id: `dash-${stage.id}`, source: "craving-dash", kind: "free-item", title: `${stage.title} reward`, detail: `${prize.item} free · valid for 48 hours`, item: prize.item, minimum: Number(prize.minimum || 0), issuedAt, expiresAt, gameStageId: stage.id };
-        transaction.set(accountRef, { availableRewards: [...(Array.isArray(loyalty.availableRewards) ? loyalty.availableRewards : []), rewardTicket], updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-      } else if (prize.kind === "percent-discount") {
-        const expiresAt = Timestamp.fromMillis(now + 48 * 60 * 60 * 1000);
-        const capText = Number(prize.maxDiscount) > 0 ? ` · up to ₹${Number(prize.maxDiscount)}` : "";
-        rewardTicket = { ticketId: `dash-${challengeId}`, id: `dash-${stage.id}`, source: "craving-dash", kind: "percent-discount", title: `${stage.title} reward`, detail: `${Number(prize.percent)}% off eligible regular menu items${capText} · valid for 48 hours`, percent: Number(prize.percent), maxDiscount: Number(prize.maxDiscount || 0), minimum: Number(prize.minimum || 0), issuedAt, expiresAt, gameStageId: stage.id };
+        const expiresAt = Timestamp.fromMillis(now + 48 * 60 * 60 * 1000), gamePointLots = [...activeGamePointLots(loyalty, now), { id: `run-${challengeId}`, points: pointsAwarded, source: "craving-runner", level: Number(challenge.level), issuedAt: Timestamp.fromMillis(now), expiresAt }];
+        transaction.set(accountRef, { gamePointLots, totalEarned: Math.max(0, Number(loyalty.totalEarned || 0)) + pointsAwarded, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        transaction.create(accountRef.collection("entries").doc(`game-${challengeId}`), { points: pointsAwarded, type: "craving-runner", reason: `Craving Run · Level ${challenge.level}`, level: Number(challenge.level), expiresAt, createdAt: FieldValue.serverTimestamp() });
+      } else if (prize?.kind === "free-item" || prize?.kind === "percent-discount") {
+        const expiresAt = Timestamp.fromMillis(now + 48 * 60 * 60 * 1000), rewardTitle = metRewardScore ? challenge.rewardTitle : "Level clear reward", title = `${rewardTitle || `Level ${challenge.level}`} reward`;
+        rewardTicket = prize.kind === "free-item"
+          ? { ticketId: `run-${challengeId}`, id: `run-level-${challenge.level}`, source: "craving-runner", kind: "free-item", title, detail: `${prize.item} free · valid for 48 hours`, item: prize.item, minimum: Number(prize.minimum || 0), issuedAt: Timestamp.fromMillis(now), expiresAt, gameLevel: Number(challenge.level) }
+          : { ticketId: `run-${challengeId}`, id: `run-level-${challenge.level}`, source: "craving-runner", kind: "percent-discount", title, detail: `${Number(prize.percent)}% off eligible regular menu items · valid for 48 hours`, percent: Number(prize.percent), maxDiscount: Number(prize.maxDiscount || 0), minimum: Number(prize.minimum || 0), issuedAt: Timestamp.fromMillis(now), expiresAt, gameLevel: Number(challenge.level) };
         transaction.set(accountRef, { availableRewards: [...(Array.isArray(loyalty.availableRewards) ? loyalty.availableRewards : []), rewardTicket], updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       }
-      transaction.set(progressRef, { campaignId: String(game.campaignId || "campaign-v1"), completedStageIds: completed, updatedAt: FieldValue.serverTimestamp(), lastStageId: stage.id }, { merge: true });
-      transaction.create(auditRef, { uid, stageId: stage.id, rewardKind: prize.kind, pointsAwarded, freeItem: rewardTicket?.item || null, createdAt: FieldValue.serverTimestamp() });
+      transaction.set(progressRef, nextProgress, { merge: true });
+      transaction.create(auditRef, { uid, level: Number(challenge.level), score, rewardKind: prize?.kind || "none", pointsAwarded, freeItem: rewardTicket?.item || null, createdAt: FieldValue.serverTimestamp() });
     }
-    const result = { success: won, score, targetScore, stageId: stage.id, pointsAwarded, reward: rewardTicket ? { title: rewardTicket.title, kind: rewardTicket.kind, item: rewardTicket.item || "", percent: Number(rewardTicket.percent || 0), maxDiscount: Number(rewardTicket.maxDiscount || 0), minimum: rewardTicket.minimum, expiresAt: new Date(now + 48 * 60 * 60 * 1000).toISOString() } : null };
+    const result = { success: won, score, targetScore, lives, level: Number(challenge.level), pointsAwarded, reward: rewardTicket ? { title: rewardTicket.title, kind: rewardTicket.kind, item: rewardTicket.item || "", percent: Number(rewardTicket.percent || 0), maxDiscount: Number(rewardTicket.maxDiscount || 0), minimum: rewardTicket.minimum, expiresAt: new Date(now + 48 * 60 * 60 * 1000).toISOString() } : prize?.kind === "points" && won ? { kind: "points", points: pointsAwarded, expiresAt: new Date(now + 48 * 60 * 60 * 1000).toISOString() } : null };
     transaction.update(challengeRef, { consumed: true, result, completedAt: FieldValue.serverTimestamp() });
     return result;
   });
@@ -1008,7 +966,7 @@ exports.adminGetCustomerDetails = onCall({ region: REGION }, async request => {
     name: String(profile.name || user?.displayName || orders.find(order => order.customerName)?.customerName || "Customer").slice(0, 80),
     addresses: safeFirestoreData(savedAddresses),
     orderAddresses: safeFirestoreData(orderAddresses),
-    points: Math.max(0, Number(loyalty.points || 0)),
+    points: availableCravingPoints(loyalty),
     completedOrders: Math.max(0, Number(loyalty.completedOrders || 0)),
     availableRewards: safeFirestoreData(loyalty.availableRewards || []),
     orders,
@@ -1272,7 +1230,7 @@ exports.adminAdjustCustomerBenefits = onCall({ region: REGION }, async request =
     const [adjustmentSnapshot, accountSnapshot] = await Promise.all([transaction.get(adjustmentRef), transaction.get(accountRef)]);
     if (adjustmentSnapshot.exists) return adjustmentSnapshot.data().response;
     const account = accountSnapshot.exists ? accountSnapshot.data() : {};
-    const currentPoints = Math.max(0, Number(account.points || 0));
+    const currentPoints = availableCravingPoints(account);
     if (currentPoints + pointsDelta < 0) throw new HttpsError("failed-precondition", "The customer does not have enough points for that deduction.");
     const availableRewards = Array.isArray(account.availableRewards) ? [...account.availableRewards] : [];
     let issuedReward = null;
@@ -1285,9 +1243,10 @@ exports.adminAdjustCustomerBenefits = onCall({ region: REGION }, async request =
       };
       availableRewards.push(issuedReward);
     }
+    const pointUpdate = pointsDelta < 0 ? consumeCravingPoints(account, -pointsDelta) : { points: Math.max(0, Number(account.points || 0)) + pointsDelta, gamePointLots: activeGamePointLots(account) };
     const response = { mobile, points: currentPoints + pointsDelta, reward: issuedReward ? { id: issuedReward.id, title: issuedReward.title } : null };
     transaction.set(accountRef, {
-      uid: user.uid, points: currentPoints + pointsDelta,
+      uid: user.uid, ...pointUpdate,
       totalEarned: Math.max(0, Number(account.totalEarned || 0)) + Math.max(0, pointsDelta),
       totalRedeemed: Math.max(0, Number(account.totalRedeemed || 0)) + Math.max(0, -pointsDelta),
       availableRewards, updatedAt: FieldValue.serverTimestamp()
@@ -1355,7 +1314,7 @@ exports.createOrder = onCall({ region: REGION }, async request => {
     ]);
     const account = accountSnapshot.exists ? accountSnapshot.data() : {};
     const profile = profileSnapshot?.exists ? profileSnapshot.data() : {};
-    const balance = Math.max(0, Number(account.points || 0));
+    const balance = availableCravingPoints(account);
     const availableRewards = Array.isArray(account.availableRewards) ? account.availableRewards : [];
     const loyaltyRewardTicketId = typeof data.loyaltyRewardId === "string" ? data.loyaltyRewardId : "";
     const requestedPoints = Number(data.redeemPoints || 0);
@@ -1378,7 +1337,7 @@ exports.createOrder = onCall({ region: REGION }, async request => {
     }
     if (loyaltyRewardTicketId) {
       claimedReward = availableRewards.find(reward => reward.ticketId === loyaltyRewardTicketId || (!reward.ticketId && reward.id === loyaltyRewardTicketId));
-      const isGameVoucher = claimedReward?.source === "craving-dash" && ["free-item", "percent-discount"].includes(claimedReward.kind);
+      const isGameVoucher = ["craving-dash", "craving-runner"].includes(claimedReward?.source) && ["free-item", "percent-discount"].includes(claimedReward.kind);
       loyaltyReward = isGameVoucher
         ? { kind: claimedReward.kind, title: claimedReward.title, detail: claimedReward.detail, item: claimedReward.item, percent: Number(claimedReward.percent || 0), maxDiscount: Number(claimedReward.maxDiscount || 0), minimum: Number(claimedReward.minimum || 0) }
         : claimedReward ? rewardConfig.rewardById[claimedReward.id] : null;
@@ -1500,7 +1459,7 @@ exports.createOrder = onCall({ region: REGION }, async request => {
     if (requestedPoints || loyaltyRewardTicketId || welcomeUsed) {
       transaction.set(accountRef, {
         uid,
-        points: balance - requestedPoints,
+        ...(requestedPoints ? consumeCravingPoints(account, requestedPoints) : {}),
         availableRewards: remainingRewards,
         ...(welcomeUsed ? { welcomeReservationId: orderRef.id } : {}),
         updatedAt: FieldValue.serverTimestamp()
@@ -1642,7 +1601,7 @@ exports.staffLookupCustomer = onCall({ region: REGION }, async request => {
   return {
     found: true,
     name: String(profile.name || user.displayName || recentOrderName || "").slice(0, 80),
-    points: Math.max(0, Number(loyalty.points || 0)),
+    points: availableCravingPoints(loyalty),
     completedOrders,
     availableRewards: activeRewards.map(reward => {
       const definition = rewardConfig.rewardById[reward.id] || reward;
@@ -1837,7 +1796,7 @@ exports.createWalkInOrder = onCall({ region: REGION }, async request => {
     const accountRef = customerUid ? db.collection("loyaltyAccounts").doc(customerUid) : null;
     const accountSnapshot = accountRef ? await transaction.get(accountRef) : null;
     const account = accountSnapshot?.exists ? accountSnapshot.data() : {};
-    const balance = Math.max(0, Number(account.points || 0));
+    const balance = availableCravingPoints(account);
     const availableRewards = Array.isArray(account.availableRewards) ? account.availableRewards : [];
     const requestedPoints = Number(data.redeemPoints || 0);
     const loyaltyRewardTicketId = typeof data.loyaltyRewardId === "string" ? data.loyaltyRewardId : "";
@@ -1859,7 +1818,7 @@ exports.createWalkInOrder = onCall({ region: REGION }, async request => {
     let pointsMultiplier = 1;
     if (loyaltyRewardTicketId) {
       claimedReward = availableRewards.find(reward => reward.ticketId === loyaltyRewardTicketId || (!reward.ticketId && reward.id === loyaltyRewardTicketId));
-      const isGameVoucher = claimedReward?.source === "craving-dash" && ["free-item", "percent-discount"].includes(claimedReward.kind);
+    const isGameVoucher = ["craving-dash", "craving-runner"].includes(claimedReward?.source) && ["free-item", "percent-discount"].includes(claimedReward.kind);
       loyaltyReward = isGameVoucher
         ? { kind: claimedReward.kind, title: claimedReward.title, detail: claimedReward.detail, item: claimedReward.item, percent: Number(claimedReward.percent || 0), maxDiscount: Number(claimedReward.maxDiscount || 0), minimum: Number(claimedReward.minimum || 0) }
         : claimedReward ? rewardConfig.rewardById[claimedReward.id] : null;
@@ -1944,7 +1903,7 @@ exports.createWalkInOrder = onCall({ region: REGION }, async request => {
     if (requestedPoints || loyaltyRewardTicketId) {
       transaction.set(accountRef, {
         uid: customerUid,
-        points: balance - requestedPoints,
+        ...(requestedPoints ? consumeCravingPoints(account, requestedPoints) : {}),
         availableRewards: remainingRewards,
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });

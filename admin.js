@@ -199,7 +199,7 @@ $("accessForm").addEventListener("submit", async event => {
 async function loadBusinessConfig() {
   try {
     const config = await call("adminGetBusinessConfig"); menu = config.menu || {}; combos = config.combos || []; rewards = config.rewards?.journey || [];
-    gameConfig = config.cravingDash || { enabled: false, campaignId: "campaign-v1", stages: [] };
+    gameConfig = config.cravingDashDraft || config.cravingDash || { enabled: false, campaignId: "campaign-v1", roundTargetScore: 50, defaultReward: null, checkpoints: [] };
     gameIsLive = config.cravingDashLive === true;
     gameHasUnpublishedChanges = config.cravingDashHasUnpublishedChanges === true;
     renderMenuEditor(); renderRewardEditor(); renderBenefitRewardOptions(); renderGameEditor();
@@ -207,128 +207,22 @@ async function loadBusinessConfig() {
 }
 
 function gameFoodOptions(selected) {
-  const names = [...new Set(Object.entries(menu).flatMap(([key, section]) => /extra|dip/i.test(key) || /extra|dip/i.test(section.title || "") ? [] : (section.items || []).flatMap(item => item.options?.length ? item.options.map(option => option.name) : [item.name])).concat((combos || []).map(combo => combo.name)))];
-  return '<option value="">Select a menu item</option>' + names.map(name => `<option value="${escapeHtml(name)}" ${name === selected ? "selected" : ""}>${escapeHtml(name)}</option>`).join("");
+ const names=[...new Set(Object.entries(menu).flatMap(([k,s])=>/extra|dip/i.test(k+s.title)?[]:(s.items||[]).flatMap(i=>i.options?.length?i.options.map(o=>o.name):[i.name])).concat((combos||[]).map(c=>c.name)))];
+ return '<option value="">Select menu item</option>'+names.map(n=>'<option '+(n===selected?'selected':'')+'>'+escapeHtml(n)+'</option>').join('');
 }
-function gameRewardDescription(reward = {}) {
-  if (reward.kind === "points") return `${Number(reward.points || 0)} Craving Points`;
-  if (reward.kind === "percent-discount") return `${Number(reward.percent || 0)}% off eligible regular menu items${Number(reward.maxDiscount) ? ` · max ₹${Number(reward.maxDiscount)}` : ""} · 48-hour voucher`;
-  return `Free ${reward.item || "menu item"} · 48-hour voucher`;
-}
-function renderGameEditor() {
-  if (!$ ("gameStageEditor")) return;
-  $("gameCampaignId").value = gameConfig.campaignId || "campaign-v1";
-  $("gameLiveStatus").textContent = gameIsLive
-    ? (gameHasUnpublishedChanges ? "LIVE · UNSAVED DRAFT CHANGES ARE NOT PUBLIC" : "LIVE · CUSTOMERS CAN SIGN IN AND PLAY")
-    : "COMING SOON · CUSTOMER PLAY IS OFF";
-  $("gameLiveStatus").classList.toggle("is-live", gameIsLive);
-  updateGamePublishButton();
-  const stages = Array.isArray(gameConfig.stages) ? gameConfig.stages : [];
-  $("gameStageEditor").innerHTML = stages.length ? stages.map((stage, index) => `<article class="card game-stage-row" data-game-stage-index="${index}">
-    <div class="game-stage-top"><strong>STAGE ${index + 1}</strong><label><input class="game-stage-enabled" type="checkbox" ${stage.enabled !== false ? "checked" : ""}> Enabled</label><div><button type="button" class="text-button" data-game-move="-1" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" class="text-button" data-game-move="1" ${index === stages.length - 1 ? "disabled" : ""}>↓</button><button type="button" class="remove-button" data-game-remove>Remove</button></div></div>
-    <div class="game-stage-fields"><label>Stage ID<input class="game-stage-id" maxlength="40" value="${escapeHtml(stage.id)}" placeholder="stage-1"></label><label>Title<input class="game-stage-title" maxlength="60" value="${escapeHtml(stage.title)}" placeholder="First order dash"></label><label>Target score<input class="game-stage-score" type="number" min="1" max="12" value="${Number(stage.targetScore || 1)}"></label>
-    <label class="game-stage-instructions">Player instructions<textarea class="game-stage-instructions-input" maxlength="240" rows="2">${escapeHtml(stage.instructions || "Swipe the tray to collect the requested foods and avoid the wrong orders.")}</textarea></label>
-    <label>Reward type<select class="game-stage-kind"><option value="points" ${stage.reward?.kind === "points" ? "selected" : ""}>Craving Points</option><option value="free-item" ${stage.reward?.kind === "free-item" ? "selected" : ""}>Free menu item or combo · 48-hour voucher</option><option value="percent-discount" ${stage.reward?.kind === "percent-discount" ? "selected" : ""}>Percentage off bill · 48-hour voucher</option></select></label>
-    <label class="game-points-field">Points<input class="game-stage-points" type="number" min="1" max="10000" value="${Number(stage.reward?.points || 100)}"></label>
-    <label class="game-item-field">Free item or combo<select class="game-stage-item">${gameFoodOptions(stage.reward?.item || "")}</select></label>
-    <label class="game-percent-field">Discount percent<input class="game-stage-percent" type="number" min="1" max="100" value="${Number(stage.reward?.percent || 10)}"></label>
-    <label class="game-minimum-field">Minimum eligible food spend<input class="game-stage-minimum" type="number" min="0" max="5000" value="${Number(stage.reward?.minimum || 0)}"><small>Only regular menu items count; combos, extras, and delivery are excluded.</small></label>
-    <label class="game-cap-field">Maximum discount (₹)<input class="game-stage-cap" type="number" min="0" max="10000" value="${Number(stage.reward?.maxDiscount || 0)}"><small>Enter 0 for no rupee cap.</small></label></div>
-    <div class="game-stage-preview"><strong>${escapeHtml(stage.title || "Stage title")}</strong><span>${escapeHtml(gameRewardDescription(stage.reward))}</span></div>
-  </article>`).join("") : '<div class="card empty-cell">No stages yet. Add stages and save the lineup before enabling the game.</div>';
-  $("gameStageEditor").querySelectorAll(".game-stage-row").forEach(row => {
-    const toggle = () => { const kind = row.querySelector(".game-stage-kind").value; row.querySelector(".game-points-field").hidden = kind !== "points"; row.querySelector(".game-item-field").hidden = kind !== "free-item"; row.querySelector(".game-minimum-field").hidden = kind === "points"; row.querySelector(".game-percent-field").hidden = kind !== "percent-discount"; row.querySelector(".game-cap-field").hidden = kind !== "percent-discount"; };
-    row.querySelector(".game-stage-kind").addEventListener("change", toggle); toggle();
-    row.querySelectorAll("input,select,textarea").forEach(input => input.addEventListener("input", () => { gameHasUnpublishedChanges = true; updateGamePublishButton(); updateGamePreview(); }));
-    row.querySelectorAll("[data-game-move]").forEach(button => button.addEventListener("click", () => { const current = readGameEditor(); const at = Number(row.dataset.gameStageIndex), to = at + Number(button.dataset.gameMove); [current.stages[at], current.stages[to]] = [current.stages[to], current.stages[at]]; gameConfig = current; gameHasUnpublishedChanges = true; renderGameEditor(); }));
-    row.querySelector("[data-game-remove]").addEventListener("click", () => { gameConfig = readGameEditor(); gameConfig.stages.splice(Number(row.dataset.gameStageIndex), 1); gameHasUnpublishedChanges = true; renderGameEditor(); });
-  });
-  const testSelect = $("gameTestStage"), selectedStage = testSelect.value;
-  testSelect.innerHTML = stages.map((stage, index) => `<option value="${escapeHtml(stage.id)}">Stage ${index + 1} · ${escapeHtml(stage.title || stage.id)}</option>`).join("") || '<option value="">Add a stage to begin</option>';
-  if (stages.some(stage => stage.id === selectedStage)) testSelect.value = selectedStage;
-  $("startGameTestButton").disabled = !stages.length;
-  $("toggleGameLiveButton").disabled = !gameIsLive && !stages.some(stage => stage.enabled !== false);
-  $("gameCampaignId").oninput = () => { gameHasUnpublishedChanges = true; updateGamePublishButton(); updateGamePreview(); };
-  updateGamePreview();
-}
-function updateGamePublishButton() {
-  $("toggleGameLiveButton").textContent = gameIsLive ? (gameHasUnpublishedChanges ? "Publish live updates" : "Take game offline") : "Make game live";
-}
-function readGameEditor() {
-  return {
-    enabled: true,
-    campaignId: $("gameCampaignId").value.trim(),
-    stages: [...$("gameStageEditor").querySelectorAll(".game-stage-row")].map((row, index) => {
-      const kind = row.querySelector(".game-stage-kind").value;
-      const stage = { id: row.querySelector(".game-stage-id").value.trim(), order: index + 1, title: row.querySelector(".game-stage-title").value.trim(), instructions: row.querySelector(".game-stage-instructions-input").value.trim(), targetScore: Number(row.querySelector(".game-stage-score").value), enabled: row.querySelector(".game-stage-enabled").checked };
-      if (kind === "points") stage.reward = { kind, points: Number(row.querySelector(".game-stage-points").value) };
-      else if (kind === "free-item") stage.reward = { kind, item: row.querySelector(".game-stage-item").value, minimum: Number(row.querySelector(".game-stage-minimum").value) };
-      else stage.reward = { kind, percent: Number(row.querySelector(".game-stage-percent").value), minimum: Number(row.querySelector(".game-stage-minimum").value), maxDiscount: Number(row.querySelector(".game-stage-cap").value) };
-      return stage;
-    })
-  };
-}
-function updateGamePreview() {
-  const stages = readGameEditor().stages;
-  for (const [index, row] of [...$("gameStageEditor").querySelectorAll(".game-stage-row")].entries()) {
-    const stage = stages[index];
-    row.querySelector(".game-stage-preview strong").textContent = stage?.title || "Stage title";
-    row.querySelector(".game-stage-preview span").textContent = gameRewardDescription(stage?.reward);
-  }
-  const first = stages[0];
-  $("gamePreviewTitle").textContent = first?.title || "Craving Dash";
-  $("gamePreviewText").textContent = first ? `${first.instructions} Clear the stage by scoring ${first.targetScore}.` : "Add a stage to preview its instructions and reward here.";
-  $("gamePreviewReward").textContent = !first ? "No reward configured" : first.reward.kind === "points" ? `${first.reward.points} Craving Points · added directly to the account` : first.reward.kind === "percent-discount" ? gameRewardDescription(first.reward) + ` · min eligible spend ₹${first.reward.minimum}` : `${first.reward.item || "Choose a menu item"} free · expires 48 hours after earning · minimum eligible spend ₹${first.reward.minimum}`;
-}
-$("addGameStage").addEventListener("click", () => {
-  const current = readGameEditor(); current.stages.push({ id: `stage-${current.stages.length + 1}-${crypto.randomUUID().slice(0, 5)}`, order: current.stages.length + 1, title: `Stage ${current.stages.length + 1}`, instructions: "Swipe the tray to collect the requested foods and avoid the wrong orders.", targetScore: 3, enabled: true, reward: { kind: "points", points: 100 } });
-  gameConfig = current; gameHasUnpublishedChanges = true; renderGameEditor();
-});
-$("saveGameDraftButton").addEventListener("click", async event => {
-  const button = event.currentTarget; button.disabled = true;
-  try {
-    const draft = readGameEditor();
-    const result = await call("adminSaveCravingDashConfig", { cravingDash: draft });
-    gameConfig = { ...draft, enabled: false };
-    gameHasUnpublishedChanges = true;
-    renderGameEditor();
-    message($("gameConfigMessage"), `Private draft saved · ${result.stages} stages. Customer play remains off.`, "success");
-  } catch (error) { message($("gameConfigMessage"), friendlyError(error), "error"); }
-  finally { button.disabled = false; }
-});
-$("startGameTestButton").addEventListener("click", async event => {
-  const button = event.currentTarget; button.disabled = true;
-  try {
-    const stageId = $("gameTestStage").value;
-    if (!stageId) throw new Error("Add a stage and choose which one to test.");
-    const draft = readGameEditor();
-    await call("adminSaveCravingDashConfig", { cravingDash: draft });
-    const response = await call("adminStartCravingDashTest", { stageId });
-    gameConfig = { ...draft, enabled: false };
-    gameHasUnpublishedChanges = true;
-    renderGameEditor();
-    const frame = $("adminGameTestFrame");
-    frame.onload = () => frame.contentWindow?.postMessage({ type: "craving-dash-admin-test-session", payload: response }, location.origin);
-    frame.src = `/?gameTest=1&v=${Date.now()}`;
-    gameTestDialog.showModal();
-    message($("gameConfigMessage"), "Draft saved. Test mode won’t award points, issue rewards, or change customer progress.", "success");
-  }
-  catch (error) { message($("gameConfigMessage"), friendlyError(error), "error"); }
-  finally { button.disabled = false; }
-});
-$("toggleGameLiveButton").addEventListener("click", async event => {
-  const button = event.currentTarget; button.disabled = true;
-  const publish = !gameIsLive || gameHasUnpublishedChanges;
-  try {
-    const result = await call("adminSetCravingDashLive", { enabled: publish, ...(publish ? { cravingDash: readGameEditor() } : {}) });
-    gameIsLive = result.enabled === true;
-    gameHasUnpublishedChanges = publish ? false : gameHasUnpublishedChanges;
-    gameConfig = { ...readGameEditor(), enabled: false };
-    renderGameEditor();
-    message($("gameConfigMessage"), gameIsLive ? `Craving Dash is live with ${result.stages} enabled stages. Customers can now sign in and play.` : "Craving Dash is offline. Customers will see Coming soon and won’t be asked to sign in for the game.", "success");
-  } catch (error) { message($("gameConfigMessage"), friendlyError(error), "error"); }
-  finally { button.disabled = false; }
-});
+function gameRewardDescription(r={}) { return r?.kind==='points'?Number(r.points||0)+' Craving Points · expires in 48 hours':r?.kind==='free-item'?'Free '+(r.item||'menu item')+' · 48-hour voucher':r?.kind==='percent-discount'?Number(r.percent||0)+'% discount · 48-hour voucher':'No reward configured'; }
+function rewardFields(p,r={}) { const k=r.kind||'points';return '<div class="game-reward-fields"><label>Reward<select class="'+p+'-kind"><option value="points" '+(k==='points'?'selected':'')+'>Craving Points · 48-hour expiry</option><option value="free-item" '+(k==='free-item'?'selected':'')+'>Free menu item/combo · 48-hour expiry</option><option value="percent-discount" '+(k==='percent-discount'?'selected':'')+'>Discount percent · 48-hour expiry</option></select></label><label class="'+p+'-points-field">Points<input class="'+p+'-points" type="number" min="1" max="10000" step="1" value="'+(r.points||100)+'"></label><label class="'+p+'-item-field">Free item/combo<select class="'+p+'-item">'+gameFoodOptions(r.item)+'</select></label><label class="'+p+'-percent-field">Discount %<input class="'+p+'-percent" type="number" min="1" max="100" value="'+(r.percent||10)+'"></label><label class="'+p+'-minimum-field">Min food spend ₹<input class="'+p+'-minimum" type="number" min="0" max="5000" value="'+(r.minimum||0)+'"></label><label class="'+p+'-cap-field">Discount cap ₹<input class="'+p+'-cap" type="number" min="0" max="10000" value="'+(r.maxDiscount||0)+'"></label></div>'; }
+function readGameReward(el,p){const k=el.querySelector('.'+p+'-kind').value;if(k==='points')return{kind:k,points:Number(el.querySelector('.'+p+'-points').value)};if(k==='free-item')return{kind:k,item:el.querySelector('.'+p+'-item').value,minimum:Number(el.querySelector('.'+p+'-minimum').value)};return{kind:k,percent:Number(el.querySelector('.'+p+'-percent').value),minimum:Number(el.querySelector('.'+p+'-minimum').value),maxDiscount:Number(el.querySelector('.'+p+'-cap').value)};}
+function bindGameReward(el,p){const toggle=()=>{const k=el.querySelector('.'+p+'-kind').value;for(const[f,v]of[['points-field',k==='points'],['item-field',k==='free-item'],['percent-field',k==='percent-discount'],['minimum-field',k!=='points'],['cap-field',k==='percent-discount']])el.querySelector('.'+p+'-'+f).hidden=!v;};el.querySelector('.'+p+'-kind').onchange=()=>{toggle();gameHasUnpublishedChanges=true;renderGamePreview();updateGamePublishButton();};toggle();el.querySelectorAll('input,select').forEach(x=>x.oninput=()=>{gameHasUnpublishedChanges=true;renderGamePreview();updateGamePublishButton();});}
+function readGameEditor(){const d=$('gameDefaultRewardEditor');return{enabled:true,campaignId:$('gameCampaignId').value.trim(),roundTargetScore:Number($('gameRoundTarget').value),defaultReward:d.querySelector('.game-default-kind')?readGameReward(d,'game-default'):null,checkpoints:[...$('gameStageEditor').querySelectorAll('.game-stage-row')].map((r,i)=>({id:r.dataset.id||'milestone-'+(i+1),title:r.querySelector('.game-stage-title').value.trim(),level:Number(r.querySelector('.game-stage-level').value),everyLevels:Number(r.querySelector('.game-stage-repeat').value),minScore:Number(r.querySelector('.game-stage-score').value),enabled:r.querySelector('.game-stage-enabled').checked,reward:readGameReward(r,'checkpoint')}))};}
+function renderGameEditor(){if(!$('gameStageEditor'))return;$('gameCampaignId').value=gameConfig.campaignId||'campaign-v1';$('gameRoundTarget').value=Number(gameConfig.roundTargetScore||50);$('gameLiveStatus').textContent=gameIsLive?(gameHasUnpublishedChanges?'LIVE · UNSAVED DRAFT':'LIVE · CUSTOMERS CAN PLAY'):'COMING SOON · CUSTOMER PLAY IS OFF';$('gameLiveStatus').classList.toggle('is-live',gameIsLive);updateGamePublishButton();const d=$('gameDefaultRewardEditor');d.innerHTML=gameConfig.defaultReward?rewardFields('game-default',gameConfig.defaultReward)+'<button id="removeDefaultGameReward" type="button" class="text-button">Remove</button>':'<p class="muted">Required before the game can go live: a reward for every cleared level.</p><button id="addDefaultGameReward" type="button" class="button button-quiet">＋ Set reward for every level</button>';if(gameConfig.defaultReward){bindGameReward(d,'game-default');$('removeDefaultGameReward').onclick=()=>{gameConfig=readGameEditor();gameConfig.defaultReward=null;gameHasUnpublishedChanges=true;renderGameEditor();};}else $('addDefaultGameReward').onclick=()=>{gameConfig=readGameEditor();gameConfig.defaultReward={kind:'points',points:100};gameHasUnpublishedChanges=true;renderGameEditor();};const cs=Array.isArray(gameConfig.checkpoints)?gameConfig.checkpoints:[];$('gameStageEditor').innerHTML=cs.length?cs.map((c,i)=>'<article class="card game-stage-row" data-game-stage-index="'+i+'" data-id="'+escapeHtml(c.id||'')+'"><header><b>MILESTONE '+(i+1)+'</b><label><input class="game-stage-enabled" type="checkbox" '+(c.enabled===false?'':'checked')+'> Active</label><button type="button" class="remove-button" data-game-remove>Remove</button></header><div class="game-checkpoint-fields"><label>Name<input class="game-stage-title" maxlength="60" value="'+escapeHtml(c.title||'')+'"></label><label>Level<input class="game-stage-level" type="number" min="1" value="'+Number(c.level||1)+'"></label><label>Repeat every N levels<input class="game-stage-repeat" type="number" min="0" value="'+Number(c.everyLevels||0)+'"><small>0 means once only.</small></label><label>Minimum score<input class="game-stage-score" type="number" min="0" max="240" value="'+Number(c.minScore||0)+'"></label></div>'+rewardFields('checkpoint',c.reward||{})+'<small>All game rewards expire after 48 hours.</small></article>').join(''):'<div class="card empty-cell">No special milestones. The every-level reward can continue indefinitely.</div>';$('gameStageEditor').querySelectorAll('.game-stage-row').forEach(r=>{bindGameReward(r,'checkpoint');r.querySelectorAll('input').forEach(x=>x.oninput=()=>{gameHasUnpublishedChanges=true;renderGamePreview();updateGamePublishButton();});r.querySelector('[data-game-remove]').onclick=()=>{gameConfig=readGameEditor();gameConfig.checkpoints.splice(Number(r.dataset.gameStageIndex),1);gameHasUnpublishedChanges=true;renderGameEditor();};});$('toggleGameLiveButton').disabled=!gameIsLive&&!gameConfig.defaultReward;for(const id of['gameCampaignId','gameRoundTarget','gameTestLevel'])$(id).oninput=()=>{gameHasUnpublishedChanges=true;renderGamePreview();updateGamePublishButton();};renderGamePreview();}
+function updateGamePublishButton(){$('toggleGameLiveButton').textContent=gameIsLive?(gameHasUnpublishedChanges?'Publish live updates':'Take game offline'):'Make game live';}
+function renderGamePreview(){const d=readGameEditor(),c=d.checkpoints[0],r=c?.reward||d.defaultReward;$('gamePreviewTitle').textContent='Craving Run · Endless levels';$('gamePreviewText').textContent='Rounds continue with no final level. Target score '+d.roundTargetScore+'. '+(c?'Milestone: '+c.title+' at level '+c.level+(c.everyLevels?' and every '+c.everyLevels+' levels':''):'Add special level milestones as needed.');$('gamePreviewReward').textContent=gameRewardDescription(r);}
+$('addGameStage').onclick=()=>{gameConfig=readGameEditor();gameConfig.checkpoints.push({id:'milestone-'+crypto.randomUUID().slice(0,8),title:'Bonus level',level:gameConfig.checkpoints.length+1,everyLevels:0,minScore:0,enabled:true,reward:{kind:'points',points:100}});gameHasUnpublishedChanges=true;renderGameEditor();};
+$('saveGameDraftButton').onclick=async e=>{const b=e.currentTarget;b.disabled=true;try{const d=readGameEditor(),r=await call('adminSaveCravingDashConfig',{cravingDash:d});gameConfig={...d,enabled:false};gameHasUnpublishedChanges=true;renderGameEditor();message($('gameConfigMessage'),'Private draft saved · '+r.checkpoints+' milestones. Customer play stays off.','success');}catch(x){message($('gameConfigMessage'),friendlyError(x),'error');}finally{b.disabled=false;}};
+$('startGameTestButton').onclick=async e=>{const b=e.currentTarget;b.disabled=true;try{const level=Number($('gameTestLevel').value);if(!Number.isSafeInteger(level)||level<1||level>1000000)throw Error('Choose a level from 1 to 1,000,000.');const d=readGameEditor();await call('adminSaveCravingDashConfig',{cravingDash:d});const payload=await call('adminStartCravingDashTest',{level});gameConfig={...d,enabled:false};gameHasUnpublishedChanges=true;renderGameEditor();const f=$('adminGameTestFrame');f.onload=()=>f.contentWindow?.postMessage({type:'craving-dash-admin-test-session',payload},location.origin);f.src='/?gameTest=1&v='+Date.now();gameTestDialog.showModal();message($('gameConfigMessage'),'Admin test does not award points, issue rewards, or change customer progress.','success');}catch(x){message($('gameConfigMessage'),friendlyError(x),'error');}finally{b.disabled=false;}};
+$('toggleGameLiveButton').onclick=async e=>{const b=e.currentTarget;b.disabled=true;const publish=!gameIsLive||gameHasUnpublishedChanges;try{const d=readGameEditor(),r=await call('adminSetCravingDashLive',{enabled:publish,...(publish?{cravingDash:d}:{})});gameIsLive=r.enabled===true;gameHasUnpublishedChanges=publish?false:gameHasUnpublishedChanges;gameConfig={...d,enabled:false};renderGameEditor();message($('gameConfigMessage'),gameIsLive?'Craving Run is live · '+r.checkpoints+' active milestones.':'Craving Run is offline. Customers see Coming soon.','success');}catch(x){message($('gameConfigMessage'),friendlyError(x),'error');}finally{b.disabled=false;}};
+
 function renderMenuEditor() {
   const categories = Object.entries(menu);
   $("newItemCategory").innerHTML = categories.map(([id, section]) => `<option value="${escapeHtml(id)}">${escapeHtml(section.title)}</option>`).join("");

@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow">
   <title>Admin Desk | CRAVING HEAVEN</title>
   <link rel="icon" type="image/png" href="images/logo.png">
-  <link rel="stylesheet" href="admin.css?v=20261025-game-publish-controls">
+  <link rel="stylesheet" href="admin.css?v=20261026-craving-runner-admin-v1">
 </head>
 <body>
   <header class="admin-header">
@@ -80,11 +80,13 @@
       </section>
 
       <section class="admin-section" data-admin-section="game" hidden>
-        <div class="section-heading"><div><span class="eyebrow">CRAVING DASH</span><h2>Play & Win stages</h2><p class="muted">Set each stage’s reward as points, a free menu item or combo, or a percentage discount. Free-item and discount vouchers expire after 48 hours. Stage tests are admin-only and never issue real rewards.</p></div></div>
-        <article class="card form-card game-config-card"><div id="gameLiveStatus" class="game-live-status" role="status">COMING SOON · CUSTOMER PLAY IS OFF</div><label>Campaign ID<input id="gameCampaignId" maxlength="60" placeholder="e.g. craving-dash-2026-01"></label><p class="footnote">Edit and test a draft safely. Customers can only sign in and play after you make the game live. Changing the campaign ID resets stage progress for the new campaign; earned rewards remain on customer accounts.</p></article>
-        <div id="gameStageEditor" class="game-stage-editor"></div><p class="footnote">Save stages as a private draft, then test any stage. Only Make game live publishes it; draft edits never change customer access or issue real rewards.</p><div class="game-editor-actions"><label class="game-test-stage-label">Test stage<select id="gameTestStage"><option value="">Add a stage to begin</option></select></label><button id="saveGameDraftButton" class="button button-quiet" type="button">Save private draft</button><button id="startGameTestButton" class="button button-quiet" type="button">Start game &amp; test</button><button id="toggleGameLiveButton" class="button button-primary" type="button">Make game live</button><button id="addGameStage" class="button button-quiet" type="button">＋ Add stage</button></div>
+        <div class="section-heading"><div><span class="eyebrow">CRAVING RUN</span><h2>Endless Play &amp; Win</h2><p class="muted">Players run through an endless stream of food and obstacles. Set the reward for every cleared level, then add special level milestones. Every game reward, including points, expires after 48 hours. Admin tests never issue real rewards.</p></div></div>
+        <article class="card form-card game-config-card"><div id="gameLiveStatus" class="game-live-status" role="status">COMING SOON · CUSTOMER PLAY IS OFF</div><label>Campaign ID<input id="gameCampaignId" maxlength="60" placeholder="e.g. craving-run-2026-01"></label><label>Round target score<input id="gameRoundTarget" type="number" min="10" max="240" step="10" value="50"></label><p class="footnote">Customers can only sign in and play after you make the game live. Changing the campaign ID starts a new level journey; earned rewards remain on customer accounts until used or expired.</p></article>
+        <article class="card game-reward-default"><div><span class="eyebrow">EVERY LEVEL</span><h3>Reward for each cleared round</h3><p class="muted">This reward applies unless a level checkpoint below overrides it.</p></div><div id="gameDefaultRewardEditor"></div></article>
+        <div class="game-checkpoints-heading"><div><span class="eyebrow">OPTIONAL MILESTONES</span><h3>Special level rewards</h3><p class="muted">Set a level and optionally repeat it every N levels (for example, level 5 then every 10 levels).</p></div><button id="addGameStage" class="button button-quiet" type="button">＋ Add milestone</button></div>
+        <div id="gameStageEditor" class="game-stage-editor"></div><p class="footnote">Save a private draft and test any level number. Only “Make game live” publishes it. Draft edits do not change customer access or issue rewards.</p><div class="game-editor-actions"><label class="game-test-stage-label">Test level<input id="gameTestLevel" type="number" min="1" max="1000000" value="1"></label><button id="saveGameDraftButton" class="button button-quiet" type="button">Save private draft</button><button id="startGameTestButton" class="button button-quiet" type="button">Start game &amp; test</button><button id="toggleGameLiveButton" class="button button-primary" type="button">Make game live</button></div>
         <p id="gameConfigMessage" class="message" role="status"></p>
-        <div class="card game-preview"><span class="eyebrow">CUSTOMER PREVIEW</span><h3 id="gamePreviewTitle">Craving Dash</h3><p id="gamePreviewText">Add a stage to preview its instructions and reward here.</p><strong id="gamePreviewReward">No reward configured</strong></div>
+        <div class="card game-preview"><span class="eyebrow">CUSTOMER PREVIEW</span><h3 id="gamePreviewTitle">Craving Run</h3><p id="gamePreviewText">Configure the reward for every cleared level and optional milestones.</p><strong id="gamePreviewReward">No reward configured</strong></div>
       </section>
 
       <section class="admin-section" data-admin-section="benefits" hidden>
@@ -97,8 +99,8 @@
         <div class="message-layout"><div class="card"><div class="section-heading compact"><div><span class="eyebrow">RECENT CUSTOMERS</span><h3>Choose recipients</h3></div><button id="selectAllCustomers" class="text-button" type="button">Select visible</button></div><div id="messageRecipients" class="recipient-list"><p class="empty-cell">Load the customer list first.</p></div></div><div class="card form-card"><label>Message<textarea id="campaignMessage" maxlength="1000" placeholder="Hi {name}, we have something tasty for you…"></textarea><small>Use {name} to personalize the message.</small></label><button id="startCampaign" class="button button-primary" type="button">Prepare WhatsApp messages</button><div id="campaignQueue" class="campaign-queue" aria-live="polite"></div><p class="footnote">This opens one pre-filled WhatsApp chat at a time. You review and tap Send in WhatsApp; the website does not send messages automatically.</p></div></div>
       </section>
     </section>
-    <dialog id="adminGameTestDialog" class="admin-game-test-dialog" aria-label="Craving Dash admin test"><div class="admin-game-test-heading"><strong>ADMIN GAME TEST</strong><button id="closeAdminGameTest" type="button" class="button button-quiet">Close test</button></div><iframe id="adminGameTestFrame" title="Craving Dash stage test"></iframe></dialog>
+    <dialog id="adminGameTestDialog" class="admin-game-test-dialog" aria-label="Craving Run admin test"><div class="admin-game-test-heading"><strong>ADMIN GAME TEST</strong><button id="closeAdminGameTest" type="button" class="button button-quiet">Close test</button></div><iframe id="adminGameTestFrame" title="Craving Run level test"></iframe></dialog>
   </main>
-  <script type="module" src="admin.js?v=20261026-game-test-postmessage"></script>
+  <script type="module" src="admin.js?v=20261026-craving-runner-admin-v1"></script>
 </body>
 </html>

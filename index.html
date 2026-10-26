@@ -7,7 +7,7 @@
   <meta name="description" content="CRAVING HEAVEN — Chicken, burgers, wraps, wings, strips, popcorn, fries and combos.">
   <title>CRAVING HEAVEN | Chicken & Burgers</title>
   <link rel="icon" type="image/png" href="images/logo.png">
-  <link rel="stylesheet" href="style.css?v=20261024-craving-dash">
+  <link rel="stylesheet" href="style.css?v=20261026-craving-runner-v1">
   <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-GD2EPLFYZP">
 </script>
@@ -49,10 +49,10 @@
     <span class="first-visit-flyer-foot">FIRST ONLINE ORDER ONLY</span>
   </dialog>
   <dialog class="game-promo-dialog" id="gamePromoDialog" aria-labelledby="gamePromoTitle">
-    <button type="button" class="game-promo-close" aria-label="Close Craving Dash invitation">×</button>
+    <button type="button" class="game-promo-close" aria-label="Close Craving Run invitation">×</button>
     <span class="game-promo-kicker">A TASTY LITTLE CHALLENGE</span><div class="game-promo-food" aria-hidden="true">🍔 🍟 🌯 🍗</div>
-    <h2 id="gamePromoTitle">Play Craving Dash.<br><em>Win real rewards.</em></h2>
-    <p>Fill the ticket with your Craving Heaven favourites. Clear stages for Craving Points or a free food voucher.</p>
+    <h2 id="gamePromoTitle">Play Craving Run.<br><em>Win real rewards.</em></h2>
+    <p>Switch lanes, grab your favourite bites and jump over kitchen spills. Clear endless levels to win Craving Points, free items or discounts.</p>
     <button type="button" class="game-promo-cta" data-screen="game">PLAY & WIN <span aria-hidden="true">→</span></button>
     <small>Sign in with your mobile number to save progress and claim prizes.</small>
   </dialog>
@@ -64,8 +64,8 @@
         <article class="home-dashboard-card home-card-game">
           <span class="home-card-icon" aria-hidden="true">🍔</span>
           <strong>PLAY & WIN REAL REWARDS</strong>
-          <small>Swipe the serving tray, fill the ticket, and win Craving Points or a free food voucher.</small>
-          <button type="button" class="home-card-action" data-screen="game">PLAY CRAVING DASH <b aria-hidden="true">→</b></button>
+          <small>Run through the kitchen, collect tasty bites, dodge obstacles and win rewards.</small>
+          <button type="button" class="home-card-action" data-screen="game">PLAY CRAVING RUN <b aria-hidden="true">→</b></button>
         </article>
         <article class="home-dashboard-card home-card-rewards">
           <span class="home-card-icon" aria-hidden="true">✦</span>
@@ -91,7 +91,7 @@
     </section>
 
     <section id="screen-game" class="app-screen account-screen craving-dash-screen" data-app-screen="game" aria-labelledby="cravingDashTitle" hidden>
-      <div class="account-heading"><span class="section-kicker">PLAY & WIN · CRAVING HEAVEN</span><h1 id="cravingDashTitle">Craving Dash</h1><p>Fill the food ticket before time runs out. Clear stages to win real Craving Points or menu-item vouchers.</p></div>
+      <div class="account-heading"><span class="section-kicker">PLAY & WIN · CRAVING HEAVEN</span><h1 id="cravingDashTitle">Craving Run</h1><p>Run through the kitchen, collect burgers, fries, wraps and chicken, and jump or switch lanes to dodge obstacles. Every level brings another chance to win.</p></div>
       <div id="cravingDashContent" class="craving-dash-content"><div class="game-loading">Loading your game…</div></div>
     </section>
 
@@ -135,6 +135,7 @@
         <div class="loyalty-card-top"><span class="loyalty-mark">✦</span><div><span class="loyalty-kicker">CRAVING HEAVEN</span><h2 id="loyaltyTitle">Craving Points</h2></div></div>
         <p class="loyalty-copy">Use your Craving Points on eligible regular-menu items.</p>
         <div class="loyalty-points"><strong id="loyaltyPointsBalance">0</strong><span>CRAVING POINTS BALANCE</span></div>
+        <small id="gamePointsExpiryNotice" class="game-points-expiry"></small>
         <div class="loyalty-value-line"><span>Craving Points value · 100 = ₹10</span><strong id="loyaltyPointsValue">₹0</strong></div>
       </section>
       <section class="rewards-rules" aria-label="Craving Points rules">
@@ -734,6 +735,6 @@ window.firebaseMessaging = firebaseMessaging;
 <script src="rewards-config.js?v=20261021-first-order-gift"></script>
 <script src="menu.js?v=20261023-remove-cheese-slice"></script>
 <script src="script.js?v=20261026-admin-game-test-start-screen"></script>
-<script src="craving-dash.js?v=20261026-game-action-cooldown"></script>
+<script src="craving-dash.js?v=20261026-craving-runner-v1"></script>
 </body>
 </html>

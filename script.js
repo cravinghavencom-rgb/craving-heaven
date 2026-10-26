@@ -557,6 +557,15 @@ function handlePlaceOrderClick() {
   function accountSignInCard(message) {
     return `<div class="account-empty"><div class="account-empty-icon">♙</div><h2>Sign in to continue</h2><p>${esc(message)}</p><button type="button" class="account-primary-button" data-account-login>LOGIN WITH MOBILE</button></div>`;
   }
+  function gamePointLots(account) {
+    return (Array.isArray(account?.gamePointLots) ? account.gamePointLots : []).filter(lot => {
+      const expiry = lot.expiresAt?.toDate ? lot.expiresAt.toDate() : new Date(lot.expiresAt || 0);
+      return Number(lot.points) > 0 && !Number.isNaN(expiry.getTime()) && expiry.getTime() > Date.now();
+    });
+  }
+  function cravingPointsBalance(account) {
+    return Math.max(0, Number(account?.points || 0)) + gamePointLots(account).reduce((sum, lot) => sum + Math.max(0, Number(lot.points || 0)), 0);
+  }
 
   function renderRewardsJourney(account = currentLoyaltyAccount, signedIn = !!window.firebaseAuth?.currentUser) {
     const root = document.getElementById("rewardsJourneyCards");
@@ -584,7 +593,8 @@ function handlePlaceOrderClick() {
       ...available.slice(0, 1).map(reward => {
         const definition = REWARDS_CONFIG.rewardById[reward.id] || reward;
         const expiry = reward.expiresAt ? (reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt)) : null;
-        const expires = expiry && !Number.isNaN(expiry.getTime()) ? `${reward.source === "craving-dash" ? "Expires" : "Use by"} ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: reward.source === "craving-dash" ? "numeric" : undefined, minute: reward.source === "craving-dash" ? "2-digit" : undefined }).format(expiry)}` : "Ready to use";
+        const gameReward = ["craving-dash", "craving-runner"].includes(reward.source);
+        const expires = expiry && !Number.isNaN(expiry.getTime()) ? `${gameReward ? "Expires" : "Use by"} ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: gameReward ? "numeric" : undefined, minute: gameReward ? "2-digit" : undefined }).format(expiry)}` : "Ready to use";
         return `<article class="journey-card journey-card-ready"><span class="journey-card-status">✦ READY TO USE</span><strong>${esc(definition.title || reward.title)}</strong><p>${esc(definition.detail || reward.detail || "Use this reward on your next order")}</p><small>${esc(expires)}</small><button type="button" class="journey-use-button" data-use-reward="${esc(reward.ticketId || reward.id)}">USE IN CART</button></article>`;
       }),
       ...upcoming.slice(0, Math.max(0, 2 - Math.min(available.length, 1))).map(item => `<article class="journey-card journey-card-locked"><span class="journey-card-status">🔒 ORDER ${item.order}</span><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p></article>`)
@@ -777,13 +787,20 @@ function handlePlaceOrderClick() {
       const getTime = value => value?.toDate ? value.toDate().getTime() : new Date(value || 0).getTime();
       orders.sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt));
       const pointsBalance = document.getElementById("loyaltyPointsBalance");
-      currentLoyaltyAccount = loyaltySnapshot.exists() ? loyaltySnapshot.data() : { points: 0, completedOrders: 0, availableRewards: [] };
+      const loyaltyData = loyaltySnapshot.exists() ? loyaltySnapshot.data() : { points: 0, completedOrders: 0, availableRewards: [] };
+      currentLoyaltyAccount = { ...loyaltyData, points: cravingPointsBalance(loyaltyData) };
       if (!Array.isArray(currentLoyaltyAccount.availableRewards)) currentLoyaltyAccount.availableRewards = [];
       const points = Math.max(0, Number(currentLoyaltyAccount.points || 0));
       const pointsText = points.toLocaleString("en-IN");
       if (pointsBalance) pointsBalance.textContent = pointsText;
       const pointsValue = document.getElementById("loyaltyPointsValue");
       if (pointsValue) pointsValue.textContent = `₹${(points / REWARDS_CONFIG.pointsPerRedemptionRupees * 10).toFixed(2)}`;
+      const expiryNotice = document.getElementById("gamePointsExpiryNotice");
+      const expiringLots = gamePointLots(loyaltyData).sort((a, b) => {
+        const date = lot => lot.expiresAt?.toDate ? lot.expiresAt.toDate() : new Date(lot.expiresAt);
+        return date(a) - date(b);
+      });
+      if (expiryNotice) expiryNotice.textContent = expiringLots.length ? `${expiringLots.reduce((sum, lot) => sum + Number(lot.points || 0), 0)} game Craving Points expire ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(expiringLots[0].expiresAt?.toDate ? expiringLots[0].expiresAt.toDate() : new Date(expiringLots[0].expiresAt))}. Use them before then.` : "";
       const homePointsBalance = document.getElementById("homeLoyaltyPointsBalance");
       if (homePointsBalance) homePointsBalance.textContent = pointsText;
       const homePointsSummary = document.getElementById("homeLoyaltySummary");
@@ -1831,11 +1848,11 @@ function getSelectedMilestoneReward() {
     const expiry = reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt);
     if (Number.isNaN(expiry.getTime()) || expiry.getTime() <= Date.now()) return null;
   }
-  return REWARDS_CONFIG.rewardById[reward.id] || (reward.source === "craving-dash" && ["free-item", "percent-discount"].includes(reward.kind) ? reward : null);
+  return REWARDS_CONFIG.rewardById[reward.id] || (["craving-dash", "craving-runner"].includes(reward.source) && ["free-item", "percent-discount"].includes(reward.kind) ? reward : null);
 }
 
 function gameRewardDiscount(reward = getSelectedMilestoneReward(), eligibleSubtotal = getOfferEligibleSubtotal()) {
-  if (reward?.source !== "craving-dash" || reward.kind !== "percent-discount" || eligibleSubtotal < Number(reward.minimum || 0)) return 0;
+  if (!(["craving-dash", "craving-runner"].includes(reward?.source)) || reward.kind !== "percent-discount" || eligibleSubtotal < Number(reward.minimum || 0)) return 0;
   const amount = Math.floor(eligibleSubtotal * Number(reward.percent || 0) / 100);
   const cap = Number(reward.maxDiscount || 0);
   return Math.max(0, Math.min(amount, cap > 0 ? cap : eligibleSubtotal));
@@ -1879,7 +1896,7 @@ function selectFreeOffer(offerId) {
 
 function selectMilestoneReward(rewardId) {
   const ticket = currentLoyaltyAccount.availableRewards?.find(item => (item.ticketId || item.id) === rewardId);
-  const definition = ticket ? (REWARDS_CONFIG.rewardById[ticket.id] || (ticket.source === "craving-dash" && ["free-item", "percent-discount"].includes(ticket.kind) ? ticket : null)) : null;
+  const definition = ticket ? (REWARDS_CONFIG.rewardById[ticket.id] || (["craving-dash", "craving-runner"].includes(ticket.source) && ["free-item", "percent-discount"].includes(ticket.kind) ? ticket : null)) : null;
   if (!definition || !ticket) return;
   const eligibleSubtotal = getOfferEligibleSubtotal();
   if (eligibleSubtotal < Number(definition.minimum || 0)) return;
@@ -2137,13 +2154,13 @@ ${esc(offer.freeItem)}
     const expiry = reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt);
     return !Number.isNaN(expiry.getTime()) && expiry.getTime() > Date.now();
   }).slice(0, 1).map(reward => {
-    const definition = REWARDS_CONFIG.rewardById[reward.id] || (reward.source === "craving-dash" && ["free-item", "percent-discount"].includes(reward.kind) ? reward : null);
+    const definition = REWARDS_CONFIG.rewardById[reward.id] || (["craving-dash", "craving-runner"].includes(reward.source) && ["free-item", "percent-discount"].includes(reward.kind) ? reward : null);
     if (!definition) return "";
     const rewardTicketId = reward.ticketId || reward.id;
     const chosen = selectedMilestoneRewardId === rewardTicketId;
     const remaining = Math.max(0, Number(definition.minimum || 0) - offerEligibleSubtotal);
     const eligible = remaining === 0 && !(definition.kind === "free-delivery" && subtotal >= FREE_DELIVERY_THRESHOLD) && !(definition.kind === "percent-discount" && gameRewardDiscount(definition, offerEligibleSubtotal) <= 0);
-    const rewardDescription = definition.kind === "free-item" ? `${definition.item} free${reward.source === "craving-dash" ? " · expires 48 hours after earning" : ""}` : definition.kind === "percent-discount" ? `${Number(definition.percent)}% off eligible regular menu items${Number(definition.maxDiscount) ? ` · up to ${money(definition.maxDiscount)}` : ""} · expires after 48 hours` : definition.kind === "free-delivery" ? "Free delivery" : definition.kind === "discount" ? `${money(definition.amount)} off` : definition.kind === "bonus-points" ? `${definition.points} Craving Points on delivery` : `Double Craving Points, up to ${definition.maxBonusPoints} extra`;
+    const rewardDescription = definition.kind === "free-item" ? `${definition.item} free${["craving-dash", "craving-runner"].includes(reward.source) ? " · expires 48 hours after earning" : ""}` : definition.kind === "percent-discount" ? `${Number(definition.percent)}% off eligible regular menu items${Number(definition.maxDiscount) ? ` · up to ${money(definition.maxDiscount)}` : ""} · expires after 48 hours` : definition.kind === "free-delivery" ? "Free delivery" : definition.kind === "discount" ? `${money(definition.amount)} off` : definition.kind === "bonus-points" ? `${definition.points} Craving Points on delivery` : `Double Craving Points, up to ${definition.maxBonusPoints} extra`;
     const statusNote = remaining > 0 ? `Add ${money(remaining)} in regular menu items to use this reward.` : definition.kind === "percent-discount" && gameRewardDiscount(definition, offerEligibleSubtotal) <= 0 ? "Add regular menu items to use this discount; combos, extras, and delivery are excluded." : definition.kind === "percent-discount" ? "Discount applies to regular menu items only. Combos, extras, and delivery are excluded." : definition.kind === "free-delivery" && subtotal >= FREE_DELIVERY_THRESHOLD ? "Your order already qualifies for free delivery." : "";
     const expiryLabel = reward.expiresAt ? ` · use by ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt))}` : "";
     return `<article class="cart-reward-choice ${chosen ? "is-selected" : ""}"><div><strong>${esc(definition.title)}</strong><small>${esc(rewardDescription)} · ${esc(definition.detail || "")}${esc(expiryLabel)}</small>${statusNote ? `<small class="reward-remaining">${esc(statusNote)}</small>` : ""}</div><button type="button" data-select-loyalty-reward="${esc(rewardTicketId)}" ${!eligible ? "disabled" : ""}>${chosen ? "SELECTED" : eligible ? "USE REWARD" : "LOCKED"}</button></article>`;

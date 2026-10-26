@@ -25,6 +25,16 @@
 .game-stage-preview { display:flex; justify-content:space-between; gap:12px; margin-top:12px; padding:11px; border-radius:10px; background:#faf4ef; font-size:12px; }
 .game-stage-preview span { color:#6e5c52; text-align:right; }
 .game-stage-preview button { flex:0 0 auto; }
+.game-reward-default { display:grid; gap:16px; margin:12px 0; padding:18px; }
+.game-reward-default h3,.game-checkpoints-heading h3 { margin:4px 0; font-size:16px; }
+.game-reward-default .muted,.game-checkpoints-heading p { margin:5px 0; color:#74675f; font-size:12px; }
+.game-checkpoints-heading { display:flex; align-items:center; justify-content:space-between; gap:14px; margin:20px 0 10px; }
+.game-reward-fields,.game-checkpoint-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:12px 0; }
+.game-reward-fields label,.game-checkpoint-fields label { display:grid; align-content:start; gap:6px; min-width:0; font-size:12px; font-weight:750; }
+.game-reward-fields input,.game-reward-fields select,.game-checkpoint-fields input { width:100%; min-height:40px; padding:9px 10px; border:1px solid #dfd5ce; border-radius:10px; font:inherit; }
+.game-stage-row header { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+.game-stage-row header>label { display:flex; align-items:center; gap:6px; font-size:12px; }
+.game-expiry-note { color:#8b4b32; font-weight:800; }
 .game-editor-actions { display:flex; align-items:end; flex-wrap:wrap; justify-content:flex-start; gap:10px; margin-top:15px; }
 .game-test-stage-label { display:grid; gap:6px; color:#6d5c51; font-size:11px; font-weight:800; }
 .game-test-stage-label select { min-width:190px; min-height:42px; padding:8px 11px; border:1px solid #dfd5ce; border-radius:10px; background:#fff; color:#302721; font:inherit; }
@@ -38,7 +48,7 @@
 .game-preview h3 { margin:9px 0; }
 .game-preview p { color:#6e5c52; line-height:1.5; }
 .game-preview>strong { color:#9e261b; }
-@media(max-width:700px) { .game-stage-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }.game-stage-instructions { grid-column:1/-1; }.game-stage-preview { flex-direction:column; }.game-stage-preview span { text-align:left; } }
+@media(max-width:700px) { .game-stage-fields,.game-reward-fields,.game-checkpoint-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }.game-stage-instructions { grid-column:1/-1; }.game-stage-preview { flex-direction:column; }.game-stage-preview span { text-align:left; }.game-checkpoints-heading { align-items:flex-start; flex-direction:column; } }
 @media(max-width:430px) { .game-stage-fields { grid-template-columns:1fr; }.game-stage-top { flex-wrap:wrap; }.game-stage-instructions { grid-column:auto; }.game-editor-actions { align-items:stretch; flex-direction:column; }.game-editor-actions button,.game-test-stage-label select { width:100%; } }
 @media(max-width:600px) { .admin-game-test-dialog { width:100vw; height:100dvh; max-height:none; border-radius:0; }.admin-game-test-heading { padding-left:14px; } }
 .editor-item label,.combo-editor-fields label,.combo-add-fields label{display:grid;gap:6px;font-size:11px;font-weight:750;color:var(--muted)}.editor-item input,.combo-editor-row input,.combo-editor-row textarea,.combo-add-form input,.combo-add-form textarea{width:100%;min-width:0;border:1px solid var(--line);border-radius:9px;padding:10px;font:inherit;color:var(--ink);background:#fff}.editor-item.has-options{grid-template-columns:minmax(150px,1fr) minmax(240px,1.2fr) minmax(160px,1fr) auto}.variant-editor{display:grid;grid-template-columns:repeat(2,minmax(100px,1fr));gap:8px}.item-description-label{min-width:0}.combo-editor{display:grid;gap:12px}.combo-editor-row{display:grid;gap:14px}.combo-editor-heading{display:flex;justify-content:space-between;align-items:center}.combo-editor-fields,.combo-add-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.combo-items-field,.combo-image-field{grid-column:1/-1}.combo-add-form{margin-bottom:4px}@media(max-width:850px){.editor-item.has-options{grid-template-columns:1fr 1fr}.editor-item.has-options .variant-editor,.editor-item.has-options .item-description-label{grid-column:1/-1}.editor-item.has-options .remove-button{grid-column:2;grid-row:1}.combo-editor-fields,.combo-add-fields{grid-template-columns:1fr 1fr}}@media(max-width:560px){.editor-item.has-options{grid-template-columns:1fr 1fr}.editor-item.has-options>label:first-child,.editor-item.has-options .variant-editor,.editor-item.has-options .item-description-label{grid-column:1/-1}.editor-item.has-options .remove-button{grid-column:1/-1;grid-row:auto}.combo-editor-fields,.combo-add-fields{grid-template-columns:1fr}.combo-items-field,.combo-image-field{grid-column:auto}.combo-editor-heading{align-items:flex-start}}
