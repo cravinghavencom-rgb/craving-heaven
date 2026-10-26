@@ -284,6 +284,18 @@ $("addGameStage").addEventListener("click", () => {
   const current = readGameEditor(); current.stages.push({ id: `stage-${current.stages.length + 1}-${crypto.randomUUID().slice(0, 5)}`, order: current.stages.length + 1, title: `Stage ${current.stages.length + 1}`, instructions: "Swipe the tray to collect the requested foods and avoid the wrong orders.", targetScore: 3, enabled: true, reward: { kind: "points", points: 100 } });
   gameConfig = current; gameHasUnpublishedChanges = true; renderGameEditor();
 });
+$("saveGameDraftButton").addEventListener("click", async event => {
+  const button = event.currentTarget; button.disabled = true;
+  try {
+    const draft = readGameEditor();
+    const result = await call("adminSaveCravingDashConfig", { cravingDash: draft });
+    gameConfig = { ...draft, enabled: false };
+    gameHasUnpublishedChanges = true;
+    renderGameEditor();
+    message($("gameConfigMessage"), `Private draft saved · ${result.stages} stages. Customer play remains off.`, "success");
+  } catch (error) { message($("gameConfigMessage"), friendlyError(error), "error"); }
+  finally { button.disabled = false; }
+});
 $("startGameTestButton").addEventListener("click", async event => {
   const button = event.currentTarget; button.disabled = true;
   try {
