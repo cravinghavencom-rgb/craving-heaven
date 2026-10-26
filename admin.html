@@ -67,8 +67,11 @@
         <div class="section-heading"><div><span class="eyebrow">LIVE WEBSITE CATALOG</span><h2>Menu management</h2><p class="muted">Changes save to Firebase, update the customer menu, and become the order service’s source for prices.</p></div><button id="saveMenu" class="button button-primary" type="button">Save menu changes</button></div>
         <p id="menuMessage" class="message" role="status"></p>
         <div class="admin-two-column"><form id="categoryForm" class="card form-card"><span class="eyebrow">ADD A CATEGORY</span><label>Category name<input id="newCategoryName" maxlength="60" placeholder="e.g. Meal Boxes" required></label><label>Short description<input id="newCategorySubtitle" maxlength="120" placeholder="A short line for the menu"></label><button class="button button-quiet" type="submit">Add category</button></form>
-        <form id="itemForm" class="card form-card"><span class="eyebrow">ADD A MENU ITEM</span><label>Category<select id="newItemCategory" required></select></label><label>Item name<input id="newItemName" maxlength="100" required></label><label>Price (₹)<input id="newItemPrice" type="number" min="1" max="20000" step="1" required></label><label>Description<input id="newItemDescription" maxlength="180" placeholder="Optional short description"></label><button class="button button-quiet" type="submit">Add item</button></form></div>
+        <form id="itemForm" class="card form-card"><span class="eyebrow">ADD A MENU ITEM</span><label>Category<select id="newItemCategory" required></select></label><label>Item name<input id="newItemName" maxlength="100" required></label><label>Price (₹)<input id="newItemPrice" type="number" min="1" max="20000" step="1" required></label><label>Description<input id="newItemDescription" maxlength="180" placeholder="Optional description"></label><button class="button button-quiet" type="submit">Add item</button></form></div>
         <div id="menuEditor" class="menu-editor"></div>
+        <div class="section-heading"><div><span class="eyebrow">COMBO CATALOG</span><h3>Edit combos and included items</h3><p class="muted">Offer price, displayed menu value, included items, and image path are saved with the menu.</p></div></div>
+        <form id="comboForm" class="card form-card combo-add-form"><span class="eyebrow">ADD A COMBO</span><div class="combo-add-fields"><label>Combo name<input id="newComboName" maxlength="100" required></label><label>Offer price (₹)<input id="newComboPrice" type="number" min="1" max="20000" step="1" required></label><label>Menu value (₹)<input id="newComboValue" type="number" min="0" max="50000" step="1" required></label><label>Image path<input id="newComboImage" placeholder="Optional: images/combos/combo.png"></label></div><label>Included items<textarea id="newComboItems" rows="3" placeholder="One included item per line" required></textarea></label><button class="button button-quiet" type="submit">Add combo</button></form>
+        <div id="comboEditor" class="combo-editor"></div>
       </section>
 
       <section class="admin-section" data-admin-section="rewards" hidden>
@@ -96,6 +99,6 @@
     </section>
     <dialog id="adminGameTestDialog" class="admin-game-test-dialog" aria-label="Craving Dash admin test"><div class="admin-game-test-heading"><strong>ADMIN GAME TEST</strong><button id="closeAdminGameTest" type="button" class="button button-quiet">Close test</button></div><iframe id="adminGameTestFrame" title="Craving Dash stage test"></iframe></dialog>
   </main>
-  <script type="module" src="admin.js?v=20261025-game-publish-controls"></script>
+  <script type="module" src="admin.js?v=20261026-admin-catalog-tools"></script>
 </body>
 </html>

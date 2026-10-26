@@ -388,6 +388,34 @@ function validateMenuCatalog(menu) {
   return clean;
 }
 
+function validateComboCatalog(combos, menu) {
+  if (!Array.isArray(combos) || combos.length > 100) {
+    throw new HttpsError("invalid-argument", "Provide a valid combo list with no more than 100 combos.");
+  }
+  const names = new Set([...buildPriceByName(menu, []).keys()].map(name => name.toLowerCase()));
+  return combos.map(combo => {
+    const name = String(combo?.name || "").trim();
+    const price = Number(combo?.price);
+    const value = Number(combo?.value || 0);
+    const items = Array.isArray(combo?.items) ? combo.items.map(item => String(item || "").trim()).filter(Boolean) : [];
+    const image = String(combo?.image || "").trim();
+    if (name.length < 2 || name.length > 100 || names.has(name.toLowerCase())) {
+      throw new HttpsError("invalid-argument", `The combo name “${name || "(blank)"}” is invalid or duplicated.`);
+    }
+    names.add(name.toLowerCase());
+    if (!Number.isSafeInteger(price) || price < 1 || price > 20000 || !Number.isSafeInteger(value) || value < 0 || value > 50000) {
+      throw new HttpsError("invalid-argument", `Enter valid offered and menu values for ${name}.`);
+    }
+    if (!items.length || items.length > 20 || items.some(item => item.length > 180)) {
+      throw new HttpsError("invalid-argument", `Add between 1 and 20 included items for ${name}.`);
+    }
+    if (image && (!image.startsWith("images/") || image.includes("..") || !/^images\/[\w./-]+\.(png|jpe?g|webp)$/i.test(image))) {
+      throw new HttpsError("invalid-argument", `Use a website image path under images/ for ${name}, or leave it blank.`);
+    }
+    return { name, price, value, image, items };
+  });
+}
+
 function validateRewardJourney(journey, menu) {
   if (!Array.isArray(journey) || journey.length < 1 || journey.length > 30) throw new HttpsError("invalid-argument", "Reward journey must contain 1 to 30 order milestones.");
   const prices = buildPriceByName(menu, COMBO_MENU_DATA);
@@ -530,8 +558,10 @@ exports.adminGetBusinessConfig = onCall({ region: REGION }, async request => {
 exports.adminSaveMenuCatalog = onCall({ region: REGION }, async request => {
   const adminUid = await requireAdmin(request);
   const menu = removeDiscontinuedMenuItems(validateMenuCatalog(request.data?.menu));
-  await MENU_CONFIG_REF().set({ menu, updatedBy: adminUid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-  return { saved: true, categories: Object.keys(menu).length, items: Object.values(menu).reduce((sum, section) => sum + section.items.length, 0) };
+  const current = await readBusinessConfig();
+  const combos = validateComboCatalog(request.data?.combos === undefined ? current.combos : request.data.combos, menu);
+  await MENU_CONFIG_REF().set({ menu, combos, updatedBy: adminUid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  return { saved: true, categories: Object.keys(menu).length, items: Object.values(menu).reduce((sum, section) => sum + section.items.length, 0), combos: combos.length };
 });
 
 exports.adminSaveRewardsConfig = onCall({ region: REGION }, async request => {

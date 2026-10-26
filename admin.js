@@ -60,6 +60,8 @@ function friendlyError(error) {
   if (code.includes("permission-denied")) return "Administrator access is required. Sign in with an authorized admin number.";
   if (code.includes("not-found")) return "No account found for that number. Sign in on the website with OTP once first.";
   if (code.includes("failed-precondition")) return error.message || "This action cannot be completed yet.";
+  if (code.includes("unauthenticated") || code.includes("app-check")) return "Firebase could not verify this secure request. Refresh the Admin page and try again. If it continues, check the website domain and App Check setup in Firebase.";
+  if (code.includes("internal")) return "Firebase could not complete this request. Refresh the Admin page and retry. If it repeats, check the Firebase App Check and Functions logs.";
   return error?.message?.replace(/^FirebaseError:\s*/i, "") || "Something went wrong. Please try again.";
 }
 
@@ -317,11 +319,17 @@ $("toggleGameLiveButton").addEventListener("click", async event => {
 function renderMenuEditor() {
   const categories = Object.entries(menu);
   $("newItemCategory").innerHTML = categories.map(([id, section]) => `<option value="${escapeHtml(id)}">${escapeHtml(section.title)}</option>`).join("");
-  $("menuEditor").innerHTML = categories.map(([id, section]) => `<details class="card editor-category" open><summary>${escapeHtml(section.title)} · ${section.items.length} items</summary><div class="editor-items">${section.items.map((item, index) => `<div class="editor-item" data-category="${escapeHtml(id)}" data-item-index="${index}"><input class="item-name" aria-label="Item name" value="${escapeHtml(item.name)}"><input class="item-price" aria-label="Item price in rupees" type="number" min="1" step="1" value="${Number(item.price || item.options?.[0]?.price || 0)}" ${item.options ? "disabled title='Edit size-based items in the variant editor (not available yet)'" : ""}><input class="item-description" aria-label="Description" value="${escapeHtml(item.description || "")}"><button type="button" class="remove-button" data-remove-category="${escapeHtml(id)}" data-remove-index="${index}">Remove</button>${item.options ? `<small>${item.options.map(option => `${escapeHtml(option.label)} ${money(option.price)}`).join(" · ")}</small>` : ""}</div>`).join("")}</div></details>`).join("");
+  $("menuEditor").innerHTML = categories.map(([id, section]) => `<details class="card editor-category" open><summary>${escapeHtml(section.title)} · ${section.items.length} items</summary><div class="editor-items">${section.items.map((item, index) => `<article class="editor-item ${item.options ? "has-options" : ""}" data-category="${escapeHtml(id)}" data-item-index="${index}"><label>Item<input class="item-name" aria-label="Item name" value="${escapeHtml(item.name)}"></label>${item.options ? `<div class="variant-editor" aria-label="${escapeHtml(item.name)} sizes">${item.options.map((option, optionIndex) => `<label>${escapeHtml(option.label)} price (₹)<input class="variant-price" data-option-index="${optionIndex}" aria-label="${escapeHtml(option.label)} price" type="number" min="1" max="20000" step="1" value="${Number(option.price)}"></label>`).join("")}</div>` : `<label>Price (₹)<input class="item-price" aria-label="Item price in rupees" type="number" min="1" max="20000" step="1" value="${Number(item.price || 0)}"></label>`}<label class="item-description-label">Description<input class="item-description" aria-label="Description" value="${escapeHtml(item.description || "")}"></label><button type="button" class="remove-button" data-remove-category="${escapeHtml(id)}" data-remove-index="${index}">Remove item</button></article>`).join("")}</div></details>`).join("");
   $("menuEditor").querySelectorAll("[data-remove-index]").forEach(button => button.addEventListener("click", () => {
     const category = button.dataset.removeCategory, index = Number(button.dataset.removeIndex);
     if (!confirm(`Remove ${menu[category].items[index].name} from the live menu?`)) return;
     menu[category].items.splice(index, 1); renderMenuEditor();
+  }));
+  $("comboEditor").innerHTML = combos.length ? combos.map((combo, index) => `<article class="card combo-editor-row" data-combo-index="${index}"><div class="combo-editor-heading"><strong>Combo ${index + 1}</strong><button type="button" class="remove-button" data-remove-combo="${index}">Remove combo</button></div><div class="combo-editor-fields"><label>Combo name<input class="combo-name" maxlength="100" value="${escapeHtml(combo.name)}"></label><label>Offer price (₹)<input class="combo-price" type="number" min="1" max="20000" step="1" value="${Number(combo.price)}"></label><label>Menu value (₹)<input class="combo-value" type="number" min="0" max="50000" step="1" value="${Number(combo.value || 0)}"></label><label class="combo-image-field">Image path<input class="combo-image" value="${escapeHtml(combo.image || "")}" placeholder="images/combos/your-combo.png"></label><label class="combo-items-field">Included items<textarea class="combo-items" rows="4" maxlength="4000">${escapeHtml((combo.items || []).join("\n"))}</textarea><small>One included item per line. These are shown to customers and on order details.</small></label></div></article>`).join("") : '<div class="card empty-cell">No combos configured.</div>';
+  $("comboEditor").querySelectorAll("[data-remove-combo]").forEach(button => button.addEventListener("click", () => {
+    const combo = combos[Number(button.dataset.removeCombo)];
+    if (!confirm(`Remove ${combo.name} from the customer menu?`)) return;
+    combos.splice(Number(button.dataset.removeCombo), 1); renderMenuEditor();
   }));
 }
 $("categoryForm").addEventListener("submit", event => {
@@ -336,16 +344,32 @@ $("itemForm").addEventListener("submit", event => {
   if (all.some(item => item.name.toLowerCase() === name.toLowerCase() || item.options?.some(option => option.name.toLowerCase() === name.toLowerCase()))) return message($("menuMessage"), "An item with that name already exists.", "error");
   menu[category].items.push({ name, price, image: "", description: $("newItemDescription").value.trim() || `${name}.` }); event.target.reset(); renderMenuEditor(); message($("menuMessage"), "Menu item added locally. Save menu changes to publish it.", "success");
 });
+$("comboForm").addEventListener("submit", event => {
+  event.preventDefault();
+  const name = $("newComboName").value.trim(), price = Number($("newComboPrice").value), value = Number($("newComboValue").value);
+  const items = $("newComboItems").value.split(/\r?\n/).map(item => item.trim()).filter(Boolean);
+  if (combos.some(combo => combo.name.toLowerCase() === name.toLowerCase())) return message($("menuMessage"), "A combo with that name already exists.", "error");
+  combos.push({ name, price, value, image: $("newComboImage").value.trim(), items });
+  event.target.reset(); renderMenuEditor(); message($("menuMessage"), "Combo added locally. Save menu changes to publish it.", "success");
+});
 $("saveMenu").addEventListener("click", async event => {
   const button = event.currentTarget; button.disabled = true;
   try {
     const changed = {};
     for (const [id, section] of Object.entries(menu)) changed[id] = { ...section, items: section.items.map(item => {
-      if (item.options) return item;
       const row = [...$("menuEditor").querySelectorAll(`[data-category="${CSS.escape(id)}"]`)].find(element => Number(element.dataset.itemIndex) === section.items.indexOf(item));
-      return row ? { ...item, name: row.querySelector(".item-name").value.trim(), price: Number(row.querySelector(".item-price").value), description: row.querySelector(".item-description").value.trim() } : item;
+      if (!row) return item;
+      const name = row.querySelector(".item-name").value.trim();
+      const updated = { ...item, name, description: row.querySelector(".item-description").value.trim() };
+      if (item.options) updated.options = item.options.map((option, optionIndex) => ({ ...option, name: `${name} (${option.label})`, price: Number(row.querySelector(`[data-option-index="${optionIndex}"]`).value) }));
+      else updated.price = Number(row.querySelector(".item-price").value);
+      return updated;
     }) };
-    const result = await call("adminSaveMenuCatalog", { menu: changed }); menu = changed; renderMenuEditor(); message($("menuMessage"), `Saved to Firebase · ${result.categories} categories, ${result.items} items.`, "success");
+    const updatedCombos = [...$("comboEditor").querySelectorAll(".combo-editor-row")].map(row => {
+      const old = combos[Number(row.dataset.comboIndex)];
+      return { ...old, name: row.querySelector(".combo-name").value.trim(), price: Number(row.querySelector(".combo-price").value), value: Number(row.querySelector(".combo-value").value), image: row.querySelector(".combo-image").value.trim(), items: row.querySelector(".combo-items").value.split(/\r?\n/).map(item => item.trim()).filter(Boolean) };
+    });
+    const result = await call("adminSaveMenuCatalog", { menu: changed, combos: updatedCombos }); menu = changed; combos = updatedCombos; renderMenuEditor(); message($("menuMessage"), `Saved to Firebase · ${result.categories} categories, ${result.items} items, ${result.combos} combos.`, "success");
   } catch (error) { message($("menuMessage"), friendlyError(error), "error"); }
   finally { button.disabled = false; }
 });
