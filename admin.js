@@ -304,11 +304,12 @@ $("startGameTestButton").addEventListener("click", async event => {
     const draft = readGameEditor();
     await call("adminSaveCravingDashConfig", { cravingDash: draft });
     const response = await call("adminStartCravingDashTest", { stageId });
-    sessionStorage.setItem("cravingDashAdminTest", JSON.stringify(response));
     gameConfig = { ...draft, enabled: false };
     gameHasUnpublishedChanges = true;
     renderGameEditor();
-    $("adminGameTestFrame").src = `/?gameTest=1&v=${Date.now()}`;
+    const frame = $("adminGameTestFrame");
+    frame.onload = () => frame.contentWindow?.postMessage({ type: "craving-dash-admin-test-session", payload: response }, location.origin);
+    frame.src = `/?gameTest=1&v=${Date.now()}`;
     gameTestDialog.showModal();
     message($("gameConfigMessage"), "Draft saved. Test mode won’t award points, issue rewards, or change customer progress.", "success");
   }

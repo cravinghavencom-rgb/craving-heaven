@@ -165,19 +165,41 @@
     if (event.target.closest("[data-game-retry]")) { beginRound(); return; }
     if (event.target.closest(".game-promo-close") || event.target === promoDialog || event.target.closest("#gamePromoDialog [data-screen]")) promoDialog.close();
   });
+  function openAdminTest(saved) {
+    if (!saved?.adminTest || !saved.challengeId || !Array.isArray(saved.objects) || !Array.isArray(saved.ticket)) {
+      root.innerHTML = `<article class="game-panel"><h2>Couldn’t open the admin test</h2><p>The test session was incomplete. Return to Admin and start the test again.</p><button class="game-secondary" type="button" data-game-admin-exit>RETURN TO ADMIN</button></article>`;
+      return;
+    }
+    adminTestMode = true;
+    adminTestStageId = String(saved.stage?.id || "");
+    activeRound = { ...saved, adminTest: true, score: 0, remainingTicket: [...saved.ticket], startedAt: Date.now() };
+    nextObject = 0;
+    submitting = false;
+    document.querySelector('[data-screen="game"]')?.click();
+    renderRound();
+    let seconds = Number(saved.durationSeconds) || 60;
+    roundTimer = window.setInterval(() => {
+      seconds -= 1;
+      const timer = root.querySelector("#gameTimer");
+      if (timer) timer.textContent = String(seconds);
+      if (seconds <= 0) {
+        clearInterval(roundTimer); roundTimer = null; activeRound = null;
+        root.innerHTML = `<article class="game-panel game-result"><h2>Test round ended</h2><p>No rewards or customer progress were changed.</p><button class="game-secondary" type="button" data-game-admin-exit>RETURN TO ADMIN</button></article>`;
+      }
+    }, 1000);
+  }
+  window.addEventListener("message", event => {
+    if (event.origin !== location.origin || event.source !== window.parent || event.data?.type !== "craving-dash-admin-test-session") return;
+    if (new URLSearchParams(location.search).get("gameTest") !== "1") return;
+    openAdminTest(event.data.payload);
+  });
   document.addEventListener("DOMContentLoaded", async () => {
     const params = new URLSearchParams(location.search);
     if (params.get("gameTest") === "1") {
-      try {
-        const saved = JSON.parse(sessionStorage.getItem("cravingDashAdminTest") || "null");
-        if (!saved?.adminTest || !saved.challengeId || !Array.isArray(saved.objects)) throw new Error("The admin test session is missing. Start a stage test again from Admin.");
-        adminTestMode = true; adminTestStageId = String(saved.stage?.id || "");
-        activeRound = { ...saved, adminTest: true, score: 0, remainingTicket: [...saved.ticket], startedAt: Date.now() }; nextObject = 0; submitting = false;
-        document.querySelector('[data-screen="game"]')?.click();
-        renderRound();
-        let seconds = 60;
-        roundTimer = window.setInterval(() => { seconds -= 1; const timer = root.querySelector("#gameTimer"); if (timer) timer.textContent = String(seconds); if (seconds <= 0) { clearInterval(roundTimer); roundTimer = null; activeRound = null; root.innerHTML = `<article class="game-panel game-result"><h2>Test round ended</h2><p>No rewards or customer progress were changed.</p><button type="button" class="game-secondary" data-game-admin-exit>RETURN TO ADMIN</button></article>`; } }, 1000);
-      } catch (error) { root.innerHTML = `<article class="game-panel"><h2>Couldn’t open the admin test</h2><p>${escapeHtml(error.message)}</p><button class="game-secondary" type="button" data-game-admin-exit>RETURN TO ADMIN</button></article>`; }
+      root.innerHTML = `<article class="game-panel"><h2>Preparing your test</h2><p>Loading the private game round from Admin…</p></article>`;
+      window.setTimeout(() => {
+        if (!adminTestMode) root.innerHTML = `<article class="game-panel"><h2>Couldn’t open the admin test</h2><p>The private test session did not arrive. Close this preview and start the test again from Admin.</p><button class="game-secondary" type="button" data-game-admin-exit>RETURN TO ADMIN</button></article>`;
+      }, 15000);
       return;
     }
     if (window.FirebaseAuthAPI?.onAuthStateChanged && window.firebaseAuth) {
