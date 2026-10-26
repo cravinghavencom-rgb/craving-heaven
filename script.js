@@ -2512,7 +2512,8 @@ document.addEventListener("click", event => {
   renderNav();
   render();
   menuInitialized = true;
-  setAppScreen("home");
+  const isAdminGameTest = new URLSearchParams(location.search).get("gameTest") === "1";
+  setAppScreen(isAdminGameTest ? "game" : "home");
 
   const firstVisitFlyer = document.getElementById("firstVisitFlyer");
   const firstVisitFlyerSeenKey = "cravingHeavenFirstVisitFlyerSeen_v8";
