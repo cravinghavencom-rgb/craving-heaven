@@ -13,7 +13,7 @@ firebase.initializeApp({
   projectId: "craving-heaven-e2e94",
   storageBucket: "craving-heaven-e2e94.firebasestorage.app",
   messagingSenderId: "20081214048",
-  appId: "1:20081214048:web:cae67b0874111ab653905",
+  appId: "1:20081214048:web:cae6c7b0874111ab653905",
   measurementId: "G-GD2EPFLYPZ"
 });
 

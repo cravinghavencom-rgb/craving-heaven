@@ -13,7 +13,7 @@ const app = initializeApp({
   projectId: useEmulator ? "demo-craving-heaven-local" : "craving-heaven-e2e94",
   storageBucket: "craving-heaven-e2e94.firebasestorage.app",
   messagingSenderId: "20081214048",
-  appId: "1:20081214048:web:cae67b0874111ab653905"
+  appId: "1:20081214048:web:cae6c7b0874111ab653905"
 });
 const appCheck = useEmulator ? null : initializeAppCheck(app, {
   provider: new ReCaptchaEnterpriseProvider("6LdBasMtAAAAAJE5V6ZDZefojEfJx9vfDFowfIjU"),
