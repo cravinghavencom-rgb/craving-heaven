@@ -175,7 +175,17 @@
     activeRound = { ...saved, adminTest: true, score: 0, remainingTicket: [...saved.ticket], startedAt: Date.now() };
     nextObject = 0;
     submitting = false;
-    document.querySelector('[data-screen="game"]')?.click();
+    document.querySelectorAll("[data-app-screen]").forEach(screen => {
+      const active = screen.dataset.appScreen === "game";
+      screen.hidden = !active;
+      screen.classList.toggle("is-active", active);
+    });
+    document.querySelectorAll(".customer-nav-button[data-screen]").forEach(button => {
+      const active = button.dataset.screen === "game";
+      button.classList.toggle("is-active", active);
+      if (active) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current");
+    });
+    window.scrollTo({ top: 0, behavior: "instant" });
     renderRound();
     let seconds = Number(saved.durationSeconds) || 60;
     roundTimer = window.setInterval(() => {
