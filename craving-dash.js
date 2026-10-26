@@ -92,6 +92,7 @@
       activeRound.score = result.score;
       if (serve) { const ticketIndex = activeRound.remainingTicket.indexOf(current.name); if (ticketIndex >= 0) activeRound.remainingTicket.splice(ticketIndex, 1); }
       nextObject = result.nextActionIndex;
+      await new Promise(resolve => window.setTimeout(resolve, 550));
       actionPending = false;
       if (nextObject >= activeRound.objects.length) submitRound(); else renderRound();
     } catch (error) {
