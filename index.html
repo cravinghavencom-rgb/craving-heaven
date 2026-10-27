@@ -17,8 +17,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Montserrat:wght@500;600;700;800;900&display=swap">
-  <link rel="preload" as="image" href="images/burgers/classic-crunchy-burger.png" type="image/png" fetchpriority="high">
-  <link rel="stylesheet" href="style.css?v=20261027-home-refresh-v2">
+  <link rel="preload" as="image" href="images/burgers/classic-crunchy-burger.webp" type="image/webp" fetchpriority="high">
+  <link rel="stylesheet" href="style.css?v=20261027-header-hero-v1">
   <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-GD2EPLFYZP">
 </script>
@@ -37,7 +37,11 @@
       <a class="brand" href="#top" data-screen="home" aria-label="CRAVING HEAVEN home">
         <img src="images/logo.png" alt="CRAVING HEAVEN logo">
       </a>
-
+      <label class="home-delivery-picker" for="homeDeliveryArea">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.3"/></svg>
+        <span class="home-delivery-copy"><span>DELIVER TO</span><select id="homeDeliveryArea" name="homeDeliveryArea" aria-label="Choose your delivery area"><option value="">Choose your area</option></select></span>
+        <span class="home-delivery-chevron" aria-hidden="true">⌄</span>
+      </label>
     </div>
   </header>
 
@@ -51,7 +55,7 @@
 
   <dialog class="first-visit-flyer" id="firstVisitFlyer" aria-labelledby="firstVisitFlyerTitle">
     <button class="first-visit-flyer-close" type="button" aria-label="Close welcome offer" data-close-first-visit>×</button>
-    <div class="first-visit-flyer-art"><img src="images/burgers/classic-crunchy-burger.png" alt="Classic Crunchy Chicken Burger"><i aria-hidden="true">✦</i><b aria-hidden="true">✦</b></div>
+    <div class="first-visit-flyer-art"><img src="images/burgers/classic-crunchy-burger.webp" alt="Classic Crunchy Chicken Burger"><i aria-hidden="true">✦</i><b aria-hidden="true">✦</b></div>
     <span class="first-visit-flyer-kicker">A LITTLE SOMETHING FOR YOUR FIRST ORDER</span>
     <h2 id="firstVisitFlyerTitle">Your first order just got crunchier!</h2>
     <p>Place your first online order to claim this welcome treat.</p>
@@ -87,7 +91,7 @@
         <div class="home-hero-art" aria-label="Classic Crunchy Chicken Burger">
           <div class="home-hero-glow" aria-hidden="true"></div>
           <span class="home-hero-stamp">MADE FOR<br>YOUR CRAVING</span>
-          <img src="images/burgers/classic-crunchy-burger.png" alt="Classic Crunchy Chicken Burger" width="512" height="512" fetchpriority="high" decoding="async">
+          <img src="images/burgers/classic-crunchy-burger.webp" alt="Classic Crunchy Chicken Burger" width="259" height="242" fetchpriority="high" decoding="async">
           <span class="home-hero-art-caption"><b>CRISPY.</b> JUICY. HEAVENLY.</span>
         </div>
       </section>
@@ -767,7 +771,7 @@ window.firebaseMessaging = firebaseMessaging;
 
 <script src="rewards-config.js?v=20261021-first-order-gift" defer></script>
 <script src="menu.js?v=20261027-combo-webp" defer></script>
-<script src="script.js?v=20261027-fast-first-render-v2" defer></script>
+<script src="script.js?v=20261027-header-hero-v1" defer></script>
 <script src="craving-dash.js?v=20261026-craving-runner-v1" defer></script>
 </body>
 </html>

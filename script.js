@@ -705,14 +705,56 @@ function handlePlaceOrderClick() {
     setAddressFormVisible(true);
   }
 
+  function refreshHomeDeliverySelector(preferredValue = "") {
+    if (!homeDeliveryArea || !checkoutArea) return;
+    const areas = [...checkoutArea.options].filter(option => option.value);
+    const addresses = Array.isArray(currentCustomerProfile.addresses) ? currentCustomerProfile.addresses : [];
+    let wanted = preferredValue;
+    if (!wanted) {
+      try { wanted = homeDeliveryArea.value || localStorage.getItem("chHomeDeliveryArea") || ""; } catch { wanted = homeDeliveryArea.value || ""; }
+    }
+    homeDeliveryArea.replaceChildren(new Option("Choose your area", ""));
+    const areaGroup = document.createElement("optgroup");
+    areaGroup.label = "Delivery areas";
+    areas.forEach(option => areaGroup.append(new Option(option.textContent.trim(), `area:${option.value}`)));
+    homeDeliveryArea.append(areaGroup);
+    if (addresses.length) {
+      const addressGroup = document.createElement("optgroup");
+      addressGroup.label = "Saved addresses";
+      addresses.forEach(address => {
+        const title = address.label || "Saved address";
+        const detail = [address.area, address.address].filter(Boolean).join(" · ");
+        addressGroup.append(new Option(detail ? `${title} · ${detail}` : title, `address:${address.id}`));
+      });
+      homeDeliveryArea.append(addressGroup);
+    }
+    const valid = [...homeDeliveryArea.options].some(option => option.value === wanted);
+    const defaultAddress = addresses.find(item => item.isDefault) || addresses[0];
+    homeDeliveryArea.value = valid ? wanted : defaultAddress ? `address:${defaultAddress.id}` : "";
+    try {
+      if (homeDeliveryArea.value) localStorage.setItem("chHomeDeliveryArea", homeDeliveryArea.value);
+      else if (wanted.startsWith("address:") && !addresses.length) return;
+      else localStorage.removeItem("chHomeDeliveryArea");
+    } catch {}
+  }
+
   function prefillCheckoutFromDefaultAddress() {
     if (checkoutSavedAddress) {
       const addresses = currentCustomerProfile.addresses || [];
       checkoutSavedAddress.innerHTML = `<option value="">Enter a new address</option>${addresses.map(item => `<option value="${esc(item.id)}">${esc(item.label || "Address")} — ${esc(item.area || "")}</option>`).join("")}`;
       if (savedAddressPickerWrap) savedAddressPickerWrap.hidden = !addresses.length;
     }
-    const chosen = (currentCustomerProfile.addresses || []).find(item => item.isDefault) || currentCustomerProfile.addresses?.[0];
-    if (!chosen) return;
+    refreshHomeDeliverySelector();
+    const selection = homeDeliveryArea?.value || "";
+    const selectedArea = selection.startsWith("area:") ? selection.slice(5) : "";
+    const selectedId = selection.startsWith("address:") ? selection.slice(8) : "";
+    const addresses = currentCustomerProfile.addresses || [];
+    const chosen = (selectedId && addresses.find(item => item.id === selectedId))
+      || (!selectedArea && (addresses.find(item => item.isDefault) || addresses[0]));
+    if (!chosen) {
+      if (checkoutArea && selectedArea) checkoutArea.value = selectedArea;
+      return;
+    }
     if (checkoutSavedAddress) checkoutSavedAddress.value = chosen.id;
     if (checkoutAddressLabel && chosen.label) {
       if (![...checkoutAddressLabel.options].some(option => option.value === chosen.label)) checkoutAddressLabel.add(new Option(chosen.label, chosen.label));
@@ -722,6 +764,9 @@ function handlePlaceOrderClick() {
     if (checkoutAddress && !checkoutAddress.value) checkoutAddress.value = chosen.address || "";
     if (checkoutLandmark && !checkoutLandmark.value) checkoutLandmark.value = chosen.landmark || "";
     if (checkoutArea && chosen.area) checkoutArea.value = chosen.area;
+    if (homeDeliveryArea && chosen.area) {
+      refreshHomeDeliverySelector(`address:${chosen.id}`);
+    }
   }
 
   function orderHistoryDate(value) {
@@ -978,6 +1023,7 @@ const checkoutLandmark =
 
 const checkoutArea =
   document.getElementById("checkoutArea");
+const homeDeliveryArea = document.getElementById("homeDeliveryArea");
 const checkoutSavedAddress = document.getElementById("checkoutSavedAddress");
 const checkoutAddressLabel = document.getElementById("checkoutAddressLabel");
 const savedAddressPickerWrap = document.getElementById("savedAddressPickerWrap");
@@ -2498,6 +2544,29 @@ document.addEventListener("click", event => {
       addressArea.add(new Option(option.textContent, option.value));
     });
   }
+  if (checkoutArea && homeDeliveryArea) {
+    refreshHomeDeliverySelector();
+    homeDeliveryArea.addEventListener("change", () => {
+      const value = homeDeliveryArea.value;
+      try {
+        if (value) localStorage.setItem("chHomeDeliveryArea", value);
+        else localStorage.removeItem("chHomeDeliveryArea");
+      } catch {}
+      if (value.startsWith("address:")) {
+        const addressId = value.slice(8);
+        if (checkoutSavedAddress) {
+          checkoutSavedAddress.value = addressId;
+          checkoutSavedAddress.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      } else if (value.startsWith("area:")) {
+        if (checkoutSavedAddress) checkoutSavedAddress.value = "";
+        if (checkoutName) checkoutName.value = currentCustomerProfile.name || "";
+        if (checkoutAddress) checkoutAddress.value = "";
+        if (checkoutLandmark) checkoutLandmark.value = "";
+        if (checkoutArea) checkoutArea.value = value.slice(5);
+      }
+    });
+  }
   checkoutSavedAddress?.addEventListener("change", () => {
     const chosen = (currentCustomerProfile.addresses || []).find(item => item.id === checkoutSavedAddress.value);
     if (!chosen) {
@@ -2514,6 +2583,7 @@ document.addEventListener("click", event => {
     checkoutAddress.value = chosen.address || "";
     checkoutLandmark.value = chosen.landmark || "";
     checkoutArea.value = chosen.area || "";
+    refreshHomeDeliverySelector(`address:${chosen.id}`);
   });
   document.getElementById("addAddressButton")?.addEventListener("click", () => {
     if (!window.firebaseAuth?.currentUser) {
