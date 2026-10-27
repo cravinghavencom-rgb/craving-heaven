@@ -53,6 +53,7 @@ let knownOnlineOrderIds = null;
 let ordersLoading = false;
 let orderSoundEnabled = false;
 let orderAudioContext = null;
+let orderChimeNodes = [];
 let orderAlertTimeout = null;
 let activeTab = "online";
 let activeStatusFilter = "all";
@@ -366,6 +367,7 @@ updateHistoryDateControls();
 
 function playOrderChime() {
   if (!orderSoundEnabled || !orderAudioContext) return;
+  stopOrderChime();
   const notes = [
     { frequency: 784, offset: 0 },
     { frequency: 988, offset: 0.2 },
@@ -375,20 +377,33 @@ function playOrderChime() {
     { frequency: 1568, offset: 1.32 }
   ];
   const start = orderAudioContext.currentTime + 0.04;
-  for (const note of notes) {
-    const oscillator = orderAudioContext.createOscillator();
-    const gain = orderAudioContext.createGain();
-    const noteStart = start + note.offset;
-    oscillator.type = "triangle";
-    oscillator.frequency.setValueAtTime(note.frequency, noteStart);
-    gain.gain.setValueAtTime(0.0001, noteStart);
-    gain.gain.exponentialRampToValueAtTime(0.62, noteStart + 0.025);
-    gain.gain.exponentialRampToValueAtTime(0.0001, noteStart + 0.24);
-    oscillator.connect(gain);
-    gain.connect(orderAudioContext.destination);
-    oscillator.start(noteStart);
-    oscillator.stop(noteStart + 0.25);
+  for (let repeat = 0; repeat < 3; repeat += 1) {
+    for (const note of notes) {
+      const oscillator = orderAudioContext.createOscillator();
+      const gain = orderAudioContext.createGain();
+      const noteStart = start + repeat * 1.68 + note.offset;
+      const noteEnd = noteStart + 0.3;
+      oscillator.type = "triangle";
+      oscillator.frequency.setValueAtTime(note.frequency, noteStart);
+      gain.gain.setValueAtTime(0.0001, noteStart);
+      gain.gain.exponentialRampToValueAtTime(0.84, noteStart + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, noteStart + 0.28);
+      oscillator.connect(gain);
+      gain.connect(orderAudioContext.destination);
+      oscillator.start(noteStart);
+      oscillator.stop(noteEnd);
+      orderChimeNodes.push(oscillator);
+    }
   }
+}
+
+function stopOrderChime() {
+  if (!orderAudioContext || !orderChimeNodes.length) return;
+  const stopAt = orderAudioContext.currentTime + 0.01;
+  for (const oscillator of orderChimeNodes) {
+    try { oscillator.stop(stopAt); } catch {}
+  }
+  orderChimeNodes = [];
 }
 
 function announceNewOnlineOrders(newOrders) {
@@ -407,6 +422,7 @@ function announceNewOnlineOrders(newOrders) {
 orderSoundButton.addEventListener("click", async () => {
   if (orderSoundEnabled) {
     orderSoundEnabled = false;
+    stopOrderChime();
     orderSoundButton.textContent = "🔔 Enable order sound";
     orderSoundButton.setAttribute("aria-pressed", "false");
     orderSoundButton.title = "Turn off new online order sounds";
