@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Montserrat:wght@500;600;700;800;900&display=swap">
   <link rel="preload" as="image" href="images/burgers/classic-crunchy-burger.webp" type="image/webp" fetchpriority="high">
-  <link rel="stylesheet" href="style.css?v=20261027-header-hero-v1">
+  <link rel="stylesheet" href="style.css?v=20261027-address-sheet-v2">
   <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-GD2EPLFYZP">
 </script>
@@ -37,7 +37,7 @@
       <a class="brand" href="#top" data-screen="home" aria-label="CRAVING HEAVEN home">
         <img src="images/logo.png" alt="CRAVING HEAVEN logo">
       </a>
-      <button class="home-delivery-picker" id="homeDeliveryPicker" type="button" aria-haspopup="dialog" aria-controls="deliveryLocationDialog">
+      <button class="home-delivery-picker" id="homeDeliveryPicker" type="button" aria-haspopup="dialog" aria-controls="deliveryLocationDialog" aria-expanded="false">
         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.3"/></svg>
         <span class="home-delivery-copy"><span>DELIVER TO</span><strong id="homeDeliveryLabel">Choose your location</strong><small id="homeDeliveryDetail">Tap to set delivery address</small></span>
         <span class="home-delivery-chevron" aria-hidden="true">⌄</span>
@@ -788,7 +788,7 @@ window.firebaseMessaging = firebaseMessaging;
 
 <script src="rewards-config.js?v=20261021-first-order-gift" defer></script>
 <script src="menu.js?v=20261027-combo-webp" defer></script>
-<script src="script.js?v=20261027-header-hero-v1" defer></script>
+<script src="script.js?v=20261027-address-sheet-v2" defer></script>
 <script src="craving-dash.js?v=20261026-craving-runner-v1" defer></script>
 </body>
 </html>

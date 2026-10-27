@@ -2730,6 +2730,7 @@ body { background:#fbf7f1; color:var(--premium-ink); }
 
 /* Compact delivery picker, points shortcut, and location bottom sheet. */
 .home-delivery-picker { min-width: 0; max-width: min(390px, 43vw); text-align: left; }
+.home-delivery-picker { position: relative; z-index: 1; align-self: center; justify-self: stretch; min-height: 50px; width: 100%; max-width: none; }
 .home-delivery-copy { overflow: hidden; }
 .home-delivery-copy strong { display: block; overflow: hidden; color: #33231d; font-size: 12px; font-weight: 850; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
 .home-delivery-copy small { display: block; overflow: hidden; max-width: 100%; color: #88766d; font-size: 9px; font-weight: 600; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
@@ -2773,24 +2774,27 @@ body { background:#fbf7f1; color:var(--premium-ink); }
 .delivery-address-form[hidden] { display: none; }
 .home-delivery-picker:focus-visible,.header-points-button:focus-visible,.use-current-location-button:focus-visible,.home-saved-address:focus-visible { outline: 3px solid rgba(181,18,27,.28); outline-offset: 2px; }
 @media (max-width: 650px) {
-  .header-inner { gap: 7px; }
-  .home-delivery-picker { flex: 1 1 auto; max-width: none; gap: 6px; min-height: 48px; padding: 5px 7px; }
+  .header-inner { display: grid; grid-template-columns: 46px minmax(0,1fr) max-content; gap: 8px; height: 68px; min-height: 68px; padding-inline: 9px; }
+  .brand { width: 46px; height: 46px; justify-content: center; }
+  .home-delivery-picker { flex: initial; max-width: none; gap: 7px; min-height: 50px; padding: 6px 8px; }
   .home-delivery-picker > svg { width: 19px; height: 19px; flex-basis: 19px; }
-  .home-delivery-copy > span { font-size: 7px; }
-  .home-delivery-copy strong { font-size: 10px; }
+  .home-delivery-copy > span { font-size: 8px; }
+  .home-delivery-copy strong { font-size: 11px; }
   .home-delivery-copy small { font-size: 8px; }
-  .home-delivery-chevron { margin-left: -16px; font-size: 15px; }
+  .home-delivery-chevron { margin-left: 0; font-size: 16px; }
   .header-points-button { gap: 5px; min-height: 44px; padding: 5px 7px; border-radius: 12px; }
-  .header-points-button small { font-size: 7px; letter-spacing: 0; }
-  .header-points-button strong { max-width: 52px; overflow: hidden; font-size: 11px; text-overflow: ellipsis; }
+  .header-points-button small { display: none; }
+  .header-points-button strong { max-width: 62px; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
   .header-points-icon { width: 22px; height: 22px; flex-basis: 22px; border-radius: 8px; font-size: 15px; }
   .delivery-location-dialog { width: 100%; max-height: 90dvh; margin: auto 0 0; border-radius: 24px 24px 0 0; }
   .delivery-location-sheet { max-height: 90dvh; padding: 20px 17px calc(20px + env(safe-area-inset-bottom)); }
   .delivery-location-heading h2 { font-size: 20px; }
 }
 @media (max-width: 370px) {
-  .brand img { width: 42px; height: 42px; }
-  .home-delivery-picker { gap: 5px; padding-inline: 5px; }
-  .home-delivery-picker > svg { width: 17px; height: 17px; flex-basis: 17px; }
+  .header-inner { grid-template-columns: 40px minmax(0,1fr) max-content; gap: 5px; padding-inline: 7px; }
+  .brand,.brand img { width: 40px; height: 40px; }
+  .home-delivery-picker { gap: 5px; padding-inline: 6px; }
+  .home-delivery-picker > svg { width: 16px; height: 16px; flex-basis: 16px; }
+  .home-delivery-picker small { display: none; }
   .header-points-button { padding-inline: 5px; }
 }

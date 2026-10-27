@@ -899,7 +899,7 @@ function handlePlaceOrderClick() {
       const homePointsBalance = document.getElementById("homeLoyaltyPointsBalance");
       if (homePointsBalance) homePointsBalance.textContent = pointsText;
       const headerPointsBalance = document.getElementById("headerCravingPointsBalance");
-      if (headerPointsBalance) headerPointsBalance.textContent = pointsText;
+      if (headerPointsBalance) headerPointsBalance.textContent = `${pointsText} pts`;
       const homePointsSummary = document.getElementById("homeLoyaltySummary");
       if (homePointsSummary) homePointsSummary.textContent = "Craving Points · combos earn half rate";
       renderRewardsJourney(currentLoyaltyAccount, true);
@@ -2604,10 +2604,6 @@ document.addEventListener("click", event => {
   }
   if (checkoutArea && homeDeliveryArea) {
     refreshHomeDeliverySelector();
-    homeDeliveryPicker?.addEventListener("click", () => {
-      refreshHomeDeliverySelector();
-      if (!deliveryLocationDialog?.open) deliveryLocationDialog?.showModal();
-    });
     deliveryLocationDialog?.querySelector("[data-close-delivery-location]")?.addEventListener("click", () => deliveryLocationDialog.close());
     deliveryLocationDialog?.addEventListener("click", event => {
       if (event.target === deliveryLocationDialog) deliveryLocationDialog.close();
@@ -2696,6 +2692,17 @@ document.addEventListener("click", event => {
       refreshHomeDeliverySelector(value);
     });
   }
+  homeDeliveryPicker?.addEventListener("click", () => {
+    if (!deliveryLocationDialog) return;
+    refreshHomeDeliverySelector();
+    if (!deliveryLocationDialog.open) deliveryLocationDialog.showModal();
+    homeDeliveryPicker.setAttribute("aria-expanded", String(deliveryLocationDialog.open));
+  });
+  deliveryLocationDialog?.addEventListener("close", () => {
+    homeDeliveryPicker?.setAttribute("aria-expanded", "false");
+    pendingGpsCoordinates = null;
+  });
+  deliveryLocationDialog?.addEventListener("cancel", () => homeDeliveryPicker?.setAttribute("aria-expanded", "false"));
   checkoutSavedAddress?.addEventListener("change", () => {
     const chosen = (currentCustomerProfile.addresses || []).find(item => item.id === checkoutSavedAddress.value);
     if (!chosen) {
