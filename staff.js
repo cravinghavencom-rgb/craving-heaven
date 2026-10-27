@@ -59,6 +59,10 @@ let activeStatusFilter = "all";
 let cart = [];
 let pendingWalkinRequestId = null;
 let editingWalkinOrderId = null;
+let activeStaffUid = "";
+let restoringWalkinDraft = false;
+let walkinDraftTimer = null;
+let restoredBenefitSelection = null;
 
 const money = value => `₹${Number(value || 0).toLocaleString("en-IN")}`;
 const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
@@ -152,7 +156,9 @@ async function showDesk(user) {
     loginPanel.hidden = true;
     deskPanel.hidden = false;
     logoutButton.hidden = false;
+    activeStaffUid = user.uid;
     $("staffPhone").textContent = user.phoneNumber || "Staff account";
+    restoreWalkinDraft();
     await Promise.all([loadOrders(), loadOrderingStatus()]);
   } catch (error) {
     loginPanel.hidden = false;
@@ -725,18 +731,39 @@ function renderMenuResults() {
   const category = menuCategory.value;
   const filtered = catalogItems.map((item, index) => ({ ...item, index })).filter(item => (category === "all" || item.group === category) && (!query || `${item.group} ${item.name}`.toLowerCase().includes(query)));
   $("menuCount").textContent = `${filtered.length} items`;
-  $("menuResults").innerHTML = filtered.length ? filtered.map(item => `<button class="menu-result" type="button" data-add-menu="${item.index}"><span class="menu-result-copy"><small>${escapeHtml(item.group)}</small><strong>${escapeHtml(item.name)}</strong></span><span class="menu-result-price">${money(item.price)}<b>＋</b></span></button>`).join("") : '<p class="cart-empty">No menu items match that search.</p>';
+  $("menuResults").innerHTML = filtered.length ? filtered.map(item => `<article class="menu-result" data-menu-card="${item.index}"><span class="menu-result-copy"><small>${escapeHtml(item.group)}</small><strong>${escapeHtml(item.name)}</strong><span class="menu-result-price">${money(item.price)}</span></span><span class="menu-quick-quantity" data-menu-quantity="${item.index}" aria-label="${escapeHtml(item.name)} quantity"></span></article>`).join("") : '<p class="cart-empty">No menu items match that search.</p>';
+  syncMenuQuickQuantities();
+}
+function syncMenuQuickQuantities() {
+  $("menuResults").querySelectorAll("[data-menu-quantity]").forEach(container => {
+    const index = Number(container.dataset.menuQuantity);
+    const item = catalogItems[index];
+    if (!item) return;
+    const qty = cart.find(line => line.name === item.name)?.qty || 0;
+    container.innerHTML = `${qty ? `<button type="button" data-menu-qty="decrease" data-menu-index="${index}" aria-label="Remove one ${escapeHtml(item.name)}">−</button><output aria-live="polite">${qty}</output>` : ""}<button type="button" data-menu-qty="increase" data-menu-index="${index}" aria-label="Add one ${escapeHtml(item.name)}">＋</button>`;
+  });
 }
 menuCategory.addEventListener("change", renderMenuResults);
 $("menuSearch").addEventListener("input", renderMenuResults);
 $("menuResults").addEventListener("click", event => {
-  const button = event.target.closest("[data-add-menu]");
-  if (button) addCatalogItem(Number(button.dataset.addMenu));
+  const button = event.target.closest("[data-menu-qty]");
+  if (!button) return;
+  const item = catalogItems[Number(button.dataset.menuIndex)];
+  if (!item) return;
+  if (button.dataset.menuQty === "increase") addCatalogItem(Number(button.dataset.menuIndex));
+  else changeCatalogItemQuantity(item.name, -1);
 });
 renderMenuResults();
 httpsCallable(functions, "getPublicBusinessConfig")({})
   .then(result => {
-    if (applyPublicMenu(result.data)) renderMenuResults();
+  if (applyPublicMenu(result.data)) {
+    cart = cart.flatMap(line => {
+      const current = catalogItems.find(item => item.name === line.name);
+      return current ? [{ ...current, qty: line.qty }] : [];
+    });
+    renderMenuResults();
+    renderWalkinCart();
+  }
   })
   .catch(error => console.warn("Could not load updated staff menu:", error));
 
@@ -784,6 +811,13 @@ async function lookupWalkinCustomer() {
       loyaltyHint.classList.remove("is-missing");
       loyaltyHint.textContent = `Account found: ${result.data.name || "Customer"}\n${pointsBalance.toLocaleString("en-IN")} Craving Points · ${Number(result.data.completedOrders || 0)} completed orders\nPoint redemption: ${pointRedemptionText}\nMilestone rewards ready: ${readyText}\nComing up: ${nextText}\nPoints and reward progress update when this walk-in order is completed.`;
       renderWalkinBenefits();
+      if (restoredBenefitSelection) {
+        const selection = restoredBenefitSelection;
+        restoredBenefitSelection = null;
+        if ([...$("walkinRedeemPoints").options].some(option => option.value === selection.points)) $("walkinRedeemPoints").value = selection.points;
+        if ([...$("walkinReward").options].some(option => option.value === selection.reward)) $("walkinReward").value = selection.reward;
+        renderWalkinBenefits();
+      }
     } else {
       if (autoFilledCustomerName && $("walkinName").value.trim() === autoFilledCustomerName) $("walkinName").value = "Walk-in customer";
       autoFilledCustomerName = "";
@@ -942,6 +976,111 @@ function addCatalogItem(index) {
   renderWalkinCart();
 }
 
+function changeCatalogItemQuantity(name, delta) {
+  const line = cart.find(item => item.name === name);
+  if (!line) return;
+  line.qty = Math.max(0, Number(line.qty || 0) + delta);
+  if (!line.qty) cart = cart.filter(item => item.name !== name);
+  renderWalkinCart();
+}
+
+function walkinDraftStorageKey() {
+  return activeStaffUid ? `cravingHeaven.staffWalkinDraft.${activeStaffUid}` : "";
+}
+
+function saveWalkinDraft() {
+  if (restoringWalkinDraft || editingWalkinOrderId || !activeStaffUid) return;
+  const key = walkinDraftStorageKey();
+  if (!key) return;
+  const draft = {
+    items: cart.map(item => ({ name: item.name, qty: Number(item.qty) || 0 })),
+    customerName: $("walkinName").value,
+    mobile: $("walkinMobile").value,
+    paymentMethod: $("paymentMethod").value,
+    paymentStatus: $("paymentStatus").value,
+    redeemPoints: $("walkinRedeemPoints").value,
+    loyaltyRewardId: $("walkinReward").value,
+    requestId: pendingWalkinRequestId,
+    savedAt: Date.now()
+  };
+  try {
+    if (!draft.items.length && !draft.mobile.trim() && (!draft.customerName.trim() || draft.customerName.trim() === "Walk-in customer")) {
+      localStorage.removeItem(key);
+      $("walkinDraftStatus").hidden = true;
+      $("clearWalkinDraftButton").hidden = true;
+      return;
+    }
+    localStorage.setItem(key, JSON.stringify(draft));
+    $("walkinDraftStatus").textContent = "Draft saved on this device";
+    $("walkinDraftStatus").hidden = false;
+    $("clearWalkinDraftButton").hidden = false;
+  } catch (error) {
+    console.warn("Could not save the walk-in draft on this device:", error);
+    $("walkinDraftStatus").textContent = "Device draft storage is unavailable";
+    $("walkinDraftStatus").hidden = false;
+  }
+}
+
+function scheduleWalkinDraftSave() {
+  clearTimeout(walkinDraftTimer);
+  walkinDraftTimer = setTimeout(saveWalkinDraft, 120);
+}
+
+function restoreWalkinDraft() {
+  const key = walkinDraftStorageKey();
+  if (!key) return;
+  let draft;
+  try { draft = JSON.parse(localStorage.getItem(key) || "null"); }
+  catch { localStorage.removeItem(key); return; }
+  if (!draft || typeof draft !== "object") return;
+  restoringWalkinDraft = true;
+  cart = (Array.isArray(draft.items) ? draft.items : []).flatMap(saved => {
+    const item = catalogItems.find(entry => entry.name === saved.name);
+    const qty = Math.max(0, Math.min(99, Number(saved.qty) || 0));
+    return item && qty ? [{ ...item, qty }] : [];
+  });
+  $("walkinName").value = typeof draft.customerName === "string" ? draft.customerName : "Walk-in customer";
+  $("walkinMobile").value = typeof draft.mobile === "string" ? draft.mobile : "";
+  $("paymentMethod").value = ["Cash", "UPI"].includes(draft.paymentMethod) ? draft.paymentMethod : "Cash";
+  $("paymentStatus").value = ["paid", "pending"].includes(draft.paymentStatus) ? draft.paymentStatus : "paid";
+  restoredBenefitSelection = { points: String(draft.redeemPoints || "0"), reward: String(draft.loyaltyRewardId || "") };
+  pendingWalkinRequestId = typeof draft.requestId === "string" && /^[a-zA-Z0-9_-]{16,80}$/.test(draft.requestId) ? draft.requestId : null;
+  renderWalkinCart();
+  $("walkinDraftStatus").textContent = "Unfinished order restored · draft saved on this device";
+  $("walkinDraftStatus").hidden = false;
+  $("clearWalkinDraftButton").hidden = false;
+  restoringWalkinDraft = false;
+  if (mobileField.value.trim()) lookupWalkinCustomer();
+  if (cart.length || $("walkinMobile").value.trim()) {
+    activeTab = "new";
+    document.querySelectorAll("[data-tab]").forEach(tab => tab.classList.toggle("active", tab.dataset.tab === "new"));
+    ordersPanel.hidden = true;
+    newOrderPanel.hidden = false;
+  }
+}
+
+$("walkinName").addEventListener("input", scheduleWalkinDraftSave);
+$("walkinMobile").addEventListener("input", scheduleWalkinDraftSave);
+$("paymentMethod").addEventListener("change", scheduleWalkinDraftSave);
+$("paymentStatus").addEventListener("change", scheduleWalkinDraftSave);
+$("walkinRedeemPoints").addEventListener("change", scheduleWalkinDraftSave);
+$("walkinReward").addEventListener("change", scheduleWalkinDraftSave);
+$("clearWalkinDraftButton").addEventListener("click", () => {
+  cart = [];
+  pendingWalkinRequestId = null;
+  $("walkinName").value = "Walk-in customer";
+  $("walkinMobile").value = "";
+  $("paymentMethod").value = "Cash";
+  $("paymentStatus").value = "paid";
+  $("walkinRedeemPoints").value = "0";
+  $("walkinReward").value = "";
+  lastLookupResult = null;
+  lastLookedUpMobile = "";
+  renderWalkinCart();
+  saveWalkinDraft();
+  orderMessage.textContent = "Unfinished order cleared from this device.";
+});
+
 function renderWalkinCart() {
   const cartNode = $("walkinCart");
   if (!cart.length) cartNode.innerHTML = '<div class="cart-empty">Choose a dish to start this order.</div>';
@@ -950,6 +1089,8 @@ function renderWalkinCart() {
   $("cartItemCount").textContent = `${cart.reduce((sum, item) => sum + item.qty, 0)} items`;
   $("walkinTotal").textContent = money(total);
   $("saveWalkinButton").disabled = !cart.length;
+  syncMenuQuickQuantities();
+  scheduleWalkinDraftSave();
   renderWalkinBenefits();
 }
 $("walkinCart").addEventListener("click", event => {
@@ -1046,7 +1187,8 @@ $("saveWalkinButton").addEventListener("click", async () => {
       renderOrders();
       return;
     }
-    await lookupWalkinCustomer();
+    const needsLoyaltyLookup = Number($("walkinRedeemPoints").value || 0) > 0 || Boolean($("walkinReward").value);
+    if (needsLoyaltyLookup) await lookupWalkinCustomer();
     const walkinOrder = {
       customerName: $("walkinName").value.trim() || "Walk-in customer",
       mobile: $("walkinMobile").value.replace(/[\s()-]/g, "").trim(),
@@ -1057,10 +1199,14 @@ $("saveWalkinButton").addEventListener("click", async () => {
       requestId: pendingWalkinRequestId,
       items: cart.map(item => ({ name: item.name, qty: item.qty }))
     };
+    saveWalkinDraft();
     const result = await httpsCallable(functions, "createWalkInOrder")(walkinOrder);
     const created = { id: result.data.orderId, orderNumber: result.data.orderNumber || "", ...walkinOrder, items: result.data.items || cart.map(item => ({ ...item, lineTotal: item.price * item.qty })), subtotal: Number(result.data.subtotal ?? result.data.total), discountAmount: Number(result.data.discountAmount || 0), pointsDiscount: Number(result.data.pointsDiscount || 0), pointsRedeemed: Number(result.data.pointsRedeemed || 0), deliveryCharge: 0, total: result.data.total, amountPaid: Number(result.data.amountPaid || 0), balanceDue: Number(result.data.balanceDue || 0), paymentStatus: result.data.paymentStatus || walkinOrder.paymentStatus, source: "walk-in", orderType: "walk-in", status: "new", loyaltyLinked: Boolean(result.data.loyaltyLinked), pointsToAward: Number(result.data.pointsToAward || 0), benefitTitle: result.data.benefitTitle || "", createdAt: new Date().toISOString() };
     orders.unshift(created);
     pendingWalkinRequestId = null;
+    try { localStorage.removeItem(walkinDraftStorageKey()); } catch {}
+    $("walkinDraftStatus").hidden = true;
+    $("clearWalkinDraftButton").hidden = true;
     cart = [];
     renderWalkinCart();
     $("walkinName").value = "Walk-in customer";

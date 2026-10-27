@@ -95,8 +95,11 @@ input:focus, select:focus { border-color: #c49452; box-shadow: 0 0 0 3px #c49452
 .menu-result-copy { display: block; min-width: 0; }
 .menu-result-copy small { display: block; color: #a17337; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; }
 .menu-result-copy strong { display: block; font-size: 12px; line-height: 1.35; }
-.menu-result-price { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 850; white-space: nowrap; }
-.menu-result-price b { width: 23px; height: 23px; display: grid; place-items: center; border-radius: 50%; background: #f4e7d2; color: #81531a; font-size: 15px; }
+.menu-result-copy .menu-result-price { display:block; margin-top:5px; font-size:12px; font-weight:850; white-space:nowrap; }
+.menu-quick-quantity { display:flex; align-items:center; gap:5px; flex:none; }
+.menu-quick-quantity button { width:32px; height:32px; display:grid; place-items:center; border:0; border-radius:9px; background:#f1e8dc; color:#49372c; font-size:19px; font-weight:800; touch-action:manipulation; }
+.menu-quick-quantity button:last-child { background:var(--red); color:#fff; }
+.menu-quick-quantity output { min-width:20px; text-align:center; font-size:13px; font-weight:900; }
 .current-check { position: sticky; top: 16px; background: #fbf8f4; border: 1px solid #eee3d8; border-radius: 15px; padding: 17px; }
 .check-heading { margin-bottom: 4px; }
 .walkin-cart { margin: 10px 0 16px; max-height: 290px; overflow: auto; }
@@ -296,6 +299,12 @@ input:focus,select:focus { border-color:#bd8f52; box-shadow:0 0 0 3px #bd8f521a;
 .add-order-items-button:hover { border-color:#c99b5c; background:#fff1d7; }
 .order-balance-due { color:#9d3d22; font-size:10px; font-weight:850; }
 .section-heading #walkinEditHint { margin:6px 0 0; font-size:12px; }
+.walkin-editor-actions { display:flex; align-items:center; gap:12px; }
+.walkin-draft-status { margin:7px 0 0; color:#47734b; font-size:11px; font-weight:750; }
+.walkin-draft-status[hidden] { display:none; }
+.menu-result { cursor:default; }
+.menu-quick-quantity button:active { transform:scale(.94); }
+.menu-quick-quantity button:disabled { opacity:.5; }
 @media(max-width:700px) {
   .order-card { grid-template-columns:minmax(0,1fr); gap:11px; padding:14px; }
   .order-card-actions { min-width:0; width:100%; flex-direction:row; align-items:center; justify-content:space-between; gap:8px; }

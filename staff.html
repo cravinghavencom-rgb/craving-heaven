@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow">
   <title>Staff Desk | CRAVING HEAVEN</title>
   <link rel="icon" type="image/png" href="images/logo.png">
-  <link rel="stylesheet" href="staff.css?v=20261025-order-history">
+  <link rel="stylesheet" href="staff.css?v=20261027-fast-counter-drafts">
 </head>
 <body>
   <header class="staff-header"><a class="brand" href="/"><img src="images/logo.png" alt=""><span>CRAVING HEAVEN<small>STAFF DESK</small></span></a><button id="logoutButton" class="quiet-button" hidden>Log out</button></header>
@@ -33,10 +33,10 @@
         <p id="availabilityActionMessage" class="message" role="status"></p>
       </section>
       <section id="newOrderPanel" class="panel" hidden>
-        <div class="section-heading"><div><p class="eyebrow">COUNTER ORDER</p><h2 id="walkinEditorTitle">New walk-in order</h2><p id="walkinEditHint" class="muted" hidden>Add items to this active walk-in order. Prices and points will be recalculated.</p></div><button id="cancelEditOrderButton" class="quiet-button" type="button" hidden>Cancel</button></div>
+        <div class="section-heading"><div><p class="eyebrow">COUNTER ORDER</p><h2 id="walkinEditorTitle">New walk-in order</h2><p id="walkinEditHint" class="muted" hidden>Add items to this active walk-in order. Prices and points will be recalculated.</p><p id="walkinDraftStatus" class="walkin-draft-status" role="status" hidden>Draft saved on this device</p></div><div class="walkin-editor-actions"><button id="clearWalkinDraftButton" class="text-button" type="button" hidden>Clear draft</button><button id="cancelEditOrderButton" class="quiet-button" type="button" hidden>Cancel</button></div></div>
         <div class="order-builder-grid">
           <div class="builder-menu">
-            <div class="menu-picker-heading"><div><p class="eyebrow">STEP 1 · ADD ITEMS</p><h3>Tap + to add food</h3><p class="muted menu-picker-hint">Search or filter the menu. Adjust quantities in Your order.</p></div><span class="menu-count" id="menuCount"></span></div>
+            <div class="menu-picker-heading"><div><p class="eyebrow">STEP 1 · ADD ITEMS</p><h3>Tap + or − beside a dish</h3><p class="muted menu-picker-hint">Your order and total update as you tap.</p></div><span class="menu-count" id="menuCount"></span></div>
             <div class="menu-filters"><label><span class="sr-only">Filter menu category</span><select id="menuCategory"></select></label><label class="menu-search"><span class="sr-only">Search menu items</span><input id="menuSearch" type="search" placeholder="Search dishes or combos"></label></div>
             <div id="menuResults" class="menu-results" aria-live="polite"></div>
           </div>
@@ -74,6 +74,6 @@
   <section id="invoice" class="invoice" aria-label="Order invoice"></section>
 
   <script src="menu.js?v=20261023-remove-cheese-slice"></script>
-  <script type="module" src="staff.js?v=20261026-app-check-appid-fix"></script>
+  <script type="module" src="staff.js?v=20261027-fast-counter-drafts"></script>
 </body>
 </html>
