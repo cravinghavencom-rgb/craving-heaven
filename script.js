@@ -1737,10 +1737,16 @@ let pendingGpsCoordinates = null;
   }
 
   function renderMenu() {
+    const categoryIcons = {
+      burgers: "🍔", shawarma: "🌯", wraps: "🌯", bowls: "🥣", strips: "🍗",
+      wings: "🍗", popcorn: "🍿", "signature-fries": "🍟", "french-fries": "🍟", extras: "🥣"
+    };
     sectionsRoot.innerHTML = Object.entries(MENU_DATA).map(([id, section]) => {
       const cards = section.items.map(item => {
         const inCart = item.options ? null : cartItem(item.name, Number(item.price));
         const image = item.image ? `<img src="${esc(item.image)}" alt="${esc(item.name)}" loading="lazy" onerror="this.closest('.food-image').classList.add('image-missing')">` : "";
+        const description = String(item.description || "").trim();
+        const showDescription = description && description.replace(/[.!?]+$/, "").toLocaleLowerCase() !== String(item.name).trim().toLocaleLowerCase();
 
         let controls;
         if (item.options) {
@@ -1778,13 +1784,13 @@ let pendingGpsCoordinates = null;
 
         return `
           <article class="menu-card">
-            <div class="food-image${item.image ? "" : " image-missing"}" data-fallback="${esc(item.name)}">
+            <div class="food-image${item.image ? "" : " image-missing"}" data-category="${esc(id)}">
               ${image}
-              <span class="image-fallback">${esc(item.name)}</span>
+              <span class="image-fallback" aria-hidden="true"><span class="image-fallback-icon">${categoryIcons[id] || "✦"}</span></span>
             </div>
             <div class="card-content">
               <h3>${esc(item.name)}</h3>
-              <p>${esc(item.description)}</p>
+              ${showDescription ? `<p>${esc(description)}</p>` : ""}
               ${controls}
             </div>
           </article>`;
@@ -1794,7 +1800,7 @@ let pendingGpsCoordinates = null;
         <section class="menu-section" id="${esc(id)}">
           <div class="section-heading">
             <h2>${esc(section.title)}</h2>
-            <p>${esc(section.subtitle)}</p>
+            <span class="menu-category-count">${section.items.length} ${section.items.length === 1 ? "item" : "items"}</span>
           </div>
           <div class="menu-grid">${cards}</div>
         </section>`;
