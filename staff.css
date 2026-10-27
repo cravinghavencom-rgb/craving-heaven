@@ -302,6 +302,12 @@ input:focus,select:focus { border-color:#bd8f52; box-shadow:0 0 0 3px #bd8f521a;
 .walkin-editor-actions { display:flex; align-items:center; gap:12px; }
 .walkin-draft-status { margin:7px 0 0; color:#47734b; font-size:11px; font-weight:750; }
 .walkin-draft-status[hidden] { display:none; }
+.walkin-points-estimate { display:flex; align-items:center; justify-content:space-between; gap:14px; margin:7px 0 2px; padding:11px 12px; border:1px solid #dce8d2; border-radius:11px; background:#f4f8ef; color:#405736; }
+.walkin-points-estimate>div { min-width:0; }
+.walkin-points-estimate>div>strong { display:block; font-size:12px; }
+.walkin-points-estimate small { display:block; margin-top:4px; color:#68775c; font-size:10px; line-height:1.4; }
+.walkin-points-estimate>#walkinPointsEstimate { flex:none; color:#355a2e; font-size:14px; white-space:nowrap; }
+.walkin-points-estimate[hidden] { display:none; }
 .menu-result { cursor:default; }
 .menu-quick-quantity button:active { transform:scale(.94); }
 .menu-quick-quantity button:disabled { opacity:.5; }
@@ -314,4 +320,9 @@ input:focus,select:focus { border-color:#bd8f52; box-shadow:0 0 0 3px #bd8f521a;
   .order-address summary { gap:7px; padding:9px; }
   .order-address p { padding-left:34px; }
   .order-status-control { grid-column:auto; }
+}
+@media(max-width:420px) {
+  .walkin-points-estimate { align-items:flex-start; gap:8px; padding:10px; }
+  .walkin-points-estimate>div>strong { font-size:11px; }
+  .walkin-points-estimate>#walkinPointsEstimate { font-size:12px; }
 }

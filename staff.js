@@ -63,6 +63,7 @@ let activeStaffUid = "";
 let restoringWalkinDraft = false;
 let walkinDraftTimer = null;
 let restoredBenefitSelection = null;
+let walkinPointRates = { regular: 10, combo: 20 };
 
 const money = value => `₹${Number(value || 0).toLocaleString("en-IN")}`;
 const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
@@ -756,14 +757,16 @@ $("menuResults").addEventListener("click", event => {
 renderMenuResults();
 httpsCallable(functions, "getPublicBusinessConfig")({})
   .then(result => {
-  if (applyPublicMenu(result.data)) {
-    cart = cart.flatMap(line => {
-      const current = catalogItems.find(item => item.name === line.name);
-      return current ? [{ ...current, qty: line.qty }] : [];
-    });
-    renderMenuResults();
-    renderWalkinCart();
-  }
+    if (Number(result.data?.rewards?.pointRateRegularRupees) > 0) walkinPointRates.regular = Number(result.data.rewards.pointRateRegularRupees);
+    if (Number(result.data?.rewards?.pointRateComboRupees) > 0) walkinPointRates.combo = Number(result.data.rewards.pointRateComboRupees);
+    if (applyPublicMenu(result.data)) {
+      cart = cart.flatMap(line => {
+        const current = catalogItems.find(item => item.name === line.name);
+        return current ? [{ ...current, qty: line.qty }] : [];
+      });
+      renderMenuResults();
+      renderWalkinCart();
+    } else renderWalkinPointsEstimate();
   })
   .catch(error => console.warn("Could not load updated staff menu:", error));
 
@@ -825,6 +828,7 @@ async function lookupWalkinCustomer() {
       loyaltyHint.classList.add("is-missing");
       loyaltyHint.textContent = "No verified website account found for this number. The order can still be created, but loyalty won't be linked.";
       $("walkinBenefits").hidden = true;
+      renderWalkinPointsEstimate();
     }
     return result.data;
   } catch (error) {
@@ -832,6 +836,7 @@ async function lookupWalkinCustomer() {
       loyaltyHint.classList.remove("is-matched");
       loyaltyHint.classList.add("is-missing");
       loyaltyHint.textContent = "Customer details could not be loaded. Check the number or connection and retry.";
+      renderWalkinPointsEstimate();
     }
     return null;
   }
@@ -842,6 +847,7 @@ mobileField.addEventListener("input", () => {
   customerLookupVersion += 1;
   lastLookedUpMobile = "";
   lastLookupResult = null;
+  loyaltyHint.classList.remove("is-matched", "is-missing");
   $("walkinRedeemPoints").value = "0";
   $("walkinReward").value = "";
   renderWalkinBenefits();
@@ -870,11 +876,58 @@ function getWalkinEligibleSubtotal() {
   return cart.reduce((sum, item) => sum + (item.group === "COMBOS" || item.group === "EXTRAS & DIPS" ? 0 : item.price * item.qty), 0);
 }
 
+function renderWalkinPointsEstimate() {
+  const row = $("walkinPointsEstimateRow");
+  if (editingWalkinOrderId) {
+    row.hidden = true;
+    return;
+  }
+  row.hidden = false;
+  const regularSubtotal = cart.reduce((sum, item) => sum + (item.group !== "COMBOS" && item.group !== "EXTRAS & DIPS" && !item.isFreeOffer && !item.isLoyaltyReward ? Number(item.price || 0) * Number(item.qty || 0) : 0), 0);
+  const comboSubtotal = cart.reduce((sum, item) => sum + (item.group === "COMBOS" ? Number(item.price || 0) * Number(item.qty || 0) : 0), 0);
+  const redeemedPoints = Number($("walkinRedeemPoints").value || 0);
+  const selectedRewardId = $("walkinReward").value;
+  const rewards = lastLookupResult?.found && Array.isArray(lastLookupResult.availableRewards) ? lastLookupResult.availableRewards : [];
+  const reward = rewards.find(item => item.ticketId === selectedRewardId);
+  let foodDiscount = redeemedPoints ? redeemedPoints / 100 * 10 : 0;
+  if (!redeemedPoints && reward?.kind === "discount") foodDiscount = Number(reward.amount || 0);
+  if (!redeemedPoints && reward?.kind === "percent-discount") {
+    const eligibleSubtotal = getWalkinEligibleSubtotal();
+    const cap = Number(reward.maxDiscount || 0);
+    foodDiscount = Math.min(Math.floor(eligibleSubtotal * Number(reward.percent || 0) / 100), cap > 0 ? cap : eligibleSubtotal);
+  }
+  const basePoints = Math.floor(Math.max(0, regularSubtotal - foodDiscount) / walkinPointRates.regular)
+    + Math.floor(comboSubtotal / walkinPointRates.combo);
+  let estimatedPoints = basePoints;
+  if (reward?.kind === "bonus-points") estimatedPoints += Number(reward.points || 0);
+  if (reward?.kind === "double-points") estimatedPoints += Math.min(basePoints, Number(reward.maxBonusPoints || 0));
+
+  const mobile = $("walkinMobile").value.trim();
+  $("walkinPointsEstimate").textContent = `${estimatedPoints.toLocaleString("en-IN")} ${estimatedPoints === 1 ? "point" : "points"}`;
+  if (!cart.length) {
+    $("walkinPointsEstimateHint").textContent = "Add items to see the points the customer could earn.";
+  } else if (!mobile) {
+    $("walkinPointsEstimateHint").textContent = estimatedPoints
+      ? "No number entered — the customer would miss these points. Combos earn half-rate; extras do not earn points."
+      : "No points on this order. Combos earn half-rate; extras do not earn points.";
+  } else if (lastLookupResult?.found) {
+    $("walkinPointsEstimateHint").textContent = "Estimated after order completion for this customer. Combos earn half-rate; extras do not earn points.";
+  } else if (lastLookupResult && !lastLookupResult.found) {
+    $("walkinPointsEstimateHint").textContent = "No customer account matched this number, so points cannot be credited.";
+    $("walkinPointsEstimate").textContent = "0 points";
+  } else if ($("walkinLoyaltyHint").classList.contains("is-missing")) {
+    $("walkinPointsEstimateHint").textContent = "Could not confirm this customer account. Points are credited only to a matched account.";
+  } else {
+    $("walkinPointsEstimateHint").textContent = "Potential points if this number is linked to a customer account. Combos earn half-rate; extras do not earn points.";
+  }
+}
+
 function renderWalkinBenefits() {
   const benefitsPanel = $("walkinBenefits");
   if (editingWalkinOrderId) {
     benefitsPanel.hidden = true;
     $("walkinDiscountRow").hidden = true;
+    renderWalkinPointsEstimate();
     return;
   }
   const customer = lastLookupResult?.found ? lastLookupResult : null;
@@ -883,6 +936,7 @@ function renderWalkinBenefits() {
     $("walkinDiscountRow").hidden = true;
     const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
     $("walkinTotal").textContent = money(subtotal);
+    renderWalkinPointsEstimate();
     return;
   }
   benefitsPanel.hidden = false;
@@ -956,6 +1010,7 @@ function renderWalkinBenefits() {
   }
   $("walkinBenefitHint").textContent = hint;
   $("walkinTotal").textContent = money(Math.max(0, subtotal - benefitDiscount));
+  renderWalkinPointsEstimate();
 }
 
 $("walkinRedeemPoints").addEventListener("change", () => {
