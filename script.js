@@ -608,6 +608,7 @@ function handlePlaceOrderClick() {
 
   function setAddressFormVisible(visible) {
     if (!addressForm) return;
+    if (visible && deliveryLocationDialog && !deliveryLocationDialog.open) deliveryLocationDialog.showModal();
     addressForm.hidden = !visible;
     if (visible) addressForm.scrollIntoView({ behavior: "smooth", block: "center" });
   }
@@ -646,6 +647,7 @@ function handlePlaceOrderClick() {
     }, { merge: true });
     currentCustomerProfile = { ...currentCustomerProfile, ...nextProfile };
     renderSavedAddresses();
+    refreshHomeDeliverySelector();
   }
 
   async function submitAddressForm(event) {
@@ -664,7 +666,9 @@ function handlePlaceOrderClick() {
     }
     const addresses = [...(currentCustomerProfile.addresses || [])];
     const addressId = id || (crypto.randomUUID ? crypto.randomUUID() : `addr-${Date.now()}`);
-    const nextAddress = { id: addressId, label: label || "Address", name, address, landmark, area, isDefault: isDefault || addresses.length === 0 };
+    const oldAddress = addresses.find(item => item.id === addressId);
+    const location = pendingGpsCoordinates || oldAddress?.location || null;
+    const nextAddress = { id: addressId, label: label || "Address", name, address, landmark, area, isDefault: isDefault || addresses.length === 0, ...(location ? { location } : {}) };
     const existingIndex = addresses.findIndex(item => item.id === addressId);
     if (existingIndex < 0 && addresses.length >= 10) {
       addressMessage.textContent = "You can save up to 10 addresses.";
@@ -678,10 +682,17 @@ function handlePlaceOrderClick() {
     submitButton.textContent = "SAVING…";
     try {
       await saveCustomerProfile({ ...currentCustomerProfile, name, addresses });
+      pendingGpsCoordinates = null;
       addressForm.reset();
       document.getElementById("addressId").value = "";
       setAddressFormVisible(false);
+      refreshHomeDeliverySelector(`address:${addressId}`);
+      if (checkoutSavedAddress) {
+        checkoutSavedAddress.value = addressId;
+        checkoutSavedAddress.dispatchEvent(new Event("change", { bubbles: true }));
+      }
       prefillCheckoutFromDefaultAddress();
+      deliveryLocationDialog?.close();
     } catch (error) {
       console.error("Could not save delivery address:", error);
       addressMessage.textContent = "Could not save this address. Please try again.";
@@ -695,7 +706,10 @@ function handlePlaceOrderClick() {
     const address = currentCustomerProfile.addresses.find(item => item.id === addressId);
     if (!address) return;
     document.getElementById("addressId").value = address.id;
-    document.getElementById("addressLabel").value = address.label || "";
+    const labelSelect = document.getElementById("addressLabel");
+    const savedLabel = address.label || "Home";
+    if (![...labelSelect.options].some(option => option.value === savedLabel)) labelSelect.add(new Option(savedLabel, savedLabel));
+    labelSelect.value = savedLabel;
     document.getElementById("addressContactName").value = address.name || "";
     document.getElementById("addressLine").value = address.address || "";
     document.getElementById("addressLandmark").value = address.landmark || "";
@@ -731,11 +745,37 @@ function handlePlaceOrderClick() {
     const valid = [...homeDeliveryArea.options].some(option => option.value === wanted);
     const defaultAddress = addresses.find(item => item.isDefault) || addresses[0];
     homeDeliveryArea.value = valid ? wanted : defaultAddress ? `address:${defaultAddress.id}` : "";
+    const selection = homeDeliveryArea.value;
+    const selectedAddress = selection.startsWith("address:") ? addresses.find(item => item.id === selection.slice(8)) : null;
+    const selectedArea = selection.startsWith("area:") ? selection.slice(5) : "";
+    if (homeDeliveryLabel) homeDeliveryLabel.textContent = selectedAddress ? `${selectedAddress.label || "Saved address"} · ${selectedAddress.area || ""}`.trim().replace(/ ·$/, "") : selectedArea || "Choose your location";
+    if (homeDeliveryDetail) homeDeliveryDetail.textContent = selectedAddress ? [selectedAddress.address, selectedAddress.landmark ? `Near ${selectedAddress.landmark}` : ""].filter(Boolean).join(" · ") : selectedArea ? "Delivery area selected" : "Tap to set delivery address";
     try {
       if (homeDeliveryArea.value) localStorage.setItem("chHomeDeliveryArea", homeDeliveryArea.value);
-      else if (wanted.startsWith("address:") && !addresses.length) return;
+      else if (wanted.startsWith("address:") && !addresses.length) { /* Keep the saved choice until the signed-in profile loads. */ }
       else localStorage.removeItem("chHomeDeliveryArea");
     } catch {}
+    renderHomeDeliveryAddresses();
+  }
+
+  function renderHomeDeliveryAddresses() {
+    if (!homeSavedAddressList) return;
+    const addresses = Array.isArray(currentCustomerProfile.addresses) ? currentCustomerProfile.addresses : [];
+    if (!window.firebaseAuth?.currentUser) {
+      homeSavedAddressList.innerHTML = `<p class="delivery-address-empty">Sign in to keep Home, Work, and other addresses saved to your account.</p>`;
+      return;
+    }
+    if (!addresses.length) {
+      homeSavedAddressList.innerHTML = `<p class="delivery-address-empty">No saved addresses yet. Use GPS or add an address below.</p>`;
+      return;
+    }
+    const selectedId = homeDeliveryArea?.value.startsWith("address:") ? homeDeliveryArea.value.slice(8) : "";
+    homeSavedAddressList.innerHTML = addresses.map(address => `
+      <button type="button" class="home-saved-address${address.id === selectedId ? " is-selected" : ""}" data-home-address="${esc(address.id)}">
+        <span class="home-saved-address-icon" aria-hidden="true">${address.label === "Work" ? "⌂" : address.label === "Home" ? "⌂" : "⌖"}</span>
+        <span><strong>${esc(address.label || "Saved address")}${address.isDefault ? " · Default" : ""}</strong><small>${esc([address.address, address.landmark ? `Near ${address.landmark}` : "", address.area].filter(Boolean).join(", "))}</small></span>
+        <span class="home-saved-address-check" aria-hidden="true">${address.id === selectedId ? "✓" : ""}</span>
+      </button>`).join("");
   }
 
   function prefillCheckoutFromDefaultAddress() {
@@ -785,12 +825,15 @@ function handlePlaceOrderClick() {
       ordersContent.innerHTML = accountSignInCard("Log in with your mobile number to see orders placed with this account.");
       profileContent.innerHTML = `<div class="profile-account-card"><div class="profile-avatar">♙</div><div><span>WELCOME TO</span><strong>CRAVING HEAVEN</strong><p>Sign in to view your profile.</p></div><button type="button" class="account-primary-button" data-account-login>LOGIN</button></div>`;
       renderSavedAddresses();
+      refreshHomeDeliverySelector();
       const pointsBalance = document.getElementById("loyaltyPointsBalance");
       if (pointsBalance) pointsBalance.textContent = "—";
       const pointsValue = document.getElementById("loyaltyPointsValue");
       if (pointsValue) pointsValue.textContent = "—";
       const homePointsBalance = document.getElementById("homeLoyaltyPointsBalance");
       if (homePointsBalance) homePointsBalance.textContent = "Sign in";
+      const headerPointsBalance = document.getElementById("headerCravingPointsBalance");
+      if (headerPointsBalance) headerPointsBalance.textContent = "Sign in";
       const homePointsSummary = document.getElementById("homeLoyaltySummary");
       if (homePointsSummary) homePointsSummary.textContent = "to see your points.";
       currentLoyaltyAccount = { points: 0, completedOrders: 0, availableRewards: [] };
@@ -805,6 +848,8 @@ function handlePlaceOrderClick() {
     const homePointsBalance = document.getElementById("homeLoyaltyPointsBalance");
     const homePointsSummary = document.getElementById("homeLoyaltySummary");
     if (homePointsBalance) homePointsBalance.textContent = "Loading…";
+      const headerPointsBalance = document.getElementById("headerCravingPointsBalance");
+      if (headerPointsBalance) headerPointsBalance.textContent = "…";
     if (homePointsSummary) homePointsSummary.textContent = "your Craving Points.";
     profileContent.innerHTML = `<div class="profile-account-card"><div class="profile-avatar">${esc(phone.slice(-2))}</div><div><span>LOGGED IN AS</span><strong>${esc(phone)}</strong><p>Your account is ready.</p></div><button type="button" class="account-secondary-button" data-account-logout>LOG OUT</button></div>`;
     if (savedAddresses) savedAddresses.innerHTML = `<div class="account-loading">Loading saved addresses…</div>`;
@@ -812,6 +857,7 @@ function handlePlaceOrderClick() {
     const firestoreApi = window.FirebaseFirestoreAPI;
     if (!window.firebaseDB || !firestoreApi?.getDocs || !firestoreApi?.getDoc || !firestoreApi?.query || !firestoreApi?.where) {
       if (homePointsBalance) homePointsBalance.textContent = "—";
+      if (headerPointsBalance) headerPointsBalance.textContent = "—";
       if (homePointsSummary) homePointsSummary.textContent = "points are temporarily unavailable.";
       ordersContent.innerHTML = `<div class="account-empty"><p>Order history is temporarily unavailable. Please try again later.</p></div>`;
       return;
@@ -852,6 +898,8 @@ function handlePlaceOrderClick() {
       if (expiryNotice) expiryNotice.textContent = expiringLots.length ? `${expiringLots.reduce((sum, lot) => sum + Number(lot.points || 0), 0)} game Craving Points expire ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(expiringLots[0].expiresAt?.toDate ? expiringLots[0].expiresAt.toDate() : new Date(expiringLots[0].expiresAt))}. Use them before then.` : "";
       const homePointsBalance = document.getElementById("homeLoyaltyPointsBalance");
       if (homePointsBalance) homePointsBalance.textContent = pointsText;
+      const headerPointsBalance = document.getElementById("headerCravingPointsBalance");
+      if (headerPointsBalance) headerPointsBalance.textContent = pointsText;
       const homePointsSummary = document.getElementById("homeLoyaltySummary");
       if (homePointsSummary) homePointsSummary.textContent = "Craving Points · combos earn half rate";
       renderRewardsJourney(currentLoyaltyAccount, true);
@@ -876,6 +924,8 @@ function handlePlaceOrderClick() {
       if (pointsBalance && pointsBalance.textContent === "Loading…") pointsBalance.textContent = "—";
       const homePointsBalance = document.getElementById("homeLoyaltyPointsBalance");
       if (homePointsBalance && homePointsBalance.textContent === "Loading…") homePointsBalance.textContent = "—";
+      const headerPointsBalance = document.getElementById("headerCravingPointsBalance");
+      if (headerPointsBalance && headerPointsBalance.textContent === "…") headerPointsBalance.textContent = "—";
       const homePointsSummary = document.getElementById("homeLoyaltySummary");
       if (homePointsSummary && homePointsSummary.textContent === "your Craving Points.") homePointsSummary.textContent = "couldn’t load. Try again later.";
       ordersContent.innerHTML = `<div class="account-empty"><h2>Orders couldn’t load</h2><p>Please check your connection and try again.</p><button type="button" class="account-primary-button" data-reload-orders>TRY AGAIN</button></div>`;
@@ -1024,6 +1074,13 @@ const checkoutLandmark =
 const checkoutArea =
   document.getElementById("checkoutArea");
 const homeDeliveryArea = document.getElementById("homeDeliveryArea");
+const homeDeliveryPicker = document.getElementById("homeDeliveryPicker");
+const homeDeliveryLabel = document.getElementById("homeDeliveryLabel");
+const homeDeliveryDetail = document.getElementById("homeDeliveryDetail");
+const deliveryLocationDialog = document.getElementById("deliveryLocationDialog");
+const homeSavedAddressList = document.getElementById("homeSavedAddressList");
+const deliveryLocationMessage = document.getElementById("deliveryLocationMessage");
+const useCurrentLocationButton = document.getElementById("useCurrentLocationButton");
 const checkoutSavedAddress = document.getElementById("checkoutSavedAddress");
 const checkoutAddressLabel = document.getElementById("checkoutAddressLabel");
 const savedAddressPickerWrap = document.getElementById("savedAddressPickerWrap");
@@ -1590,6 +1647,7 @@ let customerHasOrderedOnline = false;
   const addressArea = document.getElementById("addressArea");
   const addressMessage = document.getElementById("addressMessage");
   let currentCustomerProfile = { addresses: [] };
+let pendingGpsCoordinates = null;
   let currentLoyaltyAccount = { points: 0, completedOrders: 0, availableRewards: [] };
   let accountRefreshToken = 0;
   
@@ -2546,6 +2604,76 @@ document.addEventListener("click", event => {
   }
   if (checkoutArea && homeDeliveryArea) {
     refreshHomeDeliverySelector();
+    homeDeliveryPicker?.addEventListener("click", () => {
+      refreshHomeDeliverySelector();
+      if (!deliveryLocationDialog?.open) deliveryLocationDialog?.showModal();
+    });
+    deliveryLocationDialog?.querySelector("[data-close-delivery-location]")?.addEventListener("click", () => deliveryLocationDialog.close());
+    deliveryLocationDialog?.addEventListener("click", event => {
+      if (event.target === deliveryLocationDialog) deliveryLocationDialog.close();
+    });
+    document.getElementById("homeAddAddressButton")?.addEventListener("click", () => {
+      if (!window.firebaseAuth?.currentUser) {
+        if (deliveryLocationMessage) deliveryLocationMessage.textContent = "Sign in with your mobile number to save addresses to your account.";
+        openCustomerLogin();
+        return;
+      }
+      addressForm.reset();
+      document.getElementById("addressId").value = "";
+      document.getElementById("addressDefault").checked = !(currentCustomerProfile.addresses || []).length;
+      document.getElementById("addressContactName").value = currentCustomerProfile.name || "";
+      const currentSelection = homeDeliveryArea.value || "";
+      const selectedArea = currentSelection.startsWith("area:") ? currentSelection.slice(5) : checkoutArea.value;
+      if (selectedArea) addressArea.value = selectedArea;
+      if (addressMessage) addressMessage.textContent = "";
+      if (deliveryLocationMessage) deliveryLocationMessage.textContent = pendingGpsCoordinates ? "GPS pin ready. Add your building or flat and confirm the delivery area." : "";
+      setAddressFormVisible(true);
+    });
+    homeSavedAddressList?.addEventListener("click", event => {
+      const button = event.target.closest("[data-home-address]");
+      if (!button) return;
+      homeDeliveryArea.value = `address:${button.dataset.homeAddress}`;
+      homeDeliveryArea.dispatchEvent(new Event("change", { bubbles: true }));
+      deliveryLocationDialog?.close();
+    });
+    useCurrentLocationButton?.addEventListener("click", () => {
+      if (!navigator.geolocation) {
+        if (deliveryLocationMessage) deliveryLocationMessage.textContent = "This browser can’t share its location. Choose your area or enter an address manually.";
+        return;
+      }
+      useCurrentLocationButton.disabled = true;
+      if (deliveryLocationMessage) deliveryLocationMessage.textContent = "Finding your location… Your browser will ask permission first.";
+      navigator.geolocation.getCurrentPosition(position => {
+        pendingGpsCoordinates = {
+          latitude: Number(position.coords.latitude.toFixed(6)),
+          longitude: Number(position.coords.longitude.toFixed(6))
+        };
+        useCurrentLocationButton.disabled = false;
+        if (deliveryLocationMessage) deliveryLocationMessage.textContent = "GPS pin found. Add your building or flat and confirm the delivery area below. The pin is saved only when you save this address.";
+        if (!window.firebaseAuth?.currentUser) {
+          if (deliveryLocationMessage) deliveryLocationMessage.textContent += " Sign in is needed to save it to your account.";
+          openCustomerLogin();
+          return;
+        }
+        addressForm.reset();
+        document.getElementById("addressId").value = "";
+        document.getElementById("addressDefault").checked = !(currentCustomerProfile.addresses || []).length;
+        document.getElementById("addressContactName").value = currentCustomerProfile.name || "";
+        const currentSelection = homeDeliveryArea.value || "";
+        const selectedArea = currentSelection.startsWith("area:") ? currentSelection.slice(5) : checkoutArea.value;
+        if (selectedArea) addressArea.value = selectedArea;
+        if (addressMessage) addressMessage.textContent = "";
+        setAddressFormVisible(true);
+      }, error => {
+        useCurrentLocationButton.disabled = false;
+        const message = error.code === 1
+          ? "Location permission is off. Allow it in your browser, or choose an area and enter your address manually."
+          : error.code === 3
+            ? "Location took too long to find. Try again or enter your address manually."
+            : "We couldn’t find your location. Choose an area and enter your address manually.";
+        if (deliveryLocationMessage) deliveryLocationMessage.textContent = message;
+      }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+    });
     homeDeliveryArea.addEventListener("change", () => {
       const value = homeDeliveryArea.value;
       try {
@@ -2565,6 +2693,7 @@ document.addEventListener("click", event => {
         if (checkoutLandmark) checkoutLandmark.value = "";
         if (checkoutArea) checkoutArea.value = value.slice(5);
       }
+      refreshHomeDeliverySelector(value);
     });
   }
   checkoutSavedAddress?.addEventListener("change", () => {

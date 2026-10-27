@@ -2727,3 +2727,70 @@ body { background:#fbf7f1; color:var(--premium-ink); }
   .home-delivery-copy select { width: 56vw; font-size: 11px; }
   .home-hero { padding-inline: 15px; }
 }
+
+/* Compact delivery picker, points shortcut, and location bottom sheet. */
+.home-delivery-picker { min-width: 0; max-width: min(390px, 43vw); text-align: left; }
+.home-delivery-copy { overflow: hidden; }
+.home-delivery-copy strong { display: block; overflow: hidden; color: #33231d; font-size: 12px; font-weight: 850; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.home-delivery-copy small { display: block; overflow: hidden; max-width: 100%; color: #88766d; font-size: 9px; font-weight: 600; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.header-points-button { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 7px; min-height: 48px; margin-left: 0; padding: 6px 11px; border: 1px solid #f0e3d8; border-radius: 14px; background: #fffaf6; color: #6c3026; text-align: left; }
+.header-points-button > span:last-child { display: grid; gap: 1px; }
+.header-points-button small { color: #88766c; font-size: 8px; font-weight: 900; letter-spacing: .06em; line-height: 1; white-space: nowrap; }
+.header-points-button strong { color: #33231d; font-size: 13px; font-weight: 900; line-height: 1.2; }
+.header-points-icon { display: grid; width: 26px; height: 26px; place-items: center; border-radius: 9px; background: #fff0d7; color: #a96922; font-size: 17px; }
+.header-points-button:hover,.header-points-button:focus-visible { border-color: #dbb4a1; box-shadow: 0 4px 12px rgba(98,49,31,.08); }
+.delivery-location-dialog { width: min(520px, calc(100% - 28px)); max-width: none; max-height: min(88dvh, 780px); margin: auto; padding: 0; overflow: hidden; border: 1px solid #efe4dc; border-radius: 24px; background: #fffdfa; color: #2d211c; box-shadow: 0 24px 80px rgba(35,20,14,.25); }
+.delivery-location-dialog::backdrop { background: rgba(35,23,19,.52); backdrop-filter: blur(3px); }
+.delivery-location-sheet { max-height: min(88dvh, 780px); padding: 23px; overflow: auto; overscroll-behavior: contain; }
+.delivery-location-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; margin-bottom: 18px; }
+.delivery-location-heading h2 { margin-top: 5px; font: 900 22px/1.2 "Montserrat",sans-serif; letter-spacing: -.035em; }
+.delivery-location-close { flex: 0 0 auto; width: 38px; height: 38px; border: 0; border-radius: 50%; background: #f5eee8; color: #654b40; font-size: 25px; }
+.use-current-location-button { display: flex; width: 100%; align-items: center; gap: 13px; padding: 14px; border: 1px solid #ecd9c9; border-radius: 16px; background: linear-gradient(110deg,#fff5e9,#fffdfa); color: #6d3326; text-align: left; }
+.use-current-location-button > span:first-child { display: grid; width: 42px; height: 42px; flex: 0 0 42px; place-items: center; border-radius: 13px; background: #b5121b; color: #fff; font-size: 25px; }
+.use-current-location-button > span:nth-child(2) { display: grid; flex: 1; gap: 3px; }
+.use-current-location-button strong { font-size: 14px; font-weight: 900; }
+.use-current-location-button small { color: #806e64; font-size: 11px; line-height: 1.3; }
+.use-current-location-button > b { font-size: 18px; }
+.use-current-location-button:disabled { opacity: .65; cursor: progress; }
+.delivery-location-message { min-height: 0; margin: 8px 2px 12px; color: #8a4c25; font-size: 11px; line-height: 1.45; }
+.delivery-location-message:empty { display: none; }
+.delivery-address-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0 8px; }
+.delivery-address-list-heading h3 { font: 850 14px "Montserrat",sans-serif; }
+.delivery-address-list-heading button { border: 0; background: transparent; color: #b5121b; font-size: 12px; font-weight: 900; }
+.home-saved-address-list { display: grid; gap: 7px; max-height: 230px; overflow: auto; }
+.home-saved-address { display: grid; grid-template-columns: 38px minmax(0,1fr) 18px; align-items: center; gap: 10px; width: 100%; padding: 10px; border: 1px solid #eee4dc; border-radius: 13px; background: #fff; color: #33231d; text-align: left; }
+.home-saved-address.is-selected { border-color: #ba5a4e; background: #fff9f5; }
+.home-saved-address-icon { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 11px; background: #f7eee7; color: #a65342; font-size: 19px; }
+.home-saved-address > span:nth-child(2) { display: grid; min-width: 0; gap: 3px; }
+.home-saved-address strong { font-size: 12px; font-weight: 900; }
+.home-saved-address small { display: -webkit-box; overflow: hidden; color: #786a62; font-size: 10px; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.home-saved-address-check { color: #b5121b; font-weight: 900; }
+.delivery-address-empty { padding: 10px 2px; color: #786a62; font-size: 11px; line-height: 1.45; }
+.delivery-area-picker-label { display: block; margin: 15px 0 6px; color: #88766c; font-size: 9px; font-weight: 900; letter-spacing: .08em; }
+.delivery-area-picker { width: 100%; min-height: 46px; padding: 0 13px; border: 1px solid #e9ddd3; border-radius: 12px; background: #fff; color: #33231d; font: 700 13px "DM Sans",sans-serif; }
+.delivery-location-footnote { margin-top: 9px; color: #897a71; font-size: 10px; line-height: 1.4; }
+.delivery-address-form { margin-top: 17px; padding-top: 16px; border-top: 1px solid #eee3da; }
+.delivery-address-form[hidden] { display: none; }
+.home-delivery-picker:focus-visible,.header-points-button:focus-visible,.use-current-location-button:focus-visible,.home-saved-address:focus-visible { outline: 3px solid rgba(181,18,27,.28); outline-offset: 2px; }
+@media (max-width: 650px) {
+  .header-inner { gap: 7px; }
+  .home-delivery-picker { flex: 1 1 auto; max-width: none; gap: 6px; min-height: 48px; padding: 5px 7px; }
+  .home-delivery-picker > svg { width: 19px; height: 19px; flex-basis: 19px; }
+  .home-delivery-copy > span { font-size: 7px; }
+  .home-delivery-copy strong { font-size: 10px; }
+  .home-delivery-copy small { font-size: 8px; }
+  .home-delivery-chevron { margin-left: -16px; font-size: 15px; }
+  .header-points-button { gap: 5px; min-height: 44px; padding: 5px 7px; border-radius: 12px; }
+  .header-points-button small { font-size: 7px; letter-spacing: 0; }
+  .header-points-button strong { max-width: 52px; overflow: hidden; font-size: 11px; text-overflow: ellipsis; }
+  .header-points-icon { width: 22px; height: 22px; flex-basis: 22px; border-radius: 8px; font-size: 15px; }
+  .delivery-location-dialog { width: 100%; max-height: 90dvh; margin: auto 0 0; border-radius: 24px 24px 0 0; }
+  .delivery-location-sheet { max-height: 90dvh; padding: 20px 17px calc(20px + env(safe-area-inset-bottom)); }
+  .delivery-location-heading h2 { font-size: 20px; }
+}
+@media (max-width: 370px) {
+  .brand img { width: 42px; height: 42px; }
+  .home-delivery-picker { gap: 5px; padding-inline: 5px; }
+  .home-delivery-picker > svg { width: 17px; height: 17px; flex-basis: 17px; }
+  .header-points-button { padding-inline: 5px; }
+}

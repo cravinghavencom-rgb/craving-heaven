@@ -37,13 +37,41 @@
       <a class="brand" href="#top" data-screen="home" aria-label="CRAVING HEAVEN home">
         <img src="images/logo.png" alt="CRAVING HEAVEN logo">
       </a>
-      <label class="home-delivery-picker" for="homeDeliveryArea">
+      <button class="home-delivery-picker" id="homeDeliveryPicker" type="button" aria-haspopup="dialog" aria-controls="deliveryLocationDialog">
         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.3"/></svg>
-        <span class="home-delivery-copy"><span>DELIVER TO</span><select id="homeDeliveryArea" name="homeDeliveryArea" aria-label="Choose your delivery area"><option value="">Choose your area</option></select></span>
+        <span class="home-delivery-copy"><span>DELIVER TO</span><strong id="homeDeliveryLabel">Choose your location</strong><small id="homeDeliveryDetail">Tap to set delivery address</small></span>
         <span class="home-delivery-chevron" aria-hidden="true">⌄</span>
-      </label>
+      </button>
+      <button class="header-points-button" type="button" data-screen="rewards" aria-label="Open Craving Points and rewards">
+        <span class="header-points-icon" aria-hidden="true">✦</span>
+        <span><small>CRAVING POINTS</small><strong id="headerCravingPointsBalance">Sign in</strong></span>
+      </button>
     </div>
   </header>
+
+  <dialog class="delivery-location-dialog" id="deliveryLocationDialog" aria-labelledby="deliveryLocationTitle">
+    <div class="delivery-location-sheet">
+      <div class="delivery-location-heading"><div><span class="section-kicker">YOUR DELIVERY LOCATION</span><h2 id="deliveryLocationTitle">Where should we deliver?</h2></div><button type="button" class="delivery-location-close" aria-label="Close address selector" data-close-delivery-location>×</button></div>
+      <button type="button" class="use-current-location-button" id="useCurrentLocationButton"><span aria-hidden="true">◎</span><span><strong>Use current location</strong><small>Capture a GPS pin for this address</small></span><b aria-hidden="true">→</b></button>
+      <p class="delivery-location-message" id="deliveryLocationMessage" role="status" aria-live="polite"></p>
+      <div class="delivery-address-list-heading"><h3>Saved addresses</h3><button type="button" id="homeAddAddressButton">+ Add address</button></div>
+      <div class="home-saved-address-list" id="homeSavedAddressList"></div>
+      <label class="delivery-area-picker-label" for="homeDeliveryArea">OR CHOOSE YOUR DELIVERY AREA</label>
+      <select class="delivery-area-picker" id="homeDeliveryArea" name="homeDeliveryArea" aria-label="Choose your delivery area"><option value="">Choose your area</option></select>
+      <p class="delivery-location-footnote">Your browser asks before sharing location. We save the pin only when you save the address. Add your building details and choose the area.</p>
+      <form id="addressForm" class="address-form delivery-address-form" hidden>
+        <input type="hidden" id="addressId">
+        <label>ADDRESS LABEL<select id="addressLabel" required><option value="Home">Home</option><option value="Work">Work</option><option value="Other">Other</option></select></label>
+        <label>CONTACT NAME<input id="addressContactName" maxlength="80" autocomplete="name" required></label>
+        <label>FULL ADDRESS<textarea id="addressLine" rows="3" maxlength="300" placeholder="Flat, building, street" required></textarea></label>
+        <label>LANDMARK <span>OPTIONAL</span><input id="addressLandmark" maxlength="100" placeholder="Nearby landmark"></label>
+        <label>DELIVERY AREA<select id="addressArea" required><option value="">Select your area</option></select></label>
+        <label class="address-default-check"><input id="addressDefault" type="checkbox"> Set as default address</label>
+        <p id="addressMessage" class="address-message" role="status"></p>
+        <div class="address-form-actions"><button type="button" id="cancelAddressButton" class="account-secondary-button">CANCEL</button><button type="submit" class="account-primary-button">SAVE ADDRESS</button></div>
+      </form>
+    </div>
+  </dialog>
 
   <nav class="category-nav" id="categoryNav" aria-label="Menu categories"></nav>
   
@@ -194,17 +222,6 @@
       <section class="address-book" aria-labelledby="addressBookTitle">
         <div class="address-book-heading"><div><span class="section-kicker">DELIVERY DETAILS</span><h2 id="addressBookTitle">Saved Addresses</h2></div><button type="button" class="account-secondary-button" id="addAddressButton">LOGIN TO ADD ADDRESS</button></div>
         <div id="savedAddresses" class="saved-addresses"></div>
-        <form id="addressForm" class="address-form" hidden>
-          <input type="hidden" id="addressId">
-          <label>ADDRESS LABEL<input id="addressLabel" maxlength="30" placeholder="Home, Work, etc." required></label>
-          <label>CONTACT NAME<input id="addressContactName" maxlength="80" autocomplete="name" required></label>
-          <label>FULL ADDRESS<textarea id="addressLine" rows="3" maxlength="300" placeholder="Flat, building, street" required></textarea></label>
-          <label>LANDMARK <span>OPTIONAL</span><input id="addressLandmark" maxlength="100" placeholder="Nearby landmark"></label>
-          <label>DELIVERY AREA<select id="addressArea" required><option value="">Select your area</option></select></label>
-          <label class="address-default-check"><input id="addressDefault" type="checkbox"> Set as default address</label>
-          <p id="addressMessage" class="address-message" role="status"></p>
-          <div class="address-form-actions"><button type="button" id="cancelAddressButton" class="account-secondary-button">CANCEL</button><button type="submit" class="account-primary-button">SAVE ADDRESS</button></div>
-        </form>
       </section>
     </section>
   </main>
