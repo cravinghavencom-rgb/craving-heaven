@@ -35,13 +35,13 @@ const MENU_DATA = {
 };
 
 const COMBO_MENU_DATA = [
- {name:'Craving Mega Platter',price:800,value:970,image:'',items:['CH Crunchy King Burger','Hot Korean Crunchy Burger','Cheese Dust Strips (5 pcs)','Peri Peri Wings (6 pcs)','Cheese Dust Chicken Popcorn (Large)','Classic Salted Fries (Full)']},
- {name:'Ultimate Mixed Feast',price:750,value:910,image:'',items:['Spicy Chipotle BBQ Bowl','Cheese Chicken Shawarma','Peri Peri Strips (5 pcs)','Classic Regular Wings (6 pcs)','Crunchy Chicken Popcorn (Large)','Classic Salted Fries (Full)']},
- {name:'Party Combo',price:500,value:550,image:'',items:['2 Classic Crunchy Burgers','2 Regular Chicken Wraps','Crunchy Chicken Popcorn (Medium)','Classic Salted Fries (Full)']},
- {name:'King’s Chicken Feast',price:380,value:430,image:'',items:['CH Crunchy King Burger','Peri Peri Wings (4 pcs)','Cheese Dust Fries (Full)']},
- {name:'Schezwan Crunch Bowl',price:360,value:420,image:'',items:['Desi Schezwan Tandoori Bowl','Nachos Cheesy Strips (5 pcs)','Crunchy Chicken Popcorn (Medium)']},
- {name:'Korean Burger Wing Box',price:280,value:320,image:'',items:['Hot Korean Crunchy Burger','Classic Regular Wings (4 pcs)','Peri Peri Seasoning Fries (Half)']},
- {name:'Shawarma Crunch Box',price:260,value:300,image:'',items:['Classic Chicken Shawarma','Classic Regular Strips (5 pcs)','Classic Salted Fries (Half)']},
+ {name:'Craving Mega Platter',price:800,value:970,image:'images/combos/craving-mega-platter.png',items:['CH Crunchy King Burger','Hot Korean Crunchy Burger','Cheese Dust Strips (5 pcs)','Peri Peri Wings (6 pcs)','Cheese Dust Chicken Popcorn (Large)','Classic Salted Fries (Full)']},
+ {name:'Ultimate Mixed Feast',price:750,value:910,image:'images/combos/ultimate-mixed-feast.png',items:['Spicy Chipotle BBQ Bowl','Cheese Chicken Shawarma','Peri Peri Strips (5 pcs)','Classic Regular Wings (6 pcs)','Crunchy Chicken Popcorn (Large)','Classic Salted Fries (Full)']},
+ {name:'Party Combo',price:500,value:550,image:'images/combos/party-combo.png',items:['2 Classic Crunchy Burgers','2 Regular Chicken Wraps','Crunchy Chicken Popcorn (Medium)','Classic Salted Fries (Full)']},
+ {name:'King’s Chicken Feast',price:380,value:430,image:'images/combos/kings-chicken-feast.png',items:['CH Crunchy King Burger','Peri Peri Wings (4 pcs)','Cheese Dust Fries (Full)']},
+ {name:'Schezwan Crunch Bowl',price:360,value:420,image:'images/combos/schezwan-crunch-bowl.png',items:['Desi Schezwan Tandoori Bowl','Nachos Cheesy Strips (5 pcs)','Crunchy Chicken Popcorn (Medium)']},
+ {name:'Korean Burger Wing Box',price:280,value:320,image:'images/combos/korean-burger-wing-box.png',items:['Hot Korean Crunchy Burger','Classic Regular Wings (4 pcs)','Peri Peri Seasoning Fries (Half)']},
+ {name:'Shawarma Crunch Box',price:260,value:300,image:'images/combos/shawarma-crunch-box.png',items:['Classic Chicken Shawarma','Classic Regular Strips (5 pcs)','Classic Salted Fries (Half)']},
  {name:'Duo Combo',price:250,value:300,image:'images/combos/duo-combo.png',items:['2 Classic Crunchy Burgers','Classic Salted Fries (Full)','2 Cold Drinks (₹10 each)']},
  {name:'Loaded King Combo',price:210,value:260,image:'images/combos/loaded-king-combo.png',items:['Spicy Chipotle BBQ Bowl','Crunchy Chicken Popcorn (Medium)','Cold Drink (₹10)']},
  {name:'Ultimate Chicken Feast',price:200,value:250,image:'images/combos/ultimate-chicken-feast.png',items:['Classic Crunchy Burger','Classic Regular Strips (3 pcs)','Classic Salted Fries (Half)','Cold Drink (₹10)']},

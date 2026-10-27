@@ -299,6 +299,11 @@ async function readBusinessConfig() {
     ? menuSnapshot.data().menu : MENU_DATA;
   const combos = menuSnapshot.exists && Array.isArray(menuSnapshot.data()?.combos)
     ? menuSnapshot.data().combos : COMBO_MENU_DATA;
+  const fallbackComboImages = new Map(COMBO_MENU_DATA.filter(combo => combo.image).map(combo => [combo.name, combo.image]));
+  const combosWithImages = combos.map(combo => ({
+    ...combo,
+    image: typeof combo.image === "string" && combo.image.trim() ? combo.image : (fallbackComboImages.get(combo.name) || "")
+  }));
   const savedRewards = rewardsSnapshot.exists && Array.isArray(rewardsSnapshot.data()?.journey)
     ? rewardsSnapshot.data().journey : REWARDS.journey;
   const rewards = { ...REWARDS, journey: savedRewards };
@@ -308,7 +313,7 @@ async function readBusinessConfig() {
   const cravingDash = { ...savedCravingDash, enabled: savedCravingDash.published === true && savedCravingDash.enabled === true };
   const cravingDashDraft = gameSnapshot.exists && gameSnapshot.data()?.cravingDashDraft && typeof gameSnapshot.data().cravingDashDraft === "object"
     ? gameSnapshot.data().cravingDashDraft : { ...cravingDash, enabled: false };
-  return { menu: removeDiscontinuedMenuItems(menu), combos, rewards, cravingDash, cravingDashDraft, cravingDashHasUnpublishedChanges: gameSnapshot.data()?.cravingDashHasUnpublishedChanges === true };
+  return { menu: removeDiscontinuedMenuItems(menu), combos: combosWithImages, rewards, cravingDash, cravingDashDraft, cravingDashHasUnpublishedChanges: gameSnapshot.data()?.cravingDashHasUnpublishedChanges === true };
 }
 
 function buildPriceByName(menuData, combos) {
