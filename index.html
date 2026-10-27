@@ -7,7 +7,18 @@
   <meta name="description" content="CRAVING HEAVEN — Chicken, burgers, wraps, wings, strips, popcorn, fries and combos.">
   <title>CRAVING HEAVEN | Chicken & Burgers</title>
   <link rel="icon" type="image/png" href="images/logo.png">
-  <link rel="stylesheet" href="style.css?v=20261027-home-refresh-v1">
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js" crossorigin>
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-check.js" crossorigin>
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js" crossorigin>
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js" crossorigin>
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-functions.js" crossorigin>
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-messaging.js" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Montserrat:wght@500;600;700;800;900&display=swap">
+  <link rel="preload" as="image" href="images/burgers/classic-crunchy-burger.png" type="image/png" fetchpriority="high">
+  <link rel="stylesheet" href="style.css?v=20261027-home-refresh-v2">
   <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-GD2EPLFYZP">
 </script>
@@ -76,7 +87,7 @@
         <div class="home-hero-art" aria-label="Classic Crunchy Chicken Burger">
           <div class="home-hero-glow" aria-hidden="true"></div>
           <span class="home-hero-stamp">MADE FOR<br>YOUR CRAVING</span>
-          <img src="images/burgers/classic-crunchy-burger.png" alt="Classic Crunchy Chicken Burger" fetchpriority="high">
+          <img src="images/burgers/classic-crunchy-burger.png" alt="Classic Crunchy Chicken Burger" width="512" height="512" fetchpriority="high" decoding="async">
           <span class="home-hero-art-caption"><b>CRISPY.</b> JUICY. HEAVENLY.</span>
         </div>
       </section>
@@ -754,9 +765,9 @@ window.firebaseMessaging = firebaseMessaging;
 
 </script>
 
-<script src="rewards-config.js?v=20261021-first-order-gift"></script>
-<script src="menu.js?v=20261023-remove-cheese-slice"></script>
-<script src="script.js?v=20261026-admin-game-test-start-screen"></script>
-<script src="craving-dash.js?v=20261026-craving-runner-v1"></script>
+<script src="rewards-config.js?v=20261021-first-order-gift" defer></script>
+<script src="menu.js?v=20261027-combo-webp" defer></script>
+<script src="script.js?v=20261027-fast-first-render-v2" defer></script>
+<script src="craving-dash.js?v=20261026-craving-runner-v1" defer></script>
 </body>
 </html>

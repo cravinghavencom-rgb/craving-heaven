@@ -300,10 +300,15 @@ async function readBusinessConfig() {
   const combos = menuSnapshot.exists && Array.isArray(menuSnapshot.data()?.combos)
     ? menuSnapshot.data().combos : COMBO_MENU_DATA;
   const fallbackComboImages = new Map(COMBO_MENU_DATA.filter(combo => combo.image).map(combo => [combo.name, combo.image]));
-  const combosWithImages = combos.map(combo => ({
-    ...combo,
-    image: typeof combo.image === "string" && combo.image.trim() ? combo.image : (fallbackComboImages.get(combo.name) || "")
-  }));
+  const combosWithImages = combos.map(combo => {
+    const fallbackImage = fallbackComboImages.get(combo.name) || "";
+    const savedImage = typeof combo.image === "string" ? combo.image.trim() : "";
+    const previousPngPath = fallbackImage.replace(/\.webp$/i, ".png");
+    return {
+      ...combo,
+      image: !savedImage || savedImage === previousPngPath ? (fallbackImage || savedImage) : savedImage
+    };
+  });
   const savedRewards = rewardsSnapshot.exists && Array.isArray(rewardsSnapshot.data()?.journey)
     ? rewardsSnapshot.data().journey : REWARDS.journey;
   const rewards = { ...REWARDS, journey: savedRewards };

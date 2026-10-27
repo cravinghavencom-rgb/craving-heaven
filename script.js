@@ -23,14 +23,18 @@ async function fetchRemoteBusinessConfig() {
     return null;
   }
 }
+const BUSINESS_CONFIG_CACHE_KEY = "cravingHeavenBusinessConfig_v1";
+try {
+  const cachedBusinessConfig = JSON.parse(localStorage.getItem(BUSINESS_CONFIG_CACHE_KEY) || "null");
+  if (cachedBusinessConfig?.savedAt && Date.now() - cachedBusinessConfig.savedAt < 24 * 60 * 60 * 1000) {
+    applyRemoteBusinessConfig(cachedBusinessConfig.data);
+  }
+} catch (_) { /* The bundled menu remains available when browser storage is disabled. */ }
 const businessConfigPromise = fetchRemoteBusinessConfig();
-const businessConfigTimeout = new Promise(resolve => setTimeout(() => resolve(null), 1800));
-const initialBusinessConfig = await Promise.race([businessConfigPromise, businessConfigTimeout]);
-if (applyRemoteBusinessConfig(initialBusinessConfig)) {
-  // Use current Firebase-managed prices before restoring any saved cart rows.
-}
 businessConfigPromise.then(data => {
-  if (data && applyRemoteBusinessConfig(data) && menuInitialized) {
+  if (data && applyRemoteBusinessConfig(data)) {
+    try { localStorage.setItem(BUSINESS_CONFIG_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data })); } catch (_) { /* Remote config still works without a local cache. */ }
+    if (!menuInitialized) return;
     cart = loadCart();
     render();
   }
