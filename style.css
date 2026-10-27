@@ -2420,6 +2420,7 @@ body { background:#fbf7f1; color:var(--premium-ink); }
 .menu-category-count { flex: 0 0 auto; padding: 5px 9px; border: 1px solid var(--premium-line); border-radius: 999px; background: #fff; color: var(--premium-muted); font-size: 10px; font-weight: 800; }
 .food-image.image-missing { background: radial-gradient(circle at 50% 42%, #fffdf8 0 25%, transparent 26%), linear-gradient(145deg, #fff2df, #f2ddc8); }
 .food-image.image-missing .image-fallback { padding: 0; }
+.food-image.image-loading .image-fallback { inset: 0; display: grid; place-items: center; padding: 0; }
 .image-fallback-icon { display: grid; width: 58px; height: 58px; place-items: center; border: 1px solid rgba(157, 103, 58, .16); border-radius: 50%; background: rgba(255,255,255,.82); box-shadow: 0 8px 22px rgba(91, 53, 27, .09); font-size: 29px; }
 .menu-discovery { align-items: center; }
 .menu-discovery-copy p { max-width: 38ch; }

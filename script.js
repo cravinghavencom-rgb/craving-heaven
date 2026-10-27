@@ -1744,7 +1744,7 @@ let pendingGpsCoordinates = null;
     sectionsRoot.innerHTML = Object.entries(MENU_DATA).map(([id, section]) => {
       const cards = section.items.map(item => {
         const inCart = item.options ? null : cartItem(item.name, Number(item.price));
-        const image = item.image ? `<img src="${esc(item.image)}" alt="${esc(item.name)}" loading="lazy" onerror="this.closest('.food-image').classList.add('image-missing')">` : "";
+        const image = item.image ? `<img src="${esc(item.image)}" alt="${esc(item.name)}" loading="lazy" onload="this.closest('.food-image').classList.remove('image-loading')" onerror="this.closest('.food-image').classList.remove('image-loading');this.closest('.food-image').classList.add('image-missing')">` : "";
         const description = String(item.description || "").trim();
         const showDescription = description && description.replace(/[.!?]+$/, "").toLocaleLowerCase() !== String(item.name).trim().toLocaleLowerCase();
 
@@ -1784,7 +1784,7 @@ let pendingGpsCoordinates = null;
 
         return `
           <article class="menu-card">
-            <div class="food-image${item.image ? "" : " image-missing"}" data-category="${esc(id)}">
+            <div class="food-image${item.image ? " image-loading" : " image-missing"}" data-category="${esc(id)}">
               ${image}
               <span class="image-fallback" aria-hidden="true"><span class="image-fallback-icon">${categoryIcons[id] || "✦"}</span></span>
             </div>
