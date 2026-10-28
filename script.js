@@ -2349,8 +2349,24 @@ ${esc(offer.freeItem)}
 
   // ====================== DELIVERY PROGRESS ======================
 
+  const nextAvailableReward = (currentLoyaltyAccount.availableRewards || []).find(reward => {
+    if (!reward.expiresAt) return true;
+    const expiry = reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt);
+    return !Number.isNaN(expiry.getTime()) && expiry.getTime() > Date.now();
+  });
+  const nextRewardDefinition = nextAvailableReward
+    ? REWARDS_CONFIG.rewardById[nextAvailableReward.id] || nextAvailableReward
+    : null;
+  const freeDeliveryRewardReady = !isTestOrder
+    && !isPickupSelected()
+    && subtotal < FREE_DELIVERY_THRESHOLD
+    && nextRewardDefinition?.kind === "free-delivery"
+    && subtotal >= Number(nextRewardDefinition.minimum || 0);
+
   const deliveryProgress = delivery === 0
     ? `<div class="free-progress free-progress-complete">${selectedReward?.kind === "free-delivery" ? `🎁 <strong>FREE DELIVERY REWARD APPLIED · SAVE ${money(DELIVERY_CHARGE)}</strong>` : "🎉 <strong>FREE DELIVERY!</strong>"}</div>`
+    : freeDeliveryRewardReady
+    ? `<div class="free-progress free-progress-complete">🎁 <strong>YOUR FREE-DELIVERY REWARD IS READY · SELECT IT ABOVE</strong></div>`
     : subtotal < FREE_DELIVERY_THRESHOLD
     ? `<div class="free-progress">
         🎉 Add
@@ -2510,6 +2526,10 @@ document.addEventListener("click", event => {
   const screenButton = event.target.closest("[data-screen]");
   if (screenButton) {
     event.preventDefault();
+    if (screenButton.id === "headerPointsButton" && !customerLoggedIn) {
+      openCustomerLogin();
+      return;
+    }
     setAppScreen(screenButton.dataset.screen);
     return;
   }
