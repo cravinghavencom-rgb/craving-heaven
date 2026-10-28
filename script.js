@@ -836,6 +836,7 @@ function handlePlaceOrderClick() {
       const homePointsSummary = document.getElementById("homeLoyaltySummary");
       if (homePointsSummary) homePointsSummary.textContent = "to see your points.";
       currentLoyaltyAccount = { points: 0, completedOrders: 0, availableRewards: [] };
+      loyaltyAccountLoaded = false;
       customerHasOrderedOnline = false;
       renderRewardsJourney(currentLoyaltyAccount, false);
       if (cartOverlay?.classList.contains("open")) renderCart();
@@ -844,6 +845,7 @@ function handlePlaceOrderClick() {
 
     if (addAddressButton) addAddressButton.textContent = "+ ADD ADDRESS";
     const phone = user.phoneNumber || "Mobile number verified";
+    loyaltyAccountLoaded = false;
     const homePointsBalance = document.getElementById("homeLoyaltyPointsBalance");
     const homePointsSummary = document.getElementById("homeLoyaltySummary");
     if (homePointsBalance) homePointsBalance.textContent = "Loading…";
@@ -866,33 +868,48 @@ function handlePlaceOrderClick() {
       const profileRef = firestoreApi.doc(window.firebaseDB, "customerProfiles", user.uid);
       const loyaltyRef = firestoreApi.doc(window.firebaseDB, "loyaltyAccounts", user.uid);
       const ordersQuery = firestoreApi.query(firestoreApi.collection(window.firebaseDB, "orders"), firestoreApi.where("uid", "==", user.uid));
-      const testOrdersQuery = firestoreApi.query(firestoreApi.collection(window.firebaseDB, "testOrders"), firestoreApi.where("uid", "==", user.uid));
-      const [profileSnapshot, loyaltySnapshot, snapshot, testOrdersSnapshot] = await Promise.all([
+      // Firestore rules are not query filters: the testOrders read must include
+      // the isTestOrder constraint or the whole account refresh is rejected.
+      const testOrdersQuery = firestoreApi.query(
+        firestoreApi.collection(window.firebaseDB, "testOrders"),
+        firestoreApi.where("uid", "==", user.uid),
+        firestoreApi.where("isTestOrder", "==", true)
+      );
+      // A history-query hiccup must not discard saved addresses or the points
+      // balance. Each panel can now display/retry its own failed read.
+      const [profileResult, loyaltyResult, ordersResult, testOrdersResult] = await Promise.allSettled([
         firestoreApi.getDoc(profileRef), firestoreApi.getDoc(loyaltyRef), firestoreApi.getDocs(ordersQuery), firestoreApi.getDocs(testOrdersQuery)
       ]);
       if (refreshId !== accountRefreshToken || window.firebaseAuth?.currentUser?.uid !== user.uid) return;
+      if (profileResult.status !== "fulfilled") throw profileResult.reason;
+      const profileSnapshot = profileResult.value;
+      const loyaltySnapshot = loyaltyResult.status === "fulfilled" ? loyaltyResult.value : null;
+      if (loyaltyResult.status === "rejected") console.error("Could not load customer Craving Points:", loyaltyResult.reason);
       currentCustomerProfile = profileSnapshot.exists() ? profileSnapshot.data() : { addresses: [] };
       if (!Array.isArray(currentCustomerProfile.addresses)) currentCustomerProfile.addresses = [];
       const name = currentCustomerProfile.name || "";
       profileContent.innerHTML = `<div class="profile-account-card"><div class="profile-avatar">${esc(phone.slice(-2))}</div><div><span>LOGGED IN AS</span><strong>${esc(name || phone)}</strong><p>${name ? `${esc(phone)} · Your account is ready.` : "Your account is ready."}</p></div><button type="button" class="account-secondary-button" data-account-logout>LOG OUT</button></div>`;
       renderSavedAddresses();
       prefillCheckoutFromDefaultAddress();
+      const orderDocuments = ordersResult.status === "fulfilled" ? ordersResult.value.docs : [];
+      const testOrderDocuments = testOrdersResult.status === "fulfilled" ? testOrdersResult.value.docs : [];
       const orders = [
-        ...snapshot.docs.map(document => ({ id: document.id, ...document.data() })),
-        ...testOrdersSnapshot.docs.map(document => ({ id: document.id, ...document.data(), isTestOrder: true }))
+        ...orderDocuments.map(document => ({ id: document.id, ...document.data() })),
+        ...testOrderDocuments.map(document => ({ id: document.id, ...document.data(), isTestOrder: true }))
       ];
       customerHasOrderedOnline = orders.some(order => order.source === "website" && order.isTestOrder !== true);
       const getTime = value => value?.toDate ? value.toDate().getTime() : new Date(value || 0).getTime();
       orders.sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt));
       const pointsBalance = document.getElementById("loyaltyPointsBalance");
-      const loyaltyData = loyaltySnapshot.exists() ? loyaltySnapshot.data() : { points: 0, completedOrders: 0, availableRewards: [] };
+      const loyaltyData = loyaltySnapshot?.exists() ? loyaltySnapshot.data() : { points: 0, completedOrders: 0, availableRewards: [] };
       currentLoyaltyAccount = { ...loyaltyData, points: cravingPointsBalance(loyaltyData) };
+      loyaltyAccountLoaded = loyaltyResult.status === "fulfilled";
       if (!Array.isArray(currentLoyaltyAccount.availableRewards)) currentLoyaltyAccount.availableRewards = [];
       const points = Math.max(0, Number(currentLoyaltyAccount.points || 0));
       const pointsText = points.toLocaleString("en-IN");
-      if (pointsBalance) pointsBalance.textContent = pointsText;
+      if (pointsBalance) pointsBalance.textContent = loyaltyAccountLoaded ? pointsText : "—";
       const pointsValue = document.getElementById("loyaltyPointsValue");
-      if (pointsValue) pointsValue.textContent = `₹${(points / REWARDS_CONFIG.pointsPerRedemptionRupees * 10).toFixed(2)}`;
+      if (pointsValue) pointsValue.textContent = loyaltyAccountLoaded ? `₹${(points / REWARDS_CONFIG.pointsPerRedemptionRupees * 10).toFixed(2)}` : "—";
       const expiryNotice = document.getElementById("gamePointsExpiryNotice");
       const expiringLots = gamePointLots(loyaltyData).sort((a, b) => {
         const date = lot => lot.expiresAt?.toDate ? lot.expiresAt.toDate() : new Date(lot.expiresAt);
@@ -900,13 +917,18 @@ function handlePlaceOrderClick() {
       });
       if (expiryNotice) expiryNotice.textContent = expiringLots.length ? `${expiringLots.reduce((sum, lot) => sum + Number(lot.points || 0), 0)} game Craving Points expire ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(expiringLots[0].expiresAt?.toDate ? expiringLots[0].expiresAt.toDate() : new Date(expiringLots[0].expiresAt))}. Use them before then.` : "";
       const homePointsBalance = document.getElementById("homeLoyaltyPointsBalance");
-      if (homePointsBalance) homePointsBalance.textContent = pointsText;
+      if (homePointsBalance) homePointsBalance.textContent = loyaltyAccountLoaded ? pointsText : "—";
       const headerPointsBalance = document.getElementById("headerCravingPointsBalance");
-      if (headerPointsBalance) headerPointsBalance.textContent = `${pointsText} pts`;
+      if (headerPointsBalance) headerPointsBalance.textContent = loyaltyAccountLoaded ? `${pointsText} pts` : "Retry";
       const homePointsSummary = document.getElementById("homeLoyaltySummary");
-      if (homePointsSummary) homePointsSummary.textContent = "Craving Points · combos earn half rate";
-      renderRewardsJourney(currentLoyaltyAccount, true);
+      if (homePointsSummary) homePointsSummary.textContent = loyaltyAccountLoaded ? "Craving Points · combos earn half rate" : "Points could not load · try again";
+      renderRewardsJourney(currentLoyaltyAccount, loyaltyResult.status === "fulfilled");
       if (cartOverlay?.classList.contains("open")) renderCart();
+      if (ordersResult.status === "rejected" || testOrdersResult.status === "rejected") {
+        console.error("Could not load one or more customer order histories:", ordersResult.status === "rejected" ? ordersResult.reason : testOrdersResult.reason);
+        ordersContent.innerHTML = `<div class="account-empty"><h2>Orders couldn’t load</h2><p>Your profile, address and points loaded. Check your connection and try the order history again.</p><button type="button" class="account-primary-button" data-reload-orders>TRY AGAIN</button></div>`;
+        return;
+      }
       if (!orders.length) {
         ordersContent.innerHTML = `<div class="account-empty"><div class="account-empty-icon">▤</div><h2>No orders yet</h2><p>Your order history will show here after your first order.</p><button type="button" class="account-primary-button" data-screen="menu">EXPLORE MENU</button></div>`;
         return;
@@ -921,7 +943,7 @@ function handlePlaceOrderClick() {
     } catch (error) {
       console.error("Could not load customer orders:", error);
       if (savedAddresses?.querySelector(".account-loading")) {
-        savedAddresses.innerHTML = `<div class="address-empty">Saved addresses could not load. Please try again.</div>`;
+        savedAddresses.innerHTML = `<div class="address-empty">Saved addresses could not load. <button type="button" class="account-inline-retry" data-reload-account>TRY AGAIN</button></div>`;
       }
       const pointsBalance = document.getElementById("loyaltyPointsBalance");
       if (pointsBalance && pointsBalance.textContent === "Loading…") pointsBalance.textContent = "—";
@@ -931,7 +953,7 @@ function handlePlaceOrderClick() {
       if (headerPointsBalance && headerPointsBalance.textContent === "…") headerPointsBalance.textContent = "—";
       const homePointsSummary = document.getElementById("homeLoyaltySummary");
       if (homePointsSummary && homePointsSummary.textContent === "your Craving Points.") homePointsSummary.textContent = "couldn’t load. Try again later.";
-      ordersContent.innerHTML = `<div class="account-empty"><h2>Orders couldn’t load</h2><p>Please check your connection and try again.</p><button type="button" class="account-primary-button" data-reload-orders>TRY AGAIN</button></div>`;
+      ordersContent.innerHTML = `<div class="account-empty"><h2>Your account couldn’t load</h2><p>Please check your connection and try again.</p><button type="button" class="account-primary-button" data-reload-account>TRY AGAIN</button></div>`;
     }
   }
 
@@ -1656,6 +1678,7 @@ let customerHasOrderedOnline = false;
   let currentCustomerProfile = { addresses: [] };
 let pendingGpsCoordinates = null;
   let currentLoyaltyAccount = { points: 0, completedOrders: 0, availableRewards: [] };
+  let loyaltyAccountLoaded = false;
   let accountRefreshToken = 0;
   
 
@@ -2062,6 +2085,16 @@ function renderCart() {
     selectedMilestoneRewardId = null;
     selectedReward = null;
   }
+  if (selectedReward) {
+    const rewardSpend = selectedReward.kind === "free-delivery" ? subtotal : offerEligibleSubtotal;
+    const rewardIsNoLongerEligible = rewardSpend < Number(selectedReward.minimum || 0)
+      || (selectedReward.kind === "free-delivery" && (subtotal >= FREE_DELIVERY_THRESHOLD || isPickupSelected()))
+      || (selectedReward.kind === "percent-discount" && gameRewardDiscount(selectedReward, offerEligibleSubtotal) <= 0);
+    if (rewardIsNoLongerEligible) {
+      selectedMilestoneRewardId = null;
+      selectedReward = null;
+    }
+  }
   const maxRedeemablePoints = Math.min(REWARDS_CONFIG.maxRedeemPointsPerOrder, Math.max(0, Number(currentLoyaltyAccount.points || 0)), Math.floor(offerEligibleSubtotal / 10) * 100);
   if (selectedPointsToRedeem > maxRedeemablePoints) selectedPointsToRedeem = maxRedeemablePoints;
   if (selectedFreeOfferId || selectedMilestoneRewardId || selectedPointsToRedeem) selectedWelcomeOffer = false;
@@ -2265,7 +2298,7 @@ ${esc(offer.freeItem)}
       <div class="free-offers-heading">
         <span>🎁 SPECIAL OFFERS</span>
         <strong>ONE BENEFIT PER ORDER</strong>
-        <p>Choose one offer, Craving Points reward, or points redemption.${comboPresent ? " Combo value does not count toward spend-reward minimums." : ""}</p>
+        <p>Choose one offer, reward, or points redemption per order. Combo eligibility depends on the reward.</p>
       </div>
 
       ${offerCards}
@@ -2283,9 +2316,9 @@ ${esc(offer.freeItem)}
     const chosen = selectedMilestoneRewardId === rewardTicketId;
     const rewardSpend = definition.kind === "free-delivery" ? subtotal : offerEligibleSubtotal;
     const remaining = Math.max(0, Number(definition.minimum || 0) - rewardSpend);
-    const eligible = remaining === 0 && !(definition.kind === "free-delivery" && subtotal >= FREE_DELIVERY_THRESHOLD) && !(definition.kind === "percent-discount" && gameRewardDiscount(definition, offerEligibleSubtotal) <= 0);
+    const eligible = remaining === 0 && !(definition.kind === "free-delivery" && (subtotal >= FREE_DELIVERY_THRESHOLD || isPickupSelected())) && !(definition.kind === "percent-discount" && gameRewardDiscount(definition, offerEligibleSubtotal) <= 0);
     const rewardDescription = definition.kind === "free-item" ? `${definition.item} free${["craving-dash", "craving-runner"].includes(reward.source) ? " · expires 48 hours after earning" : ""}` : definition.kind === "percent-discount" ? `${Number(definition.percent)}% off eligible regular menu items${Number(definition.maxDiscount) ? ` · up to ${money(definition.maxDiscount)}` : ""}${["craving-dash", "craving-runner"].includes(reward.source) ? " · expires after 48 hours" : ""}` : definition.kind === "free-delivery" ? "Free delivery" : definition.kind === "discount" ? `${money(definition.amount)} off` : definition.kind === "bonus-points" ? `${definition.points} Craving Points on delivery` : `Double Craving Points, up to ${definition.maxBonusPoints} extra`;
-    const statusNote = remaining > 0 ? `Add ${money(remaining)} to your food subtotal to use this reward${definition.kind === "free-delivery" ? "; combos count" : " in regular menu items"}.` : definition.kind === "percent-discount" && gameRewardDiscount(definition, offerEligibleSubtotal) <= 0 ? "Add regular menu items to use this discount; combos, extras, and delivery are excluded." : definition.kind === "percent-discount" ? "Discount applies to regular menu items only. Combos, extras, and delivery are excluded." : definition.kind === "free-delivery" && subtotal >= FREE_DELIVERY_THRESHOLD ? "Your order already qualifies for free delivery. Save this reward for another order." : "";
+    const statusNote = definition.kind === "free-delivery" && isPickupSelected() ? "Free-delivery rewards can only be used for delivery." : remaining > 0 ? `Add ${money(remaining)} to your food subtotal to use this reward${definition.kind === "free-delivery" ? "; combos and regular items count" : " in regular menu items"}.` : definition.kind === "percent-discount" && gameRewardDiscount(definition, offerEligibleSubtotal) <= 0 ? "Add regular menu items to use this discount; combos, extras, and delivery are excluded." : definition.kind === "percent-discount" ? "Discount applies to regular menu items only. Combos, extras, and delivery are excluded." : definition.kind === "free-delivery" && subtotal >= FREE_DELIVERY_THRESHOLD ? "Your order already qualifies for free delivery. Save this reward for another order." : "";
     const expiryLabel = reward.expiresAt ? ` · use by ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt))}` : "";
     return `<article class="cart-reward-choice ${chosen ? "is-selected" : ""}"><div><strong>${esc(definition.title)}</strong><small>${esc(rewardDescription)} · ${esc(definition.detail || "")}${esc(expiryLabel)}</small>${statusNote ? `<small class="reward-remaining">${esc(statusNote)}</small>` : ""}</div><button type="button" data-select-loyalty-reward="${esc(rewardTicketId)}" ${!eligible ? "disabled" : ""}>${chosen ? "SELECTED" : eligible ? "USE REWARD" : "LOCKED"}</button></article>`;
   }).filter(Boolean).join("");
@@ -2293,9 +2326,9 @@ ${esc(offer.freeItem)}
 
   const welcomeCard = "";
   const pointsBalance = Math.max(0, Number(currentLoyaltyAccount.points || 0));
-  const cartPointsBalance = `<div class="cart-points-balance"><span>YOUR CRAVING POINTS</span><strong>${customerLoggedIn ? `${pointsBalance.toLocaleString("en-IN")} pts` : "Sign in to view"}</strong></div>`;
+  const cartPointsBalance = `<div class="cart-points-balance"><span>YOUR CRAVING POINTS</span><strong>${!customerLoggedIn ? "Sign in to view" : loyaltyAccountLoaded ? `${pointsBalance.toLocaleString("en-IN")} pts` : "Temporarily unavailable"}</strong></div>`;
   const testOrderNotice = orderAvailability.isTestCustomer ? `<p class="test-order-notice">TEST MODE · This order is for testing only. It will not be prepared, sent to staff, or earn points.</p>` : "";
-  const pointsAvailable = Math.floor(Math.min(REWARDS_CONFIG.maxRedeemPointsPerOrder, pointsBalance, offerEligibleSubtotal * 10) / 100) * 100;
+  const pointsAvailable = loyaltyAccountLoaded ? Math.floor(Math.min(REWARDS_CONFIG.maxRedeemPointsPerOrder, pointsBalance, offerEligibleSubtotal * 10) / 100) * 100 : 0;
   const pointsControls = pointsAvailable > 0
     ? `<div class="cart-points-choice"><div><strong>Use Craving Points</strong><small>${pointsBalance.toLocaleString("en-IN")} Craving Points · up to ${money(pointsAvailable / 10)} off</small><small>${selectedMilestoneRewardId || selectedFreeOfferId || selectedWelcomeOffer ? "Using Craving Points replaces the selected offer or reward." : comboPresent ? "Points apply to eligible regular menu items only; combo and extra items stay full price." : "Choose Craving Points instead of another offer or reward."}</small></div><div class="points-stepper"><button type="button" data-points-step="-100" ${selectedPointsToRedeem <= 0 ? "disabled" : ""}>−</button><span>${selectedPointsToRedeem.toLocaleString("en-IN")}</span><button type="button" data-points-step="100" ${selectedPointsToRedeem >= pointsAvailable ? "disabled" : ""}>+</button></div></div>`
     : `<div class="cart-points-note">${comboPresent ? "Points can reduce regular menu items in a mixed order; add at least ₹10 of eligible regular food. Combo and extra items stay full price." : pointsBalance < 100 ? "Earn at least 100 Craving Points to redeem ₹10. Points are added after delivery or pickup completion." : "Add eligible regular menu food to use points. Points are added after delivery or pickup completion."}</div>`;
@@ -2484,6 +2517,11 @@ document.addEventListener("click", event => {
   }
 
   if (event.target.closest("[data-reload-orders]")) {
+    refreshAccountScreens(window.firebaseAuth?.currentUser || null);
+    return;
+  }
+
+  if (event.target.closest("[data-reload-account]")) {
     refreshAccountScreens(window.firebaseAuth?.currentUser || null);
     return;
   }

@@ -2880,3 +2880,20 @@ body { background:#fbf7f1; color:var(--premium-ink); }
   .floating-cart { top: auto; right: auto; bottom: calc(86px + env(safe-area-inset-bottom)); left: 50%; min-height: 48px; }
 }
 .test-order-notice{margin:10px 0;padding:11px 13px;border:1px solid #f1c66e;border-radius:12px;background:#fff8e8;color:#754c13;font-size:11px;font-weight:800;line-height:1.45}
+
+/* Keep the last menu rows clear of both the floating cart and fixed section bar. */
+body { padding-bottom: calc(148px + env(safe-area-inset-bottom)); }
+.floating-cart {
+  position: fixed;
+  top: auto;
+  right: auto;
+  bottom: calc(86px + env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 2201;
+  transform: translateX(-50%);
+}
+.floating-cart:hover { transform: translate(-50%, -3px); }
+.account-inline-retry { margin-left: 5px; border: 0; background: transparent; color: var(--red); font-size: inherit; font-weight: 900; text-decoration: underline; }
+@media (max-width: 650px) {
+  .floating-cart { top: auto; right: auto; bottom: calc(86px + env(safe-area-inset-bottom)); left: 50%; }
+}
