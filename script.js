@@ -2349,8 +2349,8 @@ ${esc(offer.freeItem)}
 
   // ====================== DELIVERY PROGRESS ======================
 
-  const deliveryProgress = selectedReward?.kind === "free-delivery"
-    ? `<div class="free-progress free-progress-complete">🎁 <strong>FREE DELIVERY REWARD APPLIED · SAVE ${money(DELIVERY_CHARGE)}</strong></div>`
+  const deliveryProgress = delivery === 0
+    ? `<div class="free-progress free-progress-complete">${selectedReward?.kind === "free-delivery" ? `🎁 <strong>FREE DELIVERY REWARD APPLIED · SAVE ${money(DELIVERY_CHARGE)}</strong>` : "🎉 <strong>FREE DELIVERY!</strong>"}</div>`
     : subtotal < FREE_DELIVERY_THRESHOLD
     ? `<div class="free-progress">
         🎉 Add
