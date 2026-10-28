@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow">
   <title>Admin Desk | CRAVING HEAVEN</title>
   <link rel="icon" type="image/png" href="images/logo.png">
-  <link rel="stylesheet" href="admin.css?v=20261026-craving-runner-admin-v1">
+  <link rel="stylesheet" href="admin.css?v=20261028-order-rewards-v1">
 </head>
 <body>
   <header class="admin-header">
@@ -48,6 +48,15 @@
           </div>
           <p class="footnote">Admin status changes apply immediately for today. Online ordering will not turn on automatically tomorrow; an authorized team member must open it again.</p>
         </article>
+        <article class="card order-test-mode-card">
+          <div class="section-heading compact"><div><span class="eyebrow">SAFE CUSTOMER TESTING</span><h3>Test-only ordering</h3><p class="muted">Only approved phone numbers can place test orders while this is on. Test orders are stored separately, never sent to staff, excluded from sales, and do not change points or rewards.</p></div><span id="orderTestModeStatus" class="role-pill">Loading…</span></div>
+          <form id="orderTestModeForm" class="order-test-mode-form">
+            <label class="test-mode-toggle"><input id="orderTestModeEnabled" type="checkbox"><span><strong>Restrict customer ordering to test numbers</strong><small>Everyone else will be blocked from checkout until test mode is turned off.</small></span></label>
+            <label>Approved Indian mobile numbers <small>One 10-digit number per line, up to 10 numbers.</small><textarea id="orderTestPhones" rows="3" inputmode="tel" placeholder="9702108779&#10;7700929693"></textarea></label>
+            <button id="saveOrderTestMode" class="button button-quiet" type="submit">Save test access</button>
+            <p id="orderTestModeMessage" class="message" role="status"></p>
+          </form>
+        </article>
         <div class="report-grid"><article class="card report-card"><div class="section-heading compact"><div><span class="eyebrow">BEST SELLERS</span><h3>Item-wise sales</h3></div></div><div class="table-scroll"><table><thead><tr><th>Item</th><th>Qty</th><th>Menu value</th></tr></thead><tbody id="itemSalesRows"><tr><td colspan="3" class="empty-cell">No sales for this period yet.</td></tr></tbody></table></div><p class="footnote">Menu value uses listed prices; order-level discounts are shown in total sales.</p></article><article class="card report-card"><div class="section-heading compact"><div><span class="eyebrow">WEEKDAY PATTERN</span><h3>Sales by day</h3></div></div><div id="weekdayChart" class="weekday-chart"></div><p class="footnote">Shows completed and active orders placed this month, excluding cancelled orders.</p></article><article class="card report-card"><div class="section-heading compact"><div><span class="eyebrow">ORDER LOCATIONS</span><h3>Sales by area</h3></div></div><div class="table-scroll"><table><thead><tr><th>Location</th><th>Orders</th><th>Sales</th></tr></thead><tbody id="locationSalesRows"><tr><td colspan="3" class="empty-cell">No sales for this period yet.</td></tr></tbody></table></div><p class="footnote">Delivery orders use the customer’s selected area. Pickup and counter orders are listed separately.</p></article></div>
       </section>
 
@@ -75,7 +84,9 @@
       </section>
 
       <section class="admin-section" data-admin-section="rewards" hidden>
-        <div class="section-heading"><div><span class="eyebrow">ROYAL REWARDS</span><h2>Reward journey</h2><p class="muted">Edit milestone rewards below. Existing unexpired customer reward tickets must stay in the lineup until used or expired.</p></div><button id="saveRewards" class="button button-primary" type="button">Save reward lineup</button></div>
+        <div class="section-heading"><div><span class="eyebrow">ROYAL REWARDS</span><h2>Reward on order</h2><p class="muted">Choose what customers earn after each completed order. Free items, discounts and delivery unlock for a later order; Craving Points are credited directly. The old first-checkout burger offer is replaced by the order 1 reward below.</p></div><button id="saveRewards" class="button button-primary" type="button">Save reward lineup</button></div>
+        <div class="card reward-rules-note"><strong>How it works</strong><p>Order 1 reward unlocks after the first order is completed and can be used on the next order. Only one reward or offer can be used per order. Minimum spend counts regular menu food only; combos, extras and delivery do not count.</p></div>
+        <div class="reward-editor-heading"><h3>All 30 order milestones</h3></div>
         <p id="rewardsMessage" class="message" role="status"></p><div id="rewardEditor" class="reward-editor"></div>
       </section>
 
@@ -101,6 +112,6 @@
     </section>
     <dialog id="adminGameTestDialog" class="admin-game-test-dialog" aria-label="Craving Run admin test"><div class="admin-game-test-heading"><strong>ADMIN GAME TEST</strong><button id="closeAdminGameTest" type="button" class="button button-quiet">Close test</button></div><iframe id="adminGameTestFrame" title="Craving Run level test"></iframe></dialog>
   </main>
-  <script type="module" src="admin.js?v=20261026-craving-runner-admin-v1"></script>
+  <script type="module" src="admin.js?v=20261028-order-rewards-v1"></script>
 </body>
 </html>

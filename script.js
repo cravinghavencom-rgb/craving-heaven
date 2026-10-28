@@ -42,7 +42,7 @@ businessConfigPromise.then(data => {
 const FREE_DELIVERY_THRESHOLD = 300;
 const DELIVERY_CHARGE = 30;
 const ONLINE_CHECKOUT_ENABLED = true;
-let orderAvailability = { isOpen: false, paused: false, staffEnabled: false, acceptingOnlineOrders: false };
+let orderAvailability = { isOpen: false, paused: false, staffEnabled: false, acceptingOnlineOrders: false, testModeEnabled: false, isTestCustomer: false };
 let orderAvailabilityReady = false;
 // =========================================================
 // FIREBASE PUSH NOTIFICATIONS
@@ -588,8 +588,7 @@ function handlePlaceOrderClick() {
       return !Number.isNaN(expiry.getTime()) && expiry.getTime() > Date.now();
     });
     const cycleOrder = completed === 0 ? 0 : ((completed - 1) % 30) + 1;
-    // At the cycle boundary the next milestone belongs to the new cycle.
-    // Order 31 is a reset step, then order 32 can unlock the cycle's order-2 reward.
+    // Every 30 completed orders begins a fresh reward cycle at order 1.
     const previewOrder = cycleOrder === 30 ? 0 : cycleOrder;
     const availableIds = new Set(available.map(item => item.id));
     const upcoming = REWARDS_CONFIG.journey.filter(item => item.id && item.order > previewOrder && !availableIds.has(item.id)).slice(0, 2);
@@ -867,8 +866,9 @@ function handlePlaceOrderClick() {
       const profileRef = firestoreApi.doc(window.firebaseDB, "customerProfiles", user.uid);
       const loyaltyRef = firestoreApi.doc(window.firebaseDB, "loyaltyAccounts", user.uid);
       const ordersQuery = firestoreApi.query(firestoreApi.collection(window.firebaseDB, "orders"), firestoreApi.where("uid", "==", user.uid));
-      const [profileSnapshot, loyaltySnapshot, snapshot] = await Promise.all([
-        firestoreApi.getDoc(profileRef), firestoreApi.getDoc(loyaltyRef), firestoreApi.getDocs(ordersQuery)
+      const testOrdersQuery = firestoreApi.query(firestoreApi.collection(window.firebaseDB, "testOrders"), firestoreApi.where("uid", "==", user.uid));
+      const [profileSnapshot, loyaltySnapshot, snapshot, testOrdersSnapshot] = await Promise.all([
+        firestoreApi.getDoc(profileRef), firestoreApi.getDoc(loyaltyRef), firestoreApi.getDocs(ordersQuery), firestoreApi.getDocs(testOrdersQuery)
       ]);
       if (refreshId !== accountRefreshToken || window.firebaseAuth?.currentUser?.uid !== user.uid) return;
       currentCustomerProfile = profileSnapshot.exists() ? profileSnapshot.data() : { addresses: [] };
@@ -877,8 +877,11 @@ function handlePlaceOrderClick() {
       profileContent.innerHTML = `<div class="profile-account-card"><div class="profile-avatar">${esc(phone.slice(-2))}</div><div><span>LOGGED IN AS</span><strong>${esc(name || phone)}</strong><p>${name ? `${esc(phone)} · Your account is ready.` : "Your account is ready."}</p></div><button type="button" class="account-secondary-button" data-account-logout>LOG OUT</button></div>`;
       renderSavedAddresses();
       prefillCheckoutFromDefaultAddress();
-      const orders = snapshot.docs.map(document => ({ id: document.id, ...document.data() }));
-      customerHasOrderedOnline = orders.some(order => order.source === "website");
+      const orders = [
+        ...snapshot.docs.map(document => ({ id: document.id, ...document.data() })),
+        ...testOrdersSnapshot.docs.map(document => ({ id: document.id, ...document.data(), isTestOrder: true }))
+      ];
+      customerHasOrderedOnline = orders.some(order => order.source === "website" && order.isTestOrder !== true);
       const getTime = value => value?.toDate ? value.toDate().getTime() : new Date(value || 0).getTime();
       orders.sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt));
       const pointsBalance = document.getElementById("loyaltyPointsBalance");
@@ -913,7 +916,7 @@ function handlePlaceOrderClick() {
         const orderMode = order.orderType === "pickup" ? "Store pickup" : "Delivery";
         const orderPrefix = order.orderType === "pickup" ? "PK" : "DL";
         const orderNumber = order.orderNumber || `${orderPrefix}-${String(order.id).slice(-4).toUpperCase()}`;
-        return `<article class="order-history-card"><div class="order-history-head"><div><span class="order-history-date">${esc(orderHistoryDate(order.createdAt))} · ${orderMode}</span><h2>Order ${esc(orderNumber)}</h2></div><span class="order-status-pill">${esc(String(order.status || "Received"))}</span></div><p>${orderItems}</p><div class="order-history-total"><span>ORDER TOTAL</span><strong>${money(order.total || order.subtotal || 0)}</strong></div></article>`;
+        return `<article class="order-history-card ${order.isTestOrder ? "test-order-history-card" : ""}"><div class="order-history-head"><div><span class="order-history-date">${order.isTestOrder ? "TEST ORDER · " : ""}${esc(orderHistoryDate(order.createdAt))} · ${orderMode}</span><h2>Order ${esc(orderNumber)}</h2></div><span class="order-status-pill">${esc(String(order.status || "Received"))}</span></div><p>${orderItems}</p><div class="order-history-total"><span>${order.isTestOrder ? "TEST TOTAL · NO PAYMENT DUE" : "ORDER TOTAL"}</span><strong>${money(order.total || order.subtotal || 0)}</strong></div></article>`;
       }).join("");
     } catch (error) {
       console.error("Could not load customer orders:", error);
@@ -1115,7 +1118,7 @@ const orderSuccessId =
 const orderSuccessNote = document.getElementById("orderSuccessNote");
 
 
-function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false, addressLabel = "", displayOrderNumber = "") {
+function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false, addressLabel = "", displayOrderNumber = "", isTestOrder = false) {
 
   if (!orderSuccessOverlay) return;
 
@@ -1124,10 +1127,14 @@ function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false,
     orderSuccessId.textContent = displayOrderNumber || `${prefix}-${String(orderId).slice(-4).toUpperCase()}`;
   }
   if (orderSuccessNote) {
-    orderSuccessNote.textContent = orderType === "pickup"
+    orderSuccessNote.textContent = isTestOrder
+      ? "TEST ORDER ONLY — it is saved separately and will not be prepared, sent to staff, charged, or earn Craving Points."
+      : orderType === "pickup"
       ? "Pickup at Shop 10, Pearl Oasis Building, Pathanwadi, Malad East. Pay at the store and track readiness from Your Orders."
       : `${addressSaved ? `Your ${addressLabel || "delivery"} address is saved to your account. ` : ""}Track your order anytime from the Orders screen.`;
   }
+  const successTitle = document.getElementById("orderSuccessTitle");
+  if (successTitle) successTitle.textContent = isTestOrder ? "TEST ORDER PLACED" : "ORDER PLACED!";
 
   orderSuccessOverlay.classList.add("open");
 
@@ -1299,7 +1306,7 @@ function renderCheckoutSummary() {
       </strong>
     </div>
 
-    ${promotionDiscount > 0 ? `<div class="checkout-summary-item"><span>${selectedReward?.kind === "percent-discount" ? `GAME REWARD · ${Number(selectedReward.percent)}% OFF REGULAR ITEMS` : "OFFER SAVINGS"}</span><strong>−${money(promotionDiscount)}</strong></div>` : ""}
+    ${promotionDiscount > 0 ? `<div class="checkout-summary-item"><span>${selectedReward?.kind === "percent-discount" ? `ROYAL REWARD · ${Number(selectedReward.percent)}% OFF REGULAR ITEMS` : "OFFER SAVINGS"}</span><strong>−${money(promotionDiscount)}</strong></div>` : ""}
     ${selectedReward?.kind === "free-delivery" ? `<div class="checkout-summary-item"><span>ROYAL REWARDS · DELIVERY</span><strong>−${money(DELIVERY_CHARGE)}</strong></div>` : ""}
     ${pointsDiscount > 0 ? `<div class="checkout-summary-item"><span>CRAVING POINTS REDEEMED (${selectedPointsToRedeem})</span><strong>−${money(pointsDiscount)}</strong></div>` : ""}
     ${selectedReward?.kind === "bonus-points" ? `<div class="checkout-summary-item"><span>CRAVING POINTS BONUS</span><strong>+${selectedReward.points}</strong></div>` : ""}
@@ -1533,7 +1540,7 @@ async function continueToOrder() {
     closeCheckout();
     closeCart();
     render();
-    openOrderSuccess(order.orderId, pickup ? "pickup" : "delivery", order.addressSaved === true, checkoutAddressLabel?.value || "", order.orderNumber || "");
+    openOrderSuccess(order.orderId, pickup ? "pickup" : "delivery", order.addressSaved === true, checkoutAddressLabel?.value || "", order.orderNumber || "", order.isTestOrder === true);
     refreshAccountScreens(window.firebaseAuth?.currentUser || null);
   } catch (error) {
     console.error("Order creation failed:", error);
@@ -1966,7 +1973,7 @@ function getSelectedMilestoneReward() {
 }
 
 function gameRewardDiscount(reward = getSelectedMilestoneReward(), eligibleSubtotal = getOfferEligibleSubtotal()) {
-  if (!(["craving-dash", "craving-runner"].includes(reward?.source)) || reward.kind !== "percent-discount" || eligibleSubtotal < Number(reward.minimum || 0)) return 0;
+  if (reward?.kind !== "percent-discount" || eligibleSubtotal < Number(reward.minimum || 0)) return 0;
   const amount = Math.floor(eligibleSubtotal * Number(reward.percent || 0) / 100);
   const cap = Number(reward.maxDiscount || 0);
   return Math.max(0, Math.min(amount, cap > 0 ? cap : eligibleSubtotal));
@@ -2013,7 +2020,8 @@ function selectMilestoneReward(rewardId) {
   const definition = ticket ? (REWARDS_CONFIG.rewardById[ticket.id] || (["craving-dash", "craving-runner"].includes(ticket.source) && ["free-item", "percent-discount"].includes(ticket.kind) ? ticket : null)) : null;
   if (!definition || !ticket) return;
   const eligibleSubtotal = getOfferEligibleSubtotal();
-  if (eligibleSubtotal < Number(definition.minimum || 0)) return;
+  const rewardSpend = definition.kind === "free-delivery" ? getPaidSubtotal() : eligibleSubtotal;
+  if (rewardSpend < Number(definition.minimum || 0)) return;
   if (definition.kind === "percent-discount" && gameRewardDiscount(definition, eligibleSubtotal) <= 0) return;
   if (definition.kind === "free-delivery" && getPaidSubtotal() >= FREE_DELIVERY_THRESHOLD) return;
   removeSelectedFreeOffer();
@@ -2057,9 +2065,10 @@ function renderCart() {
   const maxRedeemablePoints = Math.min(REWARDS_CONFIG.maxRedeemPointsPerOrder, Math.max(0, Number(currentLoyaltyAccount.points || 0)), Math.floor(offerEligibleSubtotal / 10) * 100);
   if (selectedPointsToRedeem > maxRedeemablePoints) selectedPointsToRedeem = maxRedeemablePoints;
   if (selectedFreeOfferId || selectedMilestoneRewardId || selectedPointsToRedeem) selectedWelcomeOffer = false;
-  const welcomeEligible = !customerHasOrderedOnline && !currentLoyaltyAccount.welcomeCompleted && !currentLoyaltyAccount.welcomeReservationId && offerEligibleSubtotal > 0;
-  if (welcomeEligible && !selectedFreeOfferId && !selectedMilestoneRewardId && !selectedPointsToRedeem) selectedWelcomeOffer = true;
-  if (!welcomeEligible) selectedWelcomeOffer = false;
+  // The old first-checkout gift is replaced by the order-1 journey reward,
+  // which is unlocked only after that order completes and can be used later.
+  const welcomeEligible = false;
+  selectedWelcomeOffer = false;
 
   if (selectedFreeOfferId) {
     const selectedOffer = FREE_OFFERS[selectedFreeOfferId];
@@ -2272,19 +2281,20 @@ ${esc(offer.freeItem)}
     if (!definition) return "";
     const rewardTicketId = reward.ticketId || reward.id;
     const chosen = selectedMilestoneRewardId === rewardTicketId;
-    const remaining = Math.max(0, Number(definition.minimum || 0) - offerEligibleSubtotal);
+    const rewardSpend = definition.kind === "free-delivery" ? subtotal : offerEligibleSubtotal;
+    const remaining = Math.max(0, Number(definition.minimum || 0) - rewardSpend);
     const eligible = remaining === 0 && !(definition.kind === "free-delivery" && subtotal >= FREE_DELIVERY_THRESHOLD) && !(definition.kind === "percent-discount" && gameRewardDiscount(definition, offerEligibleSubtotal) <= 0);
-    const rewardDescription = definition.kind === "free-item" ? `${definition.item} free${["craving-dash", "craving-runner"].includes(reward.source) ? " · expires 48 hours after earning" : ""}` : definition.kind === "percent-discount" ? `${Number(definition.percent)}% off eligible regular menu items${Number(definition.maxDiscount) ? ` · up to ${money(definition.maxDiscount)}` : ""} · expires after 48 hours` : definition.kind === "free-delivery" ? "Free delivery" : definition.kind === "discount" ? `${money(definition.amount)} off` : definition.kind === "bonus-points" ? `${definition.points} Craving Points on delivery` : `Double Craving Points, up to ${definition.maxBonusPoints} extra`;
-    const statusNote = remaining > 0 ? `Add ${money(remaining)} in regular menu items to use this reward.` : definition.kind === "percent-discount" && gameRewardDiscount(definition, offerEligibleSubtotal) <= 0 ? "Add regular menu items to use this discount; combos, extras, and delivery are excluded." : definition.kind === "percent-discount" ? "Discount applies to regular menu items only. Combos, extras, and delivery are excluded." : definition.kind === "free-delivery" && subtotal >= FREE_DELIVERY_THRESHOLD ? "Your order already qualifies for free delivery." : "";
+    const rewardDescription = definition.kind === "free-item" ? `${definition.item} free${["craving-dash", "craving-runner"].includes(reward.source) ? " · expires 48 hours after earning" : ""}` : definition.kind === "percent-discount" ? `${Number(definition.percent)}% off eligible regular menu items${Number(definition.maxDiscount) ? ` · up to ${money(definition.maxDiscount)}` : ""}${["craving-dash", "craving-runner"].includes(reward.source) ? " · expires after 48 hours" : ""}` : definition.kind === "free-delivery" ? "Free delivery" : definition.kind === "discount" ? `${money(definition.amount)} off` : definition.kind === "bonus-points" ? `${definition.points} Craving Points on delivery` : `Double Craving Points, up to ${definition.maxBonusPoints} extra`;
+    const statusNote = remaining > 0 ? `Add ${money(remaining)} to your food subtotal to use this reward${definition.kind === "free-delivery" ? "; combos count" : " in regular menu items"}.` : definition.kind === "percent-discount" && gameRewardDiscount(definition, offerEligibleSubtotal) <= 0 ? "Add regular menu items to use this discount; combos, extras, and delivery are excluded." : definition.kind === "percent-discount" ? "Discount applies to regular menu items only. Combos, extras, and delivery are excluded." : definition.kind === "free-delivery" && subtotal >= FREE_DELIVERY_THRESHOLD ? "Your order already qualifies for free delivery. Save this reward for another order." : "";
     const expiryLabel = reward.expiresAt ? ` · use by ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt))}` : "";
     return `<article class="cart-reward-choice ${chosen ? "is-selected" : ""}"><div><strong>${esc(definition.title)}</strong><small>${esc(rewardDescription)} · ${esc(definition.detail || "")}${esc(expiryLabel)}</small>${statusNote ? `<small class="reward-remaining">${esc(statusNote)}</small>` : ""}</div><button type="button" data-select-loyalty-reward="${esc(rewardTicketId)}" ${!eligible ? "disabled" : ""}>${chosen ? "SELECTED" : eligible ? "USE REWARD" : "LOCKED"}</button></article>`;
   }).filter(Boolean).join("");
   const rewardWallet = availableRewardCards ? `<div class="cart-benefit-box"><strong>YOUR ROYAL REWARDS</strong>${availableRewardCards}</div>` : "";
 
-  const welcomeCard = !customerHasOrderedOnline && !currentLoyaltyAccount.welcomeCompleted && !currentLoyaltyAccount.welcomeReservationId
-    ? `<article class="cart-reward-choice ${selectedWelcomeOffer ? "is-selected" : ""}"><div><strong>FIRST ONLINE ORDER · FREE BURGER</strong><small>${esc(REWARDS_CONFIG.welcomeItem)} free with any paid regular-menu item. ₹30 delivery below ₹300.</small></div><button type="button" data-select-welcome>${selectedWelcomeOffer ? "APPLIED" : "APPLY"}</button></article>`
-    : "";
+  const welcomeCard = "";
   const pointsBalance = Math.max(0, Number(currentLoyaltyAccount.points || 0));
+  const cartPointsBalance = `<div class="cart-points-balance"><span>YOUR CRAVING POINTS</span><strong>${customerLoggedIn ? `${pointsBalance.toLocaleString("en-IN")} pts` : "Sign in to view"}</strong></div>`;
+  const testOrderNotice = orderAvailability.isTestCustomer ? `<p class="test-order-notice">TEST MODE · This order is for testing only. It will not be prepared, sent to staff, or earn points.</p>` : "";
   const pointsAvailable = Math.floor(Math.min(REWARDS_CONFIG.maxRedeemPointsPerOrder, pointsBalance, offerEligibleSubtotal * 10) / 100) * 100;
   const pointsControls = pointsAvailable > 0
     ? `<div class="cart-points-choice"><div><strong>Use Craving Points</strong><small>${pointsBalance.toLocaleString("en-IN")} Craving Points · up to ${money(pointsAvailable / 10)} off</small><small>${selectedMilestoneRewardId || selectedFreeOfferId || selectedWelcomeOffer ? "Using Craving Points replaces the selected offer or reward." : comboPresent ? "Points apply to eligible regular menu items only; combo and extra items stay full price." : "Choose Craving Points instead of another offer or reward."}</small></div><div class="points-stepper"><button type="button" data-points-step="-100" ${selectedPointsToRedeem <= 0 ? "disabled" : ""}>−</button><span>${selectedPointsToRedeem.toLocaleString("en-IN")}</span><button type="button" data-points-step="100" ${selectedPointsToRedeem >= pointsAvailable ? "disabled" : ""}>+</button></div></div>`
@@ -2307,6 +2317,8 @@ ${esc(offer.freeItem)}
     ${freeOfferSelector}
     ${rewardWallet}
     ${welcomeCard}
+    ${testOrderNotice}
+    ${cartPointsBalance}
     ${pointsControls}
 
     ${deliveryProgress}
@@ -2323,7 +2335,7 @@ ${esc(offer.freeItem)}
       </strong>
     </div>
 
-    ${promotionDiscount > 0 ? `<div class="sum-row sum-discount"><span>${selectedReward?.kind === "percent-discount" ? `GAME REWARD · ${Number(selectedReward.percent)}% OFF REGULAR ITEMS` : "OFFER SAVINGS"}</span><strong>−${money(promotionDiscount)}</strong></div>` : ""}
+    ${promotionDiscount > 0 ? `<div class="sum-row sum-discount"><span>${selectedReward?.kind === "percent-discount" ? `ROYAL REWARD · ${Number(selectedReward.percent)}% OFF REGULAR ITEMS` : "OFFER SAVINGS"}</span><strong>−${money(promotionDiscount)}</strong></div>` : ""}
     ${selectedReward?.kind === "free-delivery" ? `<div class="sum-row sum-discount"><span>REWARD DELIVERY SAVING</span><strong>${money(DELIVERY_CHARGE)}</strong></div>` : ""}
     ${pointsDiscount > 0 ? `<div class="sum-row sum-discount"><span>CRAVING POINTS REDEEMED</span><strong>−${money(pointsDiscount)}</strong></div>` : ""}
     ${selectedReward?.kind === "bonus-points" ? `<div class="sum-row sum-discount"><span>CRAVING POINTS BONUS</span><strong>+${selectedReward.points}</strong></div>` : ""}
@@ -3152,7 +3164,11 @@ function updateOpeningHours() {
     dot.classList.toggle("is-closed", !isOpen);
   }
   const notice = orderAvailabilityReady
-    ? orderAvailability.paused
+    ? orderAvailability.testModeEnabled
+      ? orderAvailability.isTestCustomer
+        ? "TEST MODE: orders from your number are saved separately and will not be prepared or sent to staff."
+        : "Online ordering is temporarily unavailable. Please check back soon."
+      : orderAvailability.paused
       ? "We’re preparing a rush of fresh orders right now. Please check back in a little while—we’d love to serve you soon!"
       : orderAvailability.adminMode === "closed"
       ? "We’re closed for now, but we’ll be back soon with your favourites. Please check back a little later!"
@@ -3183,7 +3199,9 @@ async function refreshOrderingAvailability() {
       paused: data.paused === true,
       staffEnabled: data.staffEnabled === true,
       acceptingOnlineOrders: data.acceptingOnlineOrders === true,
-      adminMode: data.adminMode || ""
+      adminMode: data.adminMode || "",
+      testModeEnabled: data.testModeEnabled === true,
+      isTestCustomer: data.isTestCustomer === true
     };
     orderAvailabilityReady = true;
   } catch (error) {

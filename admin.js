@@ -91,7 +91,7 @@ $("adminLogout").addEventListener("click", () => signOut(auth));
 onAuthStateChanged(auth, requireSignedInAdmin);
 
 async function loadInitial() {
-  await Promise.allSettled([loadAnalytics(), loadCustomers(), loadAccess(), loadBusinessConfig(), loadOrdering()]);
+  await Promise.allSettled([loadAnalytics(), loadCustomers(), loadAccess(), loadBusinessConfig(), loadOrdering(), loadOrderTestMode()]);
 }
 async function loadAnalytics() {
   message($("analyticsMessage"), "Loading sales…");
@@ -210,6 +210,10 @@ function gameFoodOptions(selected) {
  const names=[...new Set(Object.entries(menu).flatMap(([k,s])=>/extra|dip/i.test(k+s.title)?[]:(s.items||[]).flatMap(i=>i.options?.length?i.options.map(o=>o.name):[i.name])).concat((combos||[]).map(c=>c.name)))];
  return '<option value="">Select menu item</option>'+names.map(n=>'<option '+(n===selected?'selected':'')+'>'+escapeHtml(n)+'</option>').join('');
 }
+function rewardFoodOptions(selected) {
+ const names=[...new Set(Object.entries(menu).flatMap(([k,s])=>/extra|dip/i.test(k+s.title)?[]:(s.items||[]).flatMap(i=>i.options?.length?i.options.map(o=>o.name):[i.name])))];
+ return '<option value="">Select regular menu item</option>'+names.map(n=>'<option value="'+escapeHtml(n)+'" '+(n===selected?'selected':'')+'>'+escapeHtml(n)+'</option>').join('');
+}
 function gameRewardDescription(r={}) { return r?.kind==='points'?Number(r.points||0)+' Craving Points · expires in 48 hours':r?.kind==='free-item'?'Free '+(r.item||'menu item')+' · 48-hour voucher':r?.kind==='percent-discount'?Number(r.percent||0)+'% discount · 48-hour voucher':'No reward configured'; }
 function rewardFields(p,r={}) { const k=r.kind||'points';return '<div class="game-reward-fields"><label>Reward<select class="'+p+'-kind"><option value="points" '+(k==='points'?'selected':'')+'>Craving Points · 48-hour expiry</option><option value="free-item" '+(k==='free-item'?'selected':'')+'>Free menu item/combo · 48-hour expiry</option><option value="percent-discount" '+(k==='percent-discount'?'selected':'')+'>Discount percent · 48-hour expiry</option></select></label><label class="'+p+'-points-field">Points<input class="'+p+'-points" type="number" min="1" max="10000" step="1" value="'+(r.points||100)+'"></label><label class="'+p+'-item-field">Free item/combo<select class="'+p+'-item">'+gameFoodOptions(r.item)+'</select></label><label class="'+p+'-percent-field">Discount %<input class="'+p+'-percent" type="number" min="1" max="100" value="'+(r.percent||10)+'"></label><label class="'+p+'-minimum-field">Min food spend ₹<input class="'+p+'-minimum" type="number" min="0" max="5000" value="'+(r.minimum||0)+'"></label><label class="'+p+'-cap-field">Discount cap ₹<input class="'+p+'-cap" type="number" min="0" max="10000" value="'+(r.maxDiscount||0)+'"></label></div>'; }
 function readGameReward(el,p){const k=el.querySelector('.'+p+'-kind').value;if(k==='points')return{kind:k,points:Number(el.querySelector('.'+p+'-points').value)};if(k==='free-item')return{kind:k,item:el.querySelector('.'+p+'-item').value,minimum:Number(el.querySelector('.'+p+'-minimum').value)};return{kind:k,percent:Number(el.querySelector('.'+p+'-percent').value),minimum:Number(el.querySelector('.'+p+'-minimum').value),maxDiscount:Number(el.querySelector('.'+p+'-cap').value)};}
@@ -282,20 +286,32 @@ $("saveMenu").addEventListener("click", async event => {
 });
 
 function renderRewardEditor() {
-  $("rewardEditor").innerHTML = rewards.map((reward, index) => `<div class="reward-row"><strong class="reward-order">#${Number(reward.order)}</strong><select class="reward-kind"><option value="progress" ${reward.kind === "progress" ? "selected" : ""}>Progress message</option><option value="free-delivery" ${reward.kind === "free-delivery" ? "selected" : ""}>Free delivery</option><option value="free-item" ${reward.kind === "free-item" ? "selected" : ""}>Free regular item</option><option value="discount" ${reward.kind === "discount" ? "selected" : ""}>Discount</option><option value="bonus-points" ${reward.kind === "bonus-points" ? "selected" : ""}>Bonus points</option><option value="double-points" ${reward.kind === "double-points" ? "selected" : ""}>Double points</option><option value="welcome" ${reward.kind === "welcome" ? "selected" : ""}>Welcome offer</option></select><input class="reward-title" value="${escapeHtml(reward.title)}" aria-label="Reward title"><input class="reward-id" value="${escapeHtml(reward.id || "")}" placeholder="stable reward ID" aria-label="Stable reward ID"><input class="reward-minimum" type="number" min="0" value="${Number(reward.minimum || 0)}" aria-label="Minimum spend"><input class="reward-amount" type="number" min="0" value="${Number(reward.amount || reward.points || reward.maxBonusPoints || 0)}" aria-label="Discount / points amount"><input class="reward-item" value="${escapeHtml(reward.item || "")}" placeholder="free item exact menu name" aria-label="Free regular menu item"><input class="reward-detail" value="${escapeHtml(reward.detail || "")}" aria-label="Customer-facing description"><button class="remove-button reward-remove" type="button" data-reward-index="${index}">Remove milestone</button></div>`).join("");
-  $("rewardEditor").querySelectorAll("[data-reward-index]").forEach(button => button.addEventListener("click", () => { if (rewards.length <= 1) return; rewards.splice(Number(button.dataset.rewardIndex), 1); rewards.forEach((reward, index) => reward.order = index + 1); renderRewardEditor(); }));
+  const choices = rewards.length ? [...rewards].map(r=>r.kind==="welcome"&&Number(r.order)===1?{...r,kind:"free-item",id:"order-1-burger",title:"Free Classic Crunchy Burger",detail:"Unlocked after completing order 1 · use on a later order",minimum:0,item:"Classic Crunchy Burger"}:r.kind==="welcome"?{...r,kind:"progress",id:"",title:"Order milestone",detail:"Keep ordering to unlock your next reward."}:r).sort((a,b)=>Number(a.order)-Number(b.order)) : [{order:1,kind:"free-item",id:"order-1-burger",title:"Free Classic Crunchy Burger",detail:"Unlocked after completing order 1 · use on a later order",minimum:0,item:"Classic Crunchy Burger"}];
+  $("rewardEditor").innerHTML = choices.map((reward, index) => {
+    const legacy = ["discount","double-points","welcome"].includes(reward.kind);
+    const kind = reward.kind === "welcome" ? "progress" : reward.kind;
+    const options = [["progress","No reward · progress only"],["free-item","Free regular menu item"],["percent-discount","Percentage discount"],["bonus-points","Craving Points"],["free-delivery","Free delivery"]];
+    if (legacy) options.push([reward.kind, reward.kind === "discount" ? "Existing fixed discount · legacy" : reward.kind === "double-points" ? "Existing double points · legacy" : "Existing welcome · legacy"]);
+    const optHtml = options.map(([v,label])=>`<option value="${v}" ${kind===v?"selected":""}>${label}</option>`).join("");
+    return `<article class="reward-row" data-reward-index="${index}"><header class="reward-row-heading"><strong>Reward earned after order</strong><select class="reward-order" aria-label="Completed order number">${Array.from({length:30},(_,i)=>`<option value="${i+1}" ${Number(reward.order)===i+1?"selected":""}>${i+1}${i===0?"st":i===1?"nd":i===2?"rd":"th"} order</option>`).join("")}</select></header><div class="reward-fields"><label>What does the customer get?<select class="reward-kind">${optHtml}</select></label><label class="reward-title-field">Reward name<input class="reward-title" maxlength="100" value="${escapeHtml(reward.title||"")}" placeholder="e.g. Free Crunchy Burger"></label><label class="reward-minimum-field" ${["free-item","percent-discount","bonus-points","free-delivery","discount"].includes(kind)?"":"hidden"}><span class="reward-minimum-label">${kind==="free-delivery"?"Minimum food subtotal (₹)":"Minimum regular-food spend (₹)"}</span><input class="reward-minimum" type="number" min="0" max="10000" step="1" value="${Number(reward.minimum||0)}"><small class="reward-minimum-help">${kind==="free-delivery"?"Combos, regular items, and mixed orders count. Extras and delivery do not.":"Combos, extras, and delivery do not count toward this spend reward."}</small></label><label class="reward-item-field" ${kind!=="free-item"?"hidden":""}>Free item<select class="reward-item">${rewardFoodOptions(reward.item||"")}</select></label><label class="reward-percent-field" ${kind!=="percent-discount"?"hidden":""}>Discount (%)<input class="reward-percent" type="number" min="1" max="100" step="1" value="${Number(reward.percent||10)}"></label><label class="reward-cap-field" ${kind!=="percent-discount"?"hidden":""}>Maximum discount (₹)<input class="reward-cap" type="number" min="1" max="10000" step="1" value="${Number(reward.maxDiscount||100)}"></label><label class="reward-points-field" ${kind!=="bonus-points"?"hidden":""}>Craving Points<input class="reward-points" type="number" min="1" max="10000" step="1" value="${Number(reward.points||100)}"><small>Credited when this milestone is completed.</small></label><label class="reward-amount-field" ${kind!=="discount"?"hidden":""}>Discount amount (₹)<input class="reward-amount" type="number" min="1" max="1000" value="${Number(reward.amount||0)}"></label><label class="reward-double-field" ${kind!=="double-points"?"hidden":""}>Bonus point limit<input class="reward-double" type="number" min="1" max="10000" value="${Number(reward.maxBonusPoints||0)}"></label><label class="reward-id-field" ${kind==="progress"?"hidden":""}>Reward ID<input class="reward-id" value="${escapeHtml(reward.id||`order-${reward.order}-${crypto.randomUUID().slice(0,8)}`)}" placeholder="stable ID" aria-label="Stable reward ID"></label><label class="reward-detail-field">Customer message<input class="reward-detail" maxlength="180" value="${escapeHtml(reward.detail||"")}" placeholder="Shown in Rewards"></label></div></article>`;
+  }).join("");
+  $("rewardEditor").querySelectorAll(".reward-row").forEach(row=>{
+    const toggle=()=>{const k=row.querySelector(".reward-kind").value;for(const [cls,show] of [["reward-minimum-field",["free-item","percent-discount","bonus-points","free-delivery","discount"].includes(k)],["reward-item-field",k==="free-item"],["reward-percent-field",k==="percent-discount"],["reward-cap-field",k==="percent-discount"],["reward-points-field",k==="bonus-points"],["reward-amount-field",k==="discount"],["reward-double-field",k==="double-points"],["reward-id-field",k!=="progress"]])row.querySelectorAll("."+cls).forEach(el=>el.hidden=!show);const help=row.querySelector(".reward-minimum-help");if(help)help.textContent=k==="free-delivery"?"Food subtotal at redemption. Combos, regular items, and mixed orders count; extras and delivery do not.":"Food subtotal at redemption. Combos, extras, and delivery do not count toward this spend reward.";const label=row.querySelector(".reward-minimum-label");if(label)label.textContent=k==="free-delivery"?"Minimum food subtotal (₹)":"Minimum regular-food spend (₹)";};
+    row.querySelector(".reward-kind").addEventListener("change",toggle);toggle();
+  });
   renderBenefitRewardOptions();
 }
 function readRewardEditor() {
   return [...$("rewardEditor").querySelectorAll(".reward-row")].map((row, index) => {
     const kind = row.querySelector(".reward-kind").value, title = row.querySelector(".reward-title").value.trim(), id = row.querySelector(".reward-id").value.trim(), detail = row.querySelector(".reward-detail").value.trim();
-    const data = { order: index + 1, kind, title, detail };
-    if (id) data.id = id;
-    if (["free-delivery", "free-item", "discount"].includes(kind)) data.minimum = Number(row.querySelector(".reward-minimum").value);
+    const data = { order: Number(row.querySelector(".reward-order").value), kind, title, detail };
+    if (id && kind !== "progress") data.id = id;
+    if (["free-delivery", "free-item", "discount", "percent-discount", "bonus-points"].includes(kind)) data.minimum = Number(row.querySelector(".reward-minimum").value);
     if (kind === "free-item") data.item = row.querySelector(".reward-item").value.trim();
     if (kind === "discount") data.amount = Number(row.querySelector(".reward-amount").value);
-    if (kind === "bonus-points") data.points = Number(row.querySelector(".reward-amount").value);
     if (kind === "double-points") data.maxBonusPoints = Number(row.querySelector(".reward-amount").value);
+    if (kind === "percent-discount") { data.percent=Number(row.querySelector(".reward-percent").value); data.maxDiscount=Number(row.querySelector(".reward-cap").value); }
+    if (kind === "bonus-points") data.points=Number(row.querySelector(".reward-points").value);
     return data;
   });
 }
@@ -307,7 +323,7 @@ function renderBenefitRewardOptions() {
 }
 $("saveRewards").addEventListener("click", async event => {
   const button = event.currentTarget; button.disabled = true;
-  try { const result = await call("adminSaveRewardsConfig", { journey: readRewardEditor() }); rewards = readRewardEditor(); renderRewardEditor(); message($("rewardsMessage"), `Saved ${result.milestones} reward milestones to Firebase.`, "success"); }
+  try { const journey=readRewardEditor(); if(new Set(journey.map(item=>item.order)).size!==journey.length) throw new Error("Choose each completed-order number only once."); const result = await call("adminSaveRewardsConfig", { journey }); rewards = journey; renderRewardEditor(); message($("rewardsMessage"), `Saved ${result.milestones} reward milestones to Firebase.`, "success"); }
   catch (error) { message($("rewardsMessage"), friendlyError(error), "error"); }
   finally { button.disabled = false; }
 });
@@ -330,6 +346,46 @@ async function loadOrdering() {
   try { orderingStatus = await call("getOrderingStatus"); renderOrdering(); }
   catch (error) { $("orderingTitle").textContent = "Ordering status unavailable"; $("orderingMessage").textContent = friendlyError(error); }
 }
+
+async function loadOrderTestMode() {
+  try {
+    const settings = await call("adminGetOrderTestMode", {});
+    $("orderTestModeEnabled").checked = settings.enabled === true;
+    $("orderTestPhones").value = (settings.phones || []).map(phone => String(phone).replace(/^\+91/, "")).join("\n");
+    $("orderTestModeStatus").textContent = settings.enabled ? "TEST MODE ON" : "OFF";
+    $("orderTestModeStatus").classList.toggle("is-test-mode", settings.enabled === true);
+  } catch (error) {
+    $("orderTestModeStatus").textContent = "Unavailable";
+    message($("orderTestModeMessage"), friendlyError(error), "error");
+  }
+}
+
+$("orderTestModeForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = $("saveOrderTestMode");
+  const enabled = $("orderTestModeEnabled").checked;
+  const phones = $("orderTestPhones").value.split(/[\s,;]+/).map(value => value.trim()).filter(Boolean);
+  if (enabled && phones.length === 0) {
+    message($("orderTestModeMessage"), "Add at least one approved number before enabling test mode.", "error");
+    return;
+  }
+  button.disabled = true;
+  message($("orderTestModeMessage"), "Saving test access…");
+  try {
+    const result = await call("adminUpdateOrderTestMode", { enabled, phones });
+    $("orderTestModeEnabled").checked = result.enabled;
+    $("orderTestPhones").value = (result.phones || []).map(phone => String(phone).replace(/^\+91/, "")).join("\n");
+    $("orderTestModeStatus").textContent = result.enabled ? "TEST MODE ON" : "OFF";
+    $("orderTestModeStatus").classList.toggle("is-test-mode", result.enabled === true);
+    message($("orderTestModeMessage"), result.enabled
+      ? "Test mode is on. Only the approved numbers can order; test orders are isolated from staff and sales."
+      : "Test mode is off. Normal online-order rules apply.", "success");
+  } catch (error) {
+    message($("orderTestModeMessage"), friendlyError(error), "error");
+  } finally {
+    button.disabled = false;
+  }
+});
 function renderOrdering() {
   const active = orderingStatus?.acceptingOnlineOrders === true;
   const mode = orderingStatus?.adminMode || "";

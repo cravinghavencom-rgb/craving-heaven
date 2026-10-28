@@ -33,6 +33,7 @@ function mumbaiDateKey(now = new Date()) {
 }
 
 function orderNumberPrefix(source, orderType) {
+  if (source === "test") return "TS";
   if (source === "walk-in") return "WK";
   return orderType === "pickup" ? "PK" : "DL";
 }
@@ -95,7 +96,13 @@ function isStaffSessionEnabled(settings = {}, now = new Date()) {
     && settings.enabledForDate === mumbaiDateKey(new Date(now.getTime() - 24 * 60 * 60 * 1000));
 }
 
-function buildOrderingStatus(settings = {}, now = new Date()) {
+function normalizeIndianPhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  const national = digits.length === 12 && digits.startsWith("91") ? digits.slice(2) : digits;
+  return /^[6-9]\d{9}$/.test(national) ? `+91${national}` : "";
+}
+
+function buildOrderingStatus(settings = {}, now = new Date(), callerPhone = "") {
   const today = mumbaiDateKey(now);
   const adminMode = settings.adminModeForDate === today ? settings.adminMode : "";
   const paused = settings.paused === true;
@@ -104,16 +111,28 @@ function buildOrderingStatus(settings = {}, now = new Date()) {
   const manualOnline = adminMode === "online";
   const manualClosed = adminMode === "closed";
   const manualPaused = adminMode === "paused";
-  const acceptingOnlineOrders = manualOnline || (!manualClosed && !manualPaused && isOpen && staffEnabled && !paused);
+  const testModeEnabled = settings.testModeEnabled === true;
+  const normalizedCallerPhone = normalizeIndianPhone(callerPhone);
+  const testAllowed = testModeEnabled && normalizedCallerPhone && Array.isArray(settings.testPhones)
+    && settings.testPhones.includes(normalizedCallerPhone);
+  const acceptingOnlineOrders = testModeEnabled
+    ? Boolean(testAllowed)
+    : manualOnline || (!manualClosed && !manualPaused && isOpen && staffEnabled && !paused);
   const hours = getStoreHours(settings);
   return {
     isOpen,
     paused: manualPaused || (!manualClosed && paused),
     staffEnabled,
     acceptingOnlineOrders,
+    testModeEnabled,
+    isTestCustomer: Boolean(testAllowed),
     adminMode,
     hours,
-    message: manualOnline
+    message: testModeEnabled
+      ? testAllowed
+        ? "Test ordering is enabled for this phone. Orders are kept out of the live staff queue and sales reports."
+        : "Online ordering is temporarily unavailable. Please check back soon."
+      : manualOnline
       ? "Online ordering is open."
       : manualPaused || paused
         ? "High order volume: we’re temporarily not taking online orders. Please try again shortly."
@@ -127,12 +146,49 @@ function buildOrderingStatus(settings = {}, now = new Date()) {
   };
 }
 
-async function readOrderingStatus() {
+async function readOrderingStatus(callerPhone = "") {
   const snapshot = await ORDERING_STATUS_REF().get();
-  return buildOrderingStatus(snapshot.exists ? snapshot.data() : {});
+  return buildOrderingStatus(snapshot.exists ? snapshot.data() : {}, new Date(), callerPhone);
 }
 
-exports.getOrderingStatus = onCall({ region: REGION }, async () => readOrderingStatus());
+exports.getOrderingStatus = onCall({ region: REGION }, async request => {
+  let callerPhone = request.auth?.token?.phone_number || "";
+  if (!callerPhone && request.auth?.uid) {
+    try { callerPhone = (await getAuth().getUser(request.auth.uid)).phoneNumber || ""; }
+    catch { /* A missing user phone keeps test ordering unavailable. */ }
+  }
+  return readOrderingStatus(callerPhone);
+});
+
+exports.adminGetOrderTestMode = onCall({ region: REGION }, async request => {
+  await requireAdmin(request);
+  const snapshot = await ORDERING_STATUS_REF().get();
+  const data = snapshot.exists ? snapshot.data() : {};
+  return { enabled: data.testModeEnabled === true, phones: Array.isArray(data.testPhones) ? data.testPhones : [] };
+});
+
+exports.adminUpdateOrderTestMode = onCall({ region: REGION }, async request => {
+  const adminUid = await requireAdmin(request);
+  const enabled = request.data?.enabled === true;
+  const rawPhones = request.data?.phones;
+  if (!Array.isArray(rawPhones) || rawPhones.length > 10) {
+    throw new HttpsError("invalid-argument", "Add up to 10 approved Indian mobile numbers.");
+  }
+  const phones = [...new Set(rawPhones.map(normalizeIndianPhone))];
+  if (phones.some(phone => !phone)) {
+    throw new HttpsError("invalid-argument", "Enter valid 10-digit Indian mobile numbers.");
+  }
+  if (enabled && phones.length === 0) {
+    throw new HttpsError("failed-precondition", "Add at least one test phone number before enabling test mode.");
+  }
+  await ORDERING_STATUS_REF().set({
+    testModeEnabled: enabled,
+    testPhones: enabled ? phones : [],
+    testModeUpdatedBy: adminUid,
+    testModeUpdatedAt: FieldValue.serverTimestamp()
+  }, { merge: true });
+  return { enabled, phones };
+});
 
 exports.staffSetOnlineOrderingEnabled = onCall({ region: REGION }, async request => {
   const staffUid = await requireStaff(request);
@@ -433,7 +489,7 @@ function validateRewardJourney(journey, menu) {
   const prices = buildPriceByName(menu, COMBO_MENU_DATA);
   const ids = new Set();
   const orders = new Set();
-  const validKinds = new Set(["welcome", "progress", "free-delivery", "free-item", "discount", "bonus-points", "double-points"]);
+  const validKinds = new Set(["welcome", "progress", "free-delivery", "free-item", "discount", "percent-discount", "bonus-points", "double-points"]);
   return journey.map(entry => {
     const order = Number(entry?.order);
     const kind = String(entry?.kind || "");
@@ -448,7 +504,7 @@ function validateRewardJourney(journey, menu) {
     if (id) ids.add(id);
     const reward = { order, kind, title, detail };
     if (id) reward.id = id;
-    if (["free-delivery", "free-item", "discount"].includes(kind)) {
+    if (["free-delivery", "free-item", "discount", "percent-discount", "bonus-points"].includes(kind)) {
       reward.minimum = Number(entry.minimum || 0);
       if (!Number.isSafeInteger(reward.minimum) || reward.minimum < 0 || reward.minimum > 10000) throw new HttpsError("invalid-argument", `The minimum spend for ${title} is invalid.`);
     }
@@ -460,6 +516,11 @@ function validateRewardJourney(journey, menu) {
     if (kind === "discount") {
       reward.amount = Number(entry.amount || 0);
       if (!Number.isSafeInteger(reward.amount) || reward.amount < 1 || reward.amount > 1000) throw new HttpsError("invalid-argument", `The discount for ${title} is invalid.`);
+    }
+    if (kind === "percent-discount") {
+      reward.percent = Number(entry.percent || 0);
+      reward.maxDiscount = Number(entry.maxDiscount || 0);
+      if (!Number.isSafeInteger(reward.percent) || reward.percent < 1 || reward.percent > 100 || !Number.isSafeInteger(reward.maxDiscount) || reward.maxDiscount < 1 || reward.maxDiscount > 10000) throw new HttpsError("invalid-argument", `Set a 1–100% discount and a maximum discount of ₹1–₹10,000 for ${title}.`);
     }
     if (kind === "bonus-points") {
       reward.points = Number(entry.points || 0);
@@ -581,11 +642,22 @@ exports.adminSaveRewardsConfig = onCall({ region: REGION }, async request => {
   const businessConfig = await readBusinessConfig();
   const journey = validateRewardJourney(request.data?.journey, businessConfig.menu);
   const keepIds = new Set(journey.filter(item => item.id).map(item => item.id));
+  const oldById = businessConfig.rewards.rewardById;
+  const newById = Object.fromEntries(journey.filter(item => item.id).map(item => [item.id, item]));
+  const rewardSignature = reward => reward ? JSON.stringify({
+    order: Number(reward.order), kind: String(reward.kind), title: String(reward.title || ""), detail: String(reward.detail || ""),
+    minimum: Number(reward.minimum || 0), item: String(reward.item || ""), amount: Number(reward.amount || 0),
+    points: Number(reward.points || 0), maxBonusPoints: Number(reward.maxBonusPoints || 0),
+    percent: Number(reward.percent || 0), maxDiscount: Number(reward.maxDiscount || 0)
+  }) : "null";
   const accounts = await db.collection("loyaltyAccounts").get();
   for (const accountDoc of accounts.docs) {
     const activeTickets = (accountDoc.data().availableRewards || []).filter(ticket => !ticket.expiresAt || timestampMillis(ticket.expiresAt) > Date.now());
     if (activeTickets.some(ticket => !keepIds.has(ticket.id))) {
       throw new HttpsError("failed-precondition", "This reward lineup still has active customer rewards. Keep those reward IDs until the issued rewards expire or are used.");
+    }
+    if (activeTickets.some(ticket => rewardSignature(oldById[ticket.id]) !== rewardSignature(newById[ticket.id]))) {
+      throw new HttpsError("failed-precondition", "A customer has this reward available. Keep its settings unchanged until the reward is used or expires.");
     }
   }
   await REWARDS_CONFIG_REF().set({ journey, updatedBy: adminUid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
@@ -1304,31 +1376,45 @@ exports.createOrder = onCall({ region: REGION }, async request => {
   const accountRef = db.collection("loyaltyAccounts").doc(uid);
   const profileRef = db.collection("customerProfiles").doc(uid);
   const requestRef = db.collection("orderRequests").doc(`${uid}_${requestId}`);
-  const orderRef = db.collection("orders").doc();
+  const testRequestRef = db.collection("testOrderRequests").doc(`${uid}_${requestId}`);
   const orderingStatusRef = ORDERING_STATUS_REF();
 
   const result = await db.runTransaction(async transaction => {
-    const existingRequest = await transaction.get(requestRef);
+    const [existingRequest, existingTestRequest, orderingStatusSnapshot] = await Promise.all([
+      transaction.get(requestRef),
+      transaction.get(testRequestRef),
+      transaction.get(orderingStatusRef)
+    ]);
     if (existingRequest.exists) return existingRequest.data().response;
-
-    const orderingStatusSnapshot = await transaction.get(orderingStatusRef);
+    if (existingTestRequest.exists) return existingTestRequest.data().response;
     const orderingSettings = orderingStatusSnapshot.exists ? orderingStatusSnapshot.data() : {};
-    const orderingDecision = buildOrderingStatus(orderingSettings);
+    const testModeEnabled = orderingSettings.testModeEnabled === true;
+    const normalizedCustomerPhone = normalizeIndianPhone(customerMobile);
+    if (testModeEnabled && (!normalizedCustomerPhone || !Array.isArray(orderingSettings.testPhones) || !orderingSettings.testPhones.includes(normalizedCustomerPhone))) {
+      throw new HttpsError("failed-precondition", "Online ordering is temporarily unavailable. Please check back soon.");
+    }
+    const orderingDecision = buildOrderingStatus(orderingSettings, new Date(), customerMobile);
     if (!orderingDecision.acceptingOnlineOrders) {
       throw new HttpsError("failed-precondition", orderingDecision.message);
     }
+    if (testModeEnabled && (Number(data.redeemPoints || 0) > 0 || data.loyaltyRewardId || data.applyFirstOrderReward === true || freeOffer)) {
+      throw new HttpsError("failed-precondition", "Craving Points and rewards are disabled for test orders.");
+    }
+    const activeRequestRef = testModeEnabled ? testRequestRef : requestRef;
+    const orderRef = db.collection(testModeEnabled ? "testOrders" : "orders").doc();
 
-    const [accountSnapshot, profileSnapshot] = await Promise.all([
+    const [accountSnapshot, profileSnapshot] = testModeEnabled ? [null, null] : await Promise.all([
       transaction.get(accountRef),
       orderType === "delivery" ? transaction.get(profileRef) : Promise.resolve(null)
     ]);
-    const account = accountSnapshot.exists ? accountSnapshot.data() : {};
+    const account = accountSnapshot?.exists ? accountSnapshot.data() : {};
     const profile = profileSnapshot?.exists ? profileSnapshot.data() : {};
     const balance = availableCravingPoints(account);
     const availableRewards = Array.isArray(account.availableRewards) ? account.availableRewards : [];
     const loyaltyRewardTicketId = typeof data.loyaltyRewardId === "string" ? data.loyaltyRewardId : "";
     const requestedPoints = Number(data.redeemPoints || 0);
     const applyFirstOrderReward = data.applyFirstOrderReward === true;
+    if (applyFirstOrderReward) throw new HttpsError("failed-precondition", "The first-order welcome gift has moved to the reward journey: complete your first order to unlock a reward for your next order.");
     const hasOtherBenefit = Boolean(freeOffer || loyaltyRewardTicketId || requestedPoints > 0);
     let welcomeUsed = false;
     let pointsDiscount = 0;
@@ -1348,6 +1434,7 @@ exports.createOrder = onCall({ region: REGION }, async request => {
     if (loyaltyRewardTicketId) {
       claimedReward = availableRewards.find(reward => reward.ticketId === loyaltyRewardTicketId || (!reward.ticketId && reward.id === loyaltyRewardTicketId));
       const isGameVoucher = ["craving-dash", "craving-runner"].includes(claimedReward?.source) && ["free-item", "percent-discount"].includes(claimedReward.kind);
+      const isConfiguredPercentReward = claimedReward?.kind === "percent-discount" && rewardConfig.rewardById[claimedReward.id]?.kind === "percent-discount";
       loyaltyReward = isGameVoucher
         ? { kind: claimedReward.kind, title: claimedReward.title, detail: claimedReward.detail, item: claimedReward.item, percent: Number(claimedReward.percent || 0), maxDiscount: Number(claimedReward.maxDiscount || 0), minimum: Number(claimedReward.minimum || 0) }
         : claimedReward ? rewardConfig.rewardById[claimedReward.id] : null;
@@ -1361,8 +1448,12 @@ exports.createOrder = onCall({ region: REGION }, async request => {
       if (claimedReward.expiresAt && timestampMillis(claimedReward.expiresAt) <= Date.now()) {
         throw new HttpsError("failed-precondition", "This reward has expired. Choose another available reward.");
       }
-      if (eligibleSubtotal < Number(loyaltyReward.minimum || 0)) {
-        throw new HttpsError("failed-precondition", `Add ${Math.max(0, Number(loyaltyReward.minimum) - eligibleSubtotal)} more in regular menu items to use this reward. Combos do not count toward spend rewards.`);
+      const rewardSpendSubtotal = loyaltyReward.kind === "free-delivery" ? subtotal : eligibleSubtotal;
+      if (rewardSpendSubtotal < Number(loyaltyReward.minimum || 0)) {
+        const remaining = Math.max(0, Number(loyaltyReward.minimum) - rewardSpendSubtotal);
+        throw new HttpsError("failed-precondition", loyaltyReward.kind === "free-delivery"
+          ? `Add ₹${remaining} more to your food subtotal to use this free-delivery reward. Combos count.`
+          : `Add ₹${remaining} more in regular menu items to use this reward. Combos do not count toward spend rewards.`);
       }
       if (loyaltyReward.kind === "free-delivery" && orderType === "pickup") {
         throw new HttpsError("failed-precondition", "Free-delivery rewards can only be used on delivery orders.");
@@ -1374,7 +1465,7 @@ exports.createOrder = onCall({ region: REGION }, async request => {
       if (loyaltyReward.kind === "discount") discountAmount = loyaltyReward.amount;
       if (loyaltyReward.kind === "percent-discount") {
         const percent = Number(loyaltyReward.percent), cap = Number(loyaltyReward.maxDiscount || 0);
-        if (!isGameVoucher || !Number.isSafeInteger(percent) || percent < 1 || percent > 100 || !Number.isSafeInteger(cap) || cap < 0 || cap > 10000) throw new HttpsError("failed-precondition", "This game discount reward is not valid.");
+        if (!(isGameVoucher || isConfiguredPercentReward) || !Number.isSafeInteger(percent) || percent < 1 || percent > 100 || !Number.isSafeInteger(cap) || cap < (isConfiguredPercentReward ? 1 : 0) || cap > 10000) throw new HttpsError("failed-precondition", "This percentage reward is not valid.");
         discountAmount = Math.min(Math.floor(eligibleSubtotal * percent / 100), cap > 0 ? cap : eligibleSubtotal);
         if (discountAmount <= 0) throw new HttpsError("failed-precondition", "Add eligible regular menu items before using this percentage reward.");
       }
@@ -1407,12 +1498,12 @@ exports.createOrder = onCall({ region: REGION }, async request => {
     const total = Math.max(0, subtotal - totalDiscount + deliveryCharge);
     const regularSpentForPoints = Math.max(0, regularPointSubtotal - discountAmount - pointsDiscount);
     const basePoints = Math.floor(regularSpentForPoints / rewardConfig.pointRateRegularRupees) + Math.floor(comboPointSubtotal / rewardConfig.pointRateComboRupees);
-    const pointsToAward = (pointsMultiplier === 2 ? basePoints + Math.min(basePoints, Number(loyaltyReward.maxBonusPoints || 0)) : basePoints) + pointsBonus;
+    const pointsToAward = testModeEnabled ? 0 : (pointsMultiplier === 2 ? basePoints + Math.min(basePoints, Number(loyaltyReward.maxBonusPoints || 0)) : basePoints) + pointsBonus;
     const remainingRewards = loyaltyRewardTicketId ? availableRewards.filter(reward => reward.ticketId !== loyaltyRewardTicketId && !( !reward.ticketId && reward.id === loyaltyRewardTicketId)) : availableRewards;
 
-    const orderNumber = await reserveOrderNumber(transaction, "website", orderType);
+    const orderNumber = await reserveOrderNumber(transaction, testModeEnabled ? "test" : "website", orderType);
     let addressSaved = false;
-    if (orderType === "delivery") {
+    if (orderType === "delivery" && !testModeEnabled) {
       const addresses = Array.isArray(profile.addresses) ? [...profile.addresses] : [];
       const addressKey = [address, landmark, area].map(value => String(value || "").trim().toLowerCase()).join("|");
       let addressIndex = addresses.findIndex(item => item?.id === addressId);
@@ -1458,15 +1549,16 @@ exports.createOrder = onCall({ region: REGION }, async request => {
       claimedRewardId: loyaltyRewardTicketId || null,
       claimedReward: loyaltyRewardTicketId ? { ticketId: loyaltyRewardTicketId, id: claimedReward.id, kind: loyaltyReward.kind, title: loyaltyReward.title, expiresAt: claimedReward.expiresAt || null } : null,
       welcomeUsed,
+      isTestOrder: testModeEnabled,
       deliveryCharge,
       total,
       status: "new",
       orderType,
       source: "website",
-      pointsStatus: orderType === "pickup" ? "pending-completion" : "pending-delivery",
+      pointsStatus: testModeEnabled ? "test-order" : orderType === "pickup" ? "pending-completion" : "pending-delivery",
       createdAt: FieldValue.serverTimestamp()
     });
-    if (requestedPoints || loyaltyRewardTicketId || welcomeUsed) {
+    if (!testModeEnabled && (requestedPoints || loyaltyRewardTicketId || welcomeUsed)) {
       transaction.set(accountRef, {
         uid,
         ...(requestedPoints ? consumeCravingPoints(account, requestedPoints) : {}),
@@ -1475,8 +1567,8 @@ exports.createOrder = onCall({ region: REGION }, async request => {
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
     }
-    const response = { orderId: orderRef.id, orderNumber, subtotal, discountAmount: totalDiscount, deliveryCharge, total, pointsRedeemed: requestedPoints, addressSaved, items: pricedItems };
-    transaction.create(requestRef, { uid, orderId: orderRef.id, response, createdAt: FieldValue.serverTimestamp() });
+    const response = { orderId: orderRef.id, orderNumber, subtotal, discountAmount: totalDiscount, deliveryCharge, total, pointsRedeemed: requestedPoints, pointsToAward, addressSaved, items: pricedItems, isTestOrder: testModeEnabled };
+    transaction.create(activeRequestRef, { uid, orderId: orderRef.id, response, createdAt: FieldValue.serverTimestamp() });
     return response;
   });
   return result;
@@ -1828,7 +1920,8 @@ exports.createWalkInOrder = onCall({ region: REGION }, async request => {
     let pointsMultiplier = 1;
     if (loyaltyRewardTicketId) {
       claimedReward = availableRewards.find(reward => reward.ticketId === loyaltyRewardTicketId || (!reward.ticketId && reward.id === loyaltyRewardTicketId));
-    const isGameVoucher = ["craving-dash", "craving-runner"].includes(claimedReward?.source) && ["free-item", "percent-discount"].includes(claimedReward.kind);
+      const isGameVoucher = ["craving-dash", "craving-runner"].includes(claimedReward?.source) && ["free-item", "percent-discount"].includes(claimedReward.kind);
+      const isConfiguredPercentReward = claimedReward?.kind === "percent-discount" && rewardConfig.rewardById[claimedReward.id]?.kind === "percent-discount";
       loyaltyReward = isGameVoucher
         ? { kind: claimedReward.kind, title: claimedReward.title, detail: claimedReward.detail, item: claimedReward.item, percent: Number(claimedReward.percent || 0), maxDiscount: Number(claimedReward.maxDiscount || 0), minimum: Number(claimedReward.minimum || 0) }
         : claimedReward ? rewardConfig.rewardById[claimedReward.id] : null;
@@ -1850,7 +1943,7 @@ exports.createWalkInOrder = onCall({ region: REGION }, async request => {
       if (loyaltyReward.kind === "discount") discountAmount = Number(loyaltyReward.amount || 0);
       if (loyaltyReward.kind === "percent-discount") {
         const percent = Number(loyaltyReward.percent), cap = Number(loyaltyReward.maxDiscount || 0);
-        if (!isGameVoucher || !Number.isSafeInteger(percent) || percent < 1 || percent > 100 || !Number.isSafeInteger(cap) || cap < 0 || cap > 10000) throw new HttpsError("failed-precondition", "This game discount reward is not valid.");
+        if (!(isGameVoucher || isConfiguredPercentReward) || !Number.isSafeInteger(percent) || percent < 1 || percent > 100 || !Number.isSafeInteger(cap) || cap < (isConfiguredPercentReward ? 1 : 0) || cap > 10000) throw new HttpsError("failed-precondition", "This percentage reward is not valid.");
         discountAmount = Math.min(Math.floor(eligibleSubtotal * percent / 100), cap > 0 ? cap : eligibleSubtotal);
         if (discountAmount <= 0) throw new HttpsError("failed-precondition", "Add eligible regular menu items before using this percentage reward.");
       }
@@ -1952,11 +2045,13 @@ exports.onOrderStatusChanged = onDocumentUpdated({ document: "orders/{orderId}",
     if (becameDelivered) {
       if (entrySnapshot.exists) return;
       const completedOrders = Math.max(0, Number(account.completedOrders || 0)) + 1;
-      // The welcome offer is first-order only; later cycles continue at journey order 2.
-      const step = completedOrders === 1 ? 1 : ((completedOrders - 2) % 29) + 2;
-      const milestone = rewardConfig.journey.find(item => item.order === step && item.id);
+      // A milestone is earned only after its order completes; vouchers are then usable on a later order.
+      const step = ((completedOrders - 1) % 30) + 1;
+      const candidateMilestone = rewardConfig.journey.find(item => item.order === step && item.id);
+      const milestone = candidateMilestone?.kind === "bonus-points" && Number(order.eligibleSubtotal || 0) < Number(candidateMilestone.minimum || 0) ? null : candidateMilestone;
       const availableRewards = Array.isArray(account.availableRewards) ? [...account.availableRewards] : [];
-      if (milestone) {
+      const milestonePoints = milestone?.kind === "bonus-points" ? Number(milestone.points || 0) : 0;
+      if (milestone && milestone.kind !== "bonus-points") {
         availableRewards.push({
           ticketId: `${event.params.orderId}-${milestone.id}`,
           id: milestone.id,
@@ -1968,18 +2063,19 @@ exports.onOrderStatusChanged = onDocumentUpdated({ document: "orders/{orderId}",
         });
       }
       const currentPoints = Math.max(0, Number(account.points || 0));
-      transaction.set(entryRef, { orderId: event.params.orderId, points, amount: Number(order.subtotal || 0), reason: "delivered-order", createdAt: FieldValue.serverTimestamp() });
+      const pointsAwarded = points + milestonePoints;
+      transaction.set(entryRef, { orderId: event.params.orderId, points: pointsAwarded, orderPoints: points, milestonePoints, milestoneId: milestone?.id || null, amount: Number(order.subtotal || 0), reason: "delivered-order", createdAt: FieldValue.serverTimestamp() });
       transaction.set(accountRef, {
         uid: order.uid,
-        points: currentPoints + points,
-        totalEarned: Math.max(0, Number(account.totalEarned || 0)) + points,
+        points: currentPoints + pointsAwarded,
+        totalEarned: Math.max(0, Number(account.totalEarned || 0)) + pointsAwarded,
         totalRedeemed: Math.max(0, Number(account.totalRedeemed || 0)) + Number(order.pointsRedeemed || 0),
         completedOrders,
         availableRewards,
         ...(order.welcomeUsed ? { welcomeCompleted: true, welcomeReservationId: FieldValue.delete() } : {}),
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
-      transaction.update(event.data.after.ref, { pointsStatus: "awarded", pointsAwarded: points, rewardsJourneyOrder: completedOrders });
+      transaction.update(event.data.after.ref, { pointsStatus: "awarded", pointsAwarded, milestoneReward: milestone ? { id: milestone.id || null, title: milestone.title, kind: milestone.kind } : null, rewardsJourneyOrder: completedOrders });
       return;
     }
     if (order.loyaltyReversed) return;

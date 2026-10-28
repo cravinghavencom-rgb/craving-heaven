@@ -4,8 +4,8 @@
   root.CRAVING_REWARDS = config;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   const journey = [
-    { order: 1, kind: "welcome", title: "Free Classic Crunchy Burger", detail: "On your first online order with any paid regular-menu item" },
-    { order: 2, id: "delivery-200", kind: "free-delivery", title: "Free delivery", detail: "On ₹200 regular menu spend", minimum: 200 },
+    { order: 1, id: "order-1-burger", kind: "free-item", title: "Free Classic Crunchy Burger", detail: "Unlocked after completing order 1 · use on a later order", minimum: 0, item: "Classic Crunchy Burger", itemPrice: 80 },
+    { order: 2, id: "delivery-200", kind: "free-delivery", title: "Free delivery", detail: "On ₹200 food subtotal · combos count", minimum: 200 },
     { order: 3, id: "fries-250", kind: "free-item", title: "Classic Salted Fries (Half) on us", detail: "On ₹250 regular menu spend", minimum: 250, item: "Classic Salted Fries (HALF)", itemPrice: 70 },
     { order: 4, kind: "progress", title: "Keep the cravings going", detail: "Your next reward is getting closer" },
     { order: 5, id: "points-150", kind: "bonus-points", title: "150 bonus Craving Points", detail: "Added after your next delivered order", points: 150 },

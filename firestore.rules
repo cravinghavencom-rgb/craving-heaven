@@ -26,6 +26,14 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /testOrders/{orderId} {
+      allow get, list: if request.auth != null
+        && resource.data.uid == request.auth.uid
+        && resource.data.isTestOrder == true
+        && activeCustomer(request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     match /loyaltyAccounts/{uid} {
       allow get: if activeCustomer(uid);
       allow list, create, update, delete: if false;

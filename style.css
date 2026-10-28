@@ -2597,6 +2597,7 @@ body { background:#fbf7f1; color:var(--premium-ink); }
   box-shadow: 0 28px 90px rgba(35, 15, 7, .32);
   transform: translate(-50%, -50%);
 }
+
 .first-visit-flyer[open] { animation: first-visit-flyer-in .24s ease-out both; }
 .first-visit-flyer::backdrop { background: rgba(28, 17, 14, .68); backdrop-filter: blur(5px); }
 .first-visit-flyer-close { position: absolute; top: 13px; right: 14px; width: 40px; height: 40px; border: 0; border-radius: 50%; background: rgba(255,255,255,.8); color: #55443b; font-size: 25px; cursor: pointer; }
@@ -2849,3 +2850,33 @@ body { background:#fbf7f1; color:var(--premium-ink); }
   .home-delivery-picker small { display: none; }
   .header-points-button { padding-inline: 5px; }
 }
+
+/* Keep the cart in the customer's thumb zone, above the fixed section bar. */
+.floating-cart {
+  top: auto;
+  right: auto;
+  bottom: calc(86px + env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 2201;
+  min-height: 50px;
+  transform: translateX(-50%);
+  background: #2b1c18;
+}
+.floating-cart:hover { transform: translate(-50%, -3px); background: var(--red); }
+.cart-points-balance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 0;
+  padding: 11px 13px;
+  border: 1px solid #eadbc7;
+  border-radius: 12px;
+  background: #fff9ef;
+}
+.cart-points-balance span { color: #786351; font-size: 10px; font-weight: 900; letter-spacing: .04em; }
+.cart-points-balance strong { color: #8b332a; font-size: 12px; font-weight: 900; }
+@media (max-width: 650px) {
+  .floating-cart { top: auto; right: auto; bottom: calc(86px + env(safe-area-inset-bottom)); left: 50%; min-height: 48px; }
+}
+.test-order-notice{margin:10px 0;padding:11px 13px;border:1px solid #f1c66e;border-radius:12px;background:#fff8e8;color:#754c13;font-size:11px;font-weight:800;line-height:1.45}
