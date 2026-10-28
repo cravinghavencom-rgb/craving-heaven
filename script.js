@@ -2007,6 +2007,7 @@ function hasComboInCart() {
 }
 
 function selectFreeOffer(offerId) {
+  if (orderAvailability.isTestCustomer) return;
   const offer = FREE_OFFERS[offerId];
 
   if (!offer) return;
@@ -2039,6 +2040,7 @@ function selectFreeOffer(offerId) {
 }
 
 function selectMilestoneReward(rewardId) {
+  if (orderAvailability.isTestCustomer) return;
   const ticket = currentLoyaltyAccount.availableRewards?.find(item => (item.ticketId || item.id) === rewardId);
   const definition = ticket ? (REWARDS_CONFIG.rewardById[ticket.id] || (["craving-dash", "craving-runner"].includes(ticket.source) && ["free-item", "percent-discount"].includes(ticket.kind) ? ticket : null)) : null;
   if (!definition || !ticket) return;
@@ -2055,6 +2057,7 @@ function selectMilestoneReward(rewardId) {
 }
 
 function selectPointsRedemption(points) {
+  if (orderAvailability.isTestCustomer) return;
   const balance = Math.max(0, Number(currentLoyaltyAccount.points || 0));
   const eligibleSubtotal = getOfferEligibleSubtotal();
   const maxByEligibleFood = Math.floor(eligibleSubtotal / 10) * 100;
@@ -2073,7 +2076,18 @@ function renderCart() {
   const burgerCount = getBurgerCount();
   let selectedReward = getSelectedMilestoneReward();
   const comboPresent = hasComboInCart();
+  const isTestOrder = orderAvailability.isTestCustomer === true;
   const placeOrderNote = document.getElementById("placeOrderNote");
+
+  // Test orders are deliberately isolated from offers, rewards and loyalty.
+  // Clear any selection carried into test mode so the cart matches server rules.
+  if (isTestOrder) {
+    removeSelectedFreeOffer();
+    selectedMilestoneRewardId = null;
+    selectedPointsToRedeem = 0;
+    selectedWelcomeOffer = false;
+    selectedReward = null;
+  }
 
   if (placeOrderNote) {
     placeOrderNote.textContent = customerLoggedIn
@@ -2293,7 +2307,7 @@ ${esc(offer.freeItem)}
     })
     .join("");
 
-  const freeOfferSelector = offerCards ? `
+  const freeOfferSelector = !isTestOrder && offerCards ? `
     <div class="free-offers-box">
       <div class="free-offers-heading">
         <span>🎁 SPECIAL OFFERS</span>
@@ -2322,20 +2336,22 @@ ${esc(offer.freeItem)}
     const expiryLabel = reward.expiresAt ? ` · use by ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt))}` : "";
     return `<article class="cart-reward-choice ${chosen ? "is-selected" : ""}"><div><strong>${esc(definition.title)}</strong><small>${esc(rewardDescription)} · ${esc(definition.detail || "")}${esc(expiryLabel)}</small>${statusNote ? `<small class="reward-remaining">${esc(statusNote)}</small>` : ""}</div><button type="button" data-select-loyalty-reward="${esc(rewardTicketId)}" ${!eligible ? "disabled" : ""}>${chosen ? "SELECTED" : eligible ? "USE REWARD" : "LOCKED"}</button></article>`;
   }).filter(Boolean).join("");
-  const rewardWallet = availableRewardCards ? `<div class="cart-benefit-box"><strong>YOUR ROYAL REWARDS</strong>${availableRewardCards}</div>` : "";
+  const rewardWallet = !isTestOrder && availableRewardCards ? `<div class="cart-benefit-box"><strong>YOUR ROYAL REWARDS</strong>${availableRewardCards}</div>` : "";
 
   const welcomeCard = "";
   const pointsBalance = Math.max(0, Number(currentLoyaltyAccount.points || 0));
   const cartPointsBalance = `<div class="cart-points-balance"><span>YOUR CRAVING POINTS</span><strong>${!customerLoggedIn ? "Sign in to view" : loyaltyAccountLoaded ? `${pointsBalance.toLocaleString("en-IN")} pts` : "Temporarily unavailable"}</strong></div>`;
-  const testOrderNotice = orderAvailability.isTestCustomer ? `<p class="test-order-notice">TEST MODE · This order is for testing only. It will not be prepared, sent to staff, or earn points.</p>` : "";
-  const pointsAvailable = loyaltyAccountLoaded ? Math.floor(Math.min(REWARDS_CONFIG.maxRedeemPointsPerOrder, pointsBalance, offerEligibleSubtotal * 10) / 100) * 100 : 0;
-  const pointsControls = pointsAvailable > 0
+  const testOrderNotice = isTestOrder ? `<p class="test-order-notice">TEST MODE · No payment is due. This order won’t be prepared or sent to staff; offers, rewards and points can’t be used or earned.</p>` : "";
+  const pointsAvailable = loyaltyAccountLoaded && !isTestOrder ? Math.floor(Math.min(REWARDS_CONFIG.maxRedeemPointsPerOrder, pointsBalance, offerEligibleSubtotal * 10) / 100) * 100 : 0;
+  const pointsControls = isTestOrder ? "" : pointsAvailable > 0
     ? `<div class="cart-points-choice"><div><strong>Use Craving Points</strong><small>${pointsBalance.toLocaleString("en-IN")} Craving Points · up to ${money(pointsAvailable / 10)} off</small><small>${selectedMilestoneRewardId || selectedFreeOfferId || selectedWelcomeOffer ? "Using Craving Points replaces the selected offer or reward." : comboPresent ? "Points apply to eligible regular menu items only; combo and extra items stay full price." : "Choose Craving Points instead of another offer or reward."}</small></div><div class="points-stepper"><button type="button" data-points-step="-100" ${selectedPointsToRedeem <= 0 ? "disabled" : ""}>−</button><span>${selectedPointsToRedeem.toLocaleString("en-IN")}</span><button type="button" data-points-step="100" ${selectedPointsToRedeem >= pointsAvailable ? "disabled" : ""}>+</button></div></div>`
     : `<div class="cart-points-note">${comboPresent ? "Points can reduce regular menu items in a mixed order; add at least ₹10 of eligible regular food. Combo and extra items stay full price." : pointsBalance < 100 ? "Earn at least 100 Craving Points to redeem ₹10. Points are added after delivery or pickup completion." : "Add eligible regular menu food to use points. Points are added after delivery or pickup completion."}</div>`;
 
   // ====================== DELIVERY PROGRESS ======================
 
-  const deliveryProgress = subtotal < FREE_DELIVERY_THRESHOLD
+  const deliveryProgress = selectedReward?.kind === "free-delivery"
+    ? `<div class="free-progress free-progress-complete">🎁 <strong>FREE DELIVERY REWARD APPLIED · SAVE ${money(DELIVERY_CHARGE)}</strong></div>`
+    : subtotal < FREE_DELIVERY_THRESHOLD
     ? `<div class="free-progress">
         🎉 Add
         <strong>${money(FREE_DELIVERY_THRESHOLD - subtotal)}</strong>
@@ -2373,8 +2389,7 @@ ${esc(offer.freeItem)}
     ${pointsDiscount > 0 ? `<div class="sum-row sum-discount"><span>CRAVING POINTS REDEEMED</span><strong>−${money(pointsDiscount)}</strong></div>` : ""}
     ${selectedReward?.kind === "bonus-points" ? `<div class="sum-row sum-discount"><span>CRAVING POINTS BONUS</span><strong>+${selectedReward.points}</strong></div>` : ""}
     ${selectedReward?.kind === "double-points" ? `<div class="sum-row sum-discount"><span>DOUBLE CRAVING POINTS REWARD</span><strong>UP TO +${selectedReward.maxBonusPoints}</strong></div>` : ""}
-    <div class="sum-row cart-points-estimate"><span>CRAVING POINTS YOU’LL EARN</span><strong>+${estimatedPoints} pts</strong></div>
-    <p class="cart-points-estimate-note">Added after delivery or pickup completion. Regular items earn 1 Craving Point per ₹10; combos earn 1 per ₹20.</p>
+    ${isTestOrder ? "" : `<div class="sum-row cart-points-estimate"><span>CRAVING POINTS YOU’LL EARN</span><strong>+${estimatedPoints} pts</strong></div><p class="cart-points-estimate-note">Added after delivery or pickup completion. Regular items earn 1 Craving Point per ₹10; combos earn 1 per ₹20.</p>`}
 
     <div class="sum-divider"></div>
 
