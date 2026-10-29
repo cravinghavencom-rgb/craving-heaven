@@ -128,6 +128,7 @@ const FCM_VAPID_KEY =
 
   let confirmationResult = null;
   let recaptchaVerifier = null;
+  let recaptchaWidgetSequence = 0;
   let customerLoggedIn = false;
 
   if (localDemoLogin && window.useLocalFirebaseEmulators === true) {
@@ -271,18 +272,20 @@ const FCM_VAPID_KEY =
       );
     }
 
-    if (recaptchaVerifier) {
-      return recaptchaVerifier;
-    }
+    if (recaptchaVerifier) return recaptchaVerifier;
 
-recaptchaVerifier =
-  new window.FirebaseAuthAPI.RecaptchaVerifier(
-    window.firebaseAuth,
-    "recaptcha-container",
-    {
-      size: "invisible"
-    }
-  );
+    const recaptchaHost = document.getElementById("recaptcha-container");
+    if (!recaptchaHost) throw new Error("Secure login could not start. Refresh the page and try again.");
+    // Give every attempt a new element reference and unique ID. Firebase's
+    // invisible widget can retain its render state on a reused DOM target.
+    const widgetContainer = document.createElement("div");
+    widgetContainer.id = `customer-recaptcha-widget-${++recaptchaWidgetSequence}`;
+    recaptchaHost.replaceChildren(widgetContainer);
+    recaptchaVerifier = new window.FirebaseAuthAPI.RecaptchaVerifier(
+      window.firebaseAuth,
+      widgetContainer,
+      { size: "invisible" }
+    );
 
     return recaptchaVerifier;
   }
@@ -458,13 +461,7 @@ recaptchaVerifier =
     }
 
     const recaptchaContainer = document.getElementById("recaptcha-container");
-    if (recaptchaContainer?.parentNode) {
-      // clear() removes Firebase's widget, but some browsers retain the
-      // rendered marker on the original element. Replace the element itself
-      // so the next RecaptchaVerifier receives a truly unused container.
-      const freshContainer = recaptchaContainer.cloneNode(false);
-      recaptchaContainer.replaceWith(freshContainer);
-    }
+    if (recaptchaContainer) recaptchaContainer.replaceChildren();
   }
 
 
@@ -623,6 +620,7 @@ function handlePlaceOrderClick() {
           currentLoyaltyAccount = { points: 0, completedOrders: 0, availableRewards: [] };
           loyaltyAccountLoaded = false;
           customerOnlineOrderHistoryLoaded = false;
+          customerAccountLoadFailed = false;
           customerHasOrderedOnline = false;
           selectedMilestoneRewardId = null;
           selectedPointsToRedeem = 0;
@@ -957,6 +955,7 @@ function handlePlaceOrderClick() {
       if (homePointsSummary) homePointsSummary.textContent = "to see your points.";
       currentLoyaltyAccount = { points: 0, completedOrders: 0, availableRewards: [] };
       loyaltyAccountLoaded = false;
+      customerAccountLoadFailed = false;
       customerHasOrderedOnline = false;
       customerOnlineOrderHistoryLoaded = false;
       renderRewardsJourney(currentLoyaltyAccount, false);
@@ -968,6 +967,7 @@ function handlePlaceOrderClick() {
     if (addAddressButton) addAddressButton.textContent = "+ ADD ADDRESS";
     const phone = user.phoneNumber || "Mobile number verified";
     loyaltyAccountLoaded = false;
+    customerAccountLoadFailed = false;
     const homePointsBalance = document.getElementById("homeLoyaltyPointsBalance");
     const homePointsSummary = document.getElementById("homeLoyaltySummary");
     if (homePointsBalance) homePointsBalance.textContent = "Loading…";
@@ -979,6 +979,7 @@ function handlePlaceOrderClick() {
     ordersContent.innerHTML = `<div class="account-loading">Loading your orders…</div>`;
     const firestoreApi = window.FirebaseFirestoreAPI;
     if (!window.firebaseDB || !firestoreApi?.getDocs || !firestoreApi?.getDoc || !firestoreApi?.query || !firestoreApi?.where) {
+      customerAccountLoadFailed = true;
       if (homePointsBalance) homePointsBalance.textContent = "—";
       if (headerPointsBalance) headerPointsBalance.textContent = "—";
       if (homePointsSummary) homePointsSummary.textContent = "points are temporarily unavailable.";
@@ -1003,6 +1004,7 @@ function handlePlaceOrderClick() {
         firestoreApi.getDoc(profileRef), firestoreApi.getDoc(loyaltyRef), firestoreApi.getDocs(ordersQuery), firestoreApi.getDocs(testOrdersQuery)
       ]);
       if (refreshId !== accountRefreshToken || window.firebaseAuth?.currentUser?.uid !== user.uid) return;
+      customerAccountLoadFailed = [profileResult, loyaltyResult, ordersResult].some(result => result.status === "rejected");
       if (profileResult.status !== "fulfilled") throw profileResult.reason;
       const profileSnapshot = profileResult.value;
       const loyaltySnapshot = loyaltyResult.status === "fulfilled" ? loyaltyResult.value : null;
@@ -1075,6 +1077,8 @@ function handlePlaceOrderClick() {
       }).join("");
     } catch (error) {
       console.error("Could not load customer orders:", error);
+      customerAccountLoadFailed = true;
+      if (cartOverlay?.classList.contains("open")) renderCart();
       if (savedAddresses?.querySelector(".account-loading")) {
         savedAddresses.innerHTML = `<div class="address-empty">Saved addresses could not load. <button type="button" class="account-inline-retry" data-reload-account>TRY AGAIN</button></div>`;
       }
@@ -1825,6 +1829,7 @@ function firstOrderWelcomeEligible() {
 let pendingGpsCoordinates = null;
   let currentLoyaltyAccount = { points: 0, completedOrders: 0, availableRewards: [] };
   let loyaltyAccountLoaded = false;
+  let customerAccountLoadFailed = false;
   let accountRefreshToken = 0;
   
 
@@ -2488,6 +2493,8 @@ ${esc(offer.freeItem)}
   const showFirstOrderWelcomeCard = !isTestOrder && !welcomeOfferAlreadyUsed;
   const welcomeOfferNote = !customerLoggedIn
     ? "Sign in to check eligibility. Add a regular menu item to your first online order and the burger will be free."
+    : customerAccountLoadFailed
+      ? "We couldn’t verify your account. Retry the check, or sign in again after customer access has been restored."
     : !loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded
       ? "We’re checking your account so we can confirm this first-order gift."
       : !welcomeEligible
@@ -2495,7 +2502,7 @@ ${esc(offer.freeItem)}
         : welcomeHasCompetingBenefit
           ? "Only one offer or reward can be used per order. Choose the free burger instead to add it."
           : `Your free ${REWARDS_CONFIG.welcomeItem} is included below at ₹0.`;
-  const firstOrderWelcomeCard = showFirstOrderWelcomeCard ? `<div class="cart-first-order-reward"><div class="cart-first-order-icon" aria-hidden="true">🎁</div><div class="cart-first-order-copy"><span>FIRST ONLINE ORDER GIFT</span><strong>${esc(REWARDS_CONFIG.welcomeItem)} · FREE</strong><p>${esc(welcomeOfferNote)}</p></div>${!customerLoggedIn ? `<button type="button" data-account-login>SIGN IN</button>` : welcomeEligible && welcomeHasCompetingBenefit ? `<button type="button" data-select-welcome>USE GIFT</button>` : welcomeEligible && selectedWelcomeOffer ? `<span class="cart-first-order-added">ADDED</span>` : !loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded ? `<span class="cart-first-order-added">CHECKING</span>` : ""}</div>` : "";
+  const firstOrderWelcomeCard = showFirstOrderWelcomeCard ? `<div class="cart-first-order-reward"><div class="cart-first-order-icon" aria-hidden="true">🎁</div><div class="cart-first-order-copy"><span>FIRST ONLINE ORDER GIFT</span><strong>${esc(REWARDS_CONFIG.welcomeItem)} · FREE</strong><p>${esc(welcomeOfferNote)}</p></div>${!customerLoggedIn ? `<button type="button" data-account-login>SIGN IN</button>` : customerAccountLoadFailed ? `<button type="button" data-reload-account>RETRY</button>` : welcomeEligible && welcomeHasCompetingBenefit ? `<button type="button" data-select-welcome>USE GIFT</button>` : welcomeEligible && selectedWelcomeOffer ? `<span class="cart-first-order-added">ADDED</span>` : !loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded ? `<span class="cart-first-order-added">CHECKING</span>` : ""}</div>` : "";
 
   const welcomeCard = "";
   const pointsBalance = Math.max(0, Number(currentLoyaltyAccount.points || 0));
