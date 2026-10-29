@@ -1150,6 +1150,51 @@ exports.adminSetCustomerBlocked = onCall({ region: REGION }, async request => {
   return { uid: user.uid, mobile, blocked, message: blocked ? "Customer access blocked." : "Customer access restored." };
 });
 
+// Restore customer ordering for a staff/admin identity whose customer data was
+// previously deleted. This starts a fresh customer profile; it never restores
+// deleted addresses, loyalty points, rewards, or identifying order history.
+exports.adminRestoreTeamCustomerAccess = onCall({ region: REGION }, async request => {
+  const adminUid = await requireAdmin(request);
+  const mobile = normalizeIndianMobile(request.data?.mobile);
+  if (!mobile) throw new HttpsError("invalid-argument", "Enter a valid Indian mobile number.");
+
+  let user;
+  try {
+    user = await getAuth().getUserByPhoneNumber(mobile);
+  } catch (error) {
+    if (error.code === "auth/user-not-found") throw new HttpsError("not-found", "No signed-in account exists for this number.");
+    console.error("Could not load team account for customer access restoration", error);
+    throw new HttpsError("unavailable", "The account could not be loaded.");
+  }
+  if (user.customClaims?.admin !== true && user.customClaims?.staff !== true) {
+    throw new HttpsError("failed-precondition", "This recovery action is only for an existing staff/admin account.");
+  }
+  if (user.disabled) {
+    throw new HttpsError("failed-precondition", "This account is disabled. Restore its team sign-in through Access first.");
+  }
+  if (user.customClaims?.customerDataDeleted !== true) {
+    throw new HttpsError("failed-precondition", "This account does not have a deleted customer profile to restore.");
+  }
+
+  const claims = { ...(user.customClaims || {}) };
+  delete claims.customerDataDeleted;
+  await getAuth().setCustomUserClaims(user.uid, claims);
+  await db.collection("customerBlocks").doc(user.uid).delete();
+  await db.collection("adminCustomerAccessRestorations").add({
+    adminUid,
+    customerUid: user.uid,
+    mobile,
+    restorationType: "fresh-customer-profile",
+    createdAt: FieldValue.serverTimestamp()
+  });
+  return {
+    uid: user.uid,
+    mobile,
+    restored: true,
+    message: "Customer ordering is restored with a fresh profile. Previously deleted addresses, points, rewards, and personal order history cannot be recovered."
+  };
+});
+
 exports.adminDeleteCustomerAccount = onCall({ region: REGION, timeoutSeconds: 540 }, async request => {
   const adminUid = await requireAdmin(request);
   const mobile = normalizeIndianMobile(request.data?.mobile);

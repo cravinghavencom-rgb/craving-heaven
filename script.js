@@ -190,6 +190,12 @@ const FCM_VAPID_KEY =
   function openCustomerLogin() {
     if (!customerLoginOverlay) return;
 
+    // Each login attempt gets a fresh verifier and a fresh DOM target. This
+    // avoids Firebase reusing an already-rendered invisible reCAPTCHA after
+    // the customer changes their phone number or reopens the login dialog.
+    confirmationResult = null;
+    resetRecaptcha();
+
     customerLoginOverlay.classList.add("open");
     customerLoginOverlay.setAttribute("aria-hidden", "false");
 
@@ -220,6 +226,9 @@ const FCM_VAPID_KEY =
     customerLoginOverlay.setAttribute("aria-hidden", "true");
 
     document.body.classList.remove("customer-login-open");
+
+    confirmationResult = null;
+    resetRecaptcha();
   }
 
 
@@ -448,11 +457,13 @@ recaptchaVerifier =
       recaptchaVerifier = null;
     }
 
-    const recaptchaContainer =
-      document.getElementById("recaptcha-container");
-
-    if (recaptchaContainer) {
-      recaptchaContainer.innerHTML = "";
+    const recaptchaContainer = document.getElementById("recaptcha-container");
+    if (recaptchaContainer?.parentNode) {
+      // clear() removes Firebase's widget, but some browsers retain the
+      // rendered marker on the original element. Replace the element itself
+      // so the next RecaptchaVerifier receives a truly unused container.
+      const freshContainer = recaptchaContainer.cloneNode(false);
+      recaptchaContainer.replaceWith(freshContainer);
     }
   }
 
