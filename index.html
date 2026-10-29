@@ -83,13 +83,13 @@
 
   <dialog class="first-visit-flyer" id="firstVisitFlyer" aria-labelledby="firstVisitFlyerTitle">
     <button class="first-visit-flyer-close" type="button" aria-label="Close welcome offer" data-close-first-visit>×</button>
-    <div class="first-visit-flyer-art"><img src="images/burgers/classic-crunchy-burger.webp" alt="Classic Crunchy Chicken Burger"><i aria-hidden="true">✦</i><b aria-hidden="true">✦</b></div>
-    <span class="first-visit-flyer-kicker">A LITTLE SOMETHING FOR YOUR FIRST ORDER</span>
-    <h2 id="firstVisitFlyerTitle">Your first order just got crunchier!</h2>
-    <p>Place your first online order to claim this welcome treat.</p>
-    <div class="first-visit-flyer-rule"><span>YOUR FIRST-ORDER GIFT</span><strong>Classic Crunchy Burger · FREE</strong></div>
-    <button class="first-visit-flyer-cta" type="button" data-first-visit-menu>EXPLORE THE MENU <span aria-hidden="true">→</span></button>
-    <span class="first-visit-flyer-foot">FIRST ONLINE ORDER ONLY</span>
+    <div class="first-visit-flyer-art"><img id="firstVisitFlyerImage" src="images/burgers/classic-crunchy-burger.webp" alt="Classic Crunchy Burger"><strong id="firstVisitFlyerEmblem" hidden>✦</strong><i aria-hidden="true">✦</i><b aria-hidden="true">✦</b><span id="firstVisitFlyerValue">₹80 VALUE</span></div>
+    <span class="first-visit-flyer-kicker" id="firstVisitFlyerKicker">A WELCOME TREAT FROM CRAVING HEAVEN</span>
+    <h2 id="firstVisitFlyerTitle">Your first order unlocks a free burger!</h2>
+    <p id="firstVisitFlyerDescription">Complete your first online order and enjoy a Classic Crunchy Burger free on your next order.</p>
+    <div class="first-visit-flyer-rule"><span id="firstVisitFlyerRuleLabel">YOUR NEXT-ORDER GIFT</span><strong id="firstVisitFlyerReward">Classic Crunchy Burger <em>ON US</em></strong></div>
+    <button class="first-visit-flyer-cta" type="button" data-first-visit-menu>START YOUR FIRST ORDER <span aria-hidden="true">→</span></button>
+    <span class="first-visit-flyer-foot" id="firstVisitFlyerFoot">UNLOCKS AFTER DELIVERY OR PICKUP · USE WITHIN 7 DAYS</span>
   </dialog>
   <dialog class="game-promo-dialog" id="gamePromoDialog" aria-labelledby="gamePromoTitle">
     <button type="button" class="game-promo-close" aria-label="Close Craving Run invitation">×</button>
@@ -318,6 +318,19 @@
         <p class="customer-login-terms">
           By continuing, you agree to receive an SMS OTP for verification.
         </p>
+
+        <div class="local-demo-login" id="localDemoLogin" hidden>
+          <p>LOCAL TEST ACCOUNTS · no SMS or OTP</p>
+          <div class="local-demo-login-buttons">
+            <button type="button" data-demo-customer="1">Demo 1</button>
+            <button type="button" data-demo-customer="2">Demo 2</button>
+            <button type="button" data-demo-customer="3">Demo 3</button>
+            <button type="button" data-demo-customer="4">Demo 4</button>
+            <button type="button" data-demo-customer="5">Demo 5</button>
+          </div>
+          <small>Only works on this local emulator. Test orders stay separate from live orders.</small>
+          <p class="customer-login-message" id="localDemoLoginMessage" aria-live="polite"></p>
+        </div>
 
       </div>
 
@@ -676,6 +689,7 @@
     getAuth,
     RecaptchaVerifier,
     signInWithPhoneNumber,
+    signInWithCustomToken,
     onAuthStateChanged,
     setPersistence,
     connectAuthEmulator,
@@ -711,6 +725,7 @@ import {
     || /^172\.(1[6-9]|2\d|3[01])\./.test(emulatorHost);
   const useLocalFirebaseEmulators = isLoopbackHost
     || (new URLSearchParams(window.location.search).get("emulator") === "1" && isPrivateLanHost);
+  window.useLocalFirebaseEmulators = useLocalFirebaseEmulators;
   const firebaseConfig = {
     apiKey: "AIzaSyDVYYv3TMRKWktXA33jOGjniz43hDfRVe4",
     authDomain: "craving-heaven-e2e94.firebaseapp.com",
@@ -746,6 +761,7 @@ window.firebaseFunctions = firebaseFunctions;
 window.FirebaseAuthAPI = {
   RecaptchaVerifier,
   signInWithPhoneNumber,
+  signInWithCustomToken,
   onAuthStateChanged,
   signOut
 };

@@ -1076,6 +1076,52 @@ button:focus-visible, a:focus-visible { outline: 3px solid rgba(201,0,0,.30); ou
   line-height: 1.45;
 }
 
+.local-demo-login {
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px dashed #d7c4b4;
+  border-radius: 14px;
+  background: #fffaf4;
+}
+
+.local-demo-login > p:first-child {
+  margin: 0 0 10px;
+  color: #7a3027;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.local-demo-login-buttons {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.local-demo-login-buttons button {
+  min-height: 38px;
+  border: 1px solid #e1d3c7;
+  border-radius: 9px;
+  background: #fff;
+  color: #45231e;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.local-demo-login-buttons button:disabled { opacity: .55; }
+
+.local-demo-login small {
+  display: block;
+  margin-top: 9px;
+  color: #776b64;
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.local-demo-login .customer-login-message { margin-bottom: 0; }
+
 .customer-otp-input {
   display: block;
   width: 100%;
@@ -2582,16 +2628,16 @@ body { background:#fbf7f1; color:var(--premium-ink); }
 .first-visit-flyer {
   position: fixed;
   inset: 50% auto auto 50%;
-  width: min(510px, calc(100vw - 30px));
+  width: min(490px, calc(100vw - 28px));
   max-width: none;
   max-height: min(92dvh, 760px);
   overflow: auto;
   margin: 0;
   box-sizing: border-box;
-  padding: 26px 34px 20px;
+  padding: 22px 30px 20px;
   border: 1px solid rgba(255,255,255,.8);
   border-radius: 30px;
-  background: radial-gradient(circle at 50% 0%, #fff0d9 0, #fff9f1 43%, #fff 100%);
+  background: radial-gradient(ellipse at 50% -4%, #fff0d5 0, #fffaf3 37%, #fff 100%);
   color: #2a201b;
   text-align: center;
   box-shadow: 0 28px 90px rgba(35, 15, 7, .32);
@@ -2601,23 +2647,37 @@ body { background:#fbf7f1; color:var(--premium-ink); }
 .first-visit-flyer[open] { animation: first-visit-flyer-in .24s ease-out both; }
 .first-visit-flyer::backdrop { background: rgba(28, 17, 14, .68); backdrop-filter: blur(5px); }
 .first-visit-flyer-close { position: absolute; top: 13px; right: 14px; width: 40px; height: 40px; border: 0; border-radius: 50%; background: rgba(255,255,255,.8); color: #55443b; font-size: 25px; cursor: pointer; }
-.first-visit-flyer-art { position: relative; display: grid; place-items: center; width: min(330px, 100%); height: auto; min-height: 0; margin: 3px auto 12px; padding: 6px; overflow: hidden; border: 1px solid #f1e7de; border-radius: 22px; background: #fff; box-shadow: 0 13px 25px rgba(77, 42, 23, .12); }
-.first-visit-flyer-art img { display: block; width: min(200px, 100%); height: auto; max-width: 100%; max-height: none; object-fit: contain; object-position: center; mix-blend-mode: multiply; }
-.first-visit-flyer-art i, .first-visit-flyer-art b { position: absolute; color: #ffe3a8; font-size: 24px; font-style: normal; }
-.first-visit-flyer-art i { top: 10px; right: 12px; }.first-visit-flyer-art b { bottom: 8px; left: 10px; font-size: 17px; }
-.first-visit-flyer-kicker, .first-visit-flyer-foot { display: block; color: #a60e14; font-size: 10px; font-weight: 950; letter-spacing: .16em; }
-.first-visit-flyer h2 { max-width: 420px; margin: 7px auto 6px; font-size: clamp(30px, 8vw, 43px); font-weight: 950; letter-spacing: -.045em; line-height: .99; }
-.first-visit-flyer > p { max-width: 390px; margin: 8px auto; color: #63564e; font-size: 16px; line-height: 1.45; }
+.first-visit-flyer-art { position: relative; display: grid; place-items: center; width: min(330px, 100%); height: 190px; min-height: 0; margin: 2px auto 15px; padding: 6px; overflow: hidden; border: 1px solid rgba(255,255,255,.28); border-radius: 24px; background: radial-gradient(circle at 50% 55%, #f7c984 0, #e9a65b 43%, #782b20 44%, #4a211b 100%); box-shadow: inset 0 0 0 7px rgba(255,255,255,.08), 0 15px 28px rgba(77, 42, 23, .2); }
+.first-visit-flyer-art::before { position:absolute; inset:12px; border:1px solid rgba(255,234,200,.46); border-radius:18px; content:""; pointer-events:none; }
+.first-visit-flyer-art img { position:relative; z-index:1; display: block; width: min(218px, 82%); height: 175px; object-fit: contain; object-position: center; mix-blend-mode: multiply; filter: drop-shadow(0 15px 12px rgba(28,13,8,.28)); }
+.first-visit-flyer-art [hidden] { display:none !important; }
+.first-visit-flyer-emblem { position:relative; z-index:1; display:grid; width:76px; height:76px; place-items:center; border:1px solid rgba(255,249,234,.8); border-radius:50%; background:linear-gradient(145deg,#fff2d9,#f2ca83); color:#8f321e; font:950 32px/1 "DM Sans",sans-serif; box-shadow:0 9px 22px rgba(33,12,8,.22); }
+.first-visit-flyer-art i, .first-visit-flyer-art b { position: absolute; z-index:2; color: #ffe3a8; font-size: 24px; font-style: normal; }
+.first-visit-flyer-art i { top: 16px; right: 21px; }.first-visit-flyer-art b { bottom: 15px; left: 20px; font-size: 17px; }
+.first-visit-flyer-art > span { position:absolute; z-index:2; right:15px; bottom:13px; padding:6px 9px; border:1px solid rgba(255,244,223,.56); border-radius:999px; background:#fff2d9; color:#7c261b; font-size:9px; font-weight:950; letter-spacing:.08em; }
+.first-visit-flyer-kicker, .first-visit-flyer-foot { display: block; color: #a60e14; font-size: 10px; font-weight: 950; letter-spacing: .13em; }
+.first-visit-flyer h2 { max-width: 420px; margin: 8px auto; font-size: clamp(29px, 7.6vw, 42px); font-weight: 950; letter-spacing: -.045em; line-height: 1.01; }
+.first-visit-flyer > p { max-width: 390px; margin: 8px auto 12px; color: #63564e; font-size: 15px; line-height: 1.45; }
 .first-visit-flyer > p strong { color: #a60e14; }
-.first-visit-flyer-rule { display: grid; gap: 4px; margin: 14px 0 10px; padding: 12px 16px; border: 1px solid #f1d5bc; border-radius: 16px; background: rgba(255,255,255,.84); }
+.first-visit-flyer-rule { display: grid; gap: 4px; margin: 13px 0 11px; padding: 12px 16px; border: 1px solid #ead6c4; border-radius: 16px; background: rgba(255,255,255,.86); }
 .first-visit-flyer-rule span { color: #9a8170; font-size: 9px; font-weight: 950; letter-spacing: .15em; }
 .first-visit-flyer-rule strong { color: #35271f; font-size: 16px; }
+.first-visit-flyer-rule em { display:inline-block; margin-left:4px; color:#13834a; font-size:.78em; font-style:normal; letter-spacing:.04em; }
 .first-visit-flyer .first-visit-flyer-fineprint { margin: 8px auto 12px; font-size: 12px; line-height: 1.45; }
 .first-visit-flyer-cta { display: flex; width: 100%; min-height: 50px; align-items: center; justify-content: center; gap: 12px; padding: 12px 20px; border: 0; border-radius: 15px; background: #b80808; color: #fff; font-size: 13px; font-weight: 950; letter-spacing: .07em; box-shadow: 0 9px 19px rgba(184,8,8,.2); cursor: pointer; }
 .first-visit-flyer-cta:hover { background: #970606; }
-.first-visit-flyer-foot { margin-top: 10px; color: #9a8170; font-size: 9px; }
+.first-visit-flyer-foot { margin-top: 11px; color: #89776b; font-size: 8px; letter-spacing:.1em; }
 @keyframes first-visit-flyer-in { from { opacity: 0; transform: translate(-50%, -47%) scale(.97); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
-@media (max-width: 480px) { .first-visit-flyer { padding: 24px 20px 18px; border-radius: 25px; } .first-visit-flyer-art { width: min(300px, 100%); border-radius: 19px; margin-bottom: 12px; } .first-visit-flyer-art img { width: min(180px, 100%); } .first-visit-flyer > p { font-size: 14px; } }
+@media (max-width: 480px) { .first-visit-flyer { padding: 20px 19px 16px; border-radius: 25px; } .first-visit-flyer-art { width: 100%; height: clamp(155px, 39vw, 190px); border-radius: 19px; margin-bottom: 14px; } .first-visit-flyer-art img { width: min(200px, 82%); height:100%; } .first-visit-flyer > p { font-size: 14px; } .first-visit-flyer-kicker { font-size:9px; } .first-visit-flyer-rule { margin:11px 0; padding:11px; } .first-visit-flyer-cta { min-height:48px; font-size:11px; } .first-visit-flyer-foot { font-size:7px; } }
+
+.cart-first-order-reward { display:flex; align-items:center; gap:11px; margin:12px 0; padding:13px; border:1px solid #edcf9d; border-radius:14px; background:linear-gradient(115deg,#fff4db,#fffaf0 72%,#fff); box-shadow:0 5px 16px rgba(113,70,22,.06); }
+.cart-first-order-icon { display:grid; width:40px; height:40px; flex:0 0 40px; place-items:center; border-radius:12px; background:#f8e5bd; font-size:21px; }
+.cart-first-order-copy { display:grid; min-width:0; gap:3px; }
+.cart-first-order-copy > span { color:#946018; font-size:9px; font-weight:950; letter-spacing:.1em; }
+.cart-first-order-copy > strong { color:#41251d; font-size:13px; line-height:1.3; }
+.cart-first-order-copy > p { margin:0; color:#76685f; font-size:11px; line-height:1.4; }
+.cart-first-order-reward > button { flex:0 0 auto; padding:9px 11px; border:0; border-radius:9px; background:#a90d17; color:white; font-size:9px; font-weight:900; }
+@media(max-width:480px){.cart-first-order-reward{align-items:flex-start;gap:9px;padding:11px}.cart-first-order-icon{width:34px;height:34px;flex-basis:34px;font-size:18px}.cart-first-order-copy>strong{font-size:12px}.cart-first-order-copy>p{font-size:10px}.cart-first-order-reward>button{padding:8px;font-size:8px}}
 
 .checkout-address-note{display:block;margin-top:6px;color:#766d68;font-size:12px;line-height:1.4}
 

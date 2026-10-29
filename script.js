@@ -30,9 +30,44 @@ try {
     applyRemoteBusinessConfig(cachedBusinessConfig.data);
   }
 } catch (_) { /* The bundled menu remains available when browser storage is disabled. */ }
+function syncFirstVisitFlyerReward() {
+  const flyer = document.getElementById("firstVisitFlyer");
+  if (!flyer) return;
+  const reward = (REWARDS_CONFIG.journey || []).find(item => Number(item.order) === 1 && item.kind && item.kind !== "progress");
+  if (!reward) return;
+  const setText = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = value; };
+  const formatRupees = value => `₹${Number(value || 0).toLocaleString("en-IN")}`;
+  const image = document.getElementById("firstVisitFlyerImage");
+  const emblem = document.getElementById("firstVisitFlyerEmblem");
+  const freeItem = reward.kind === "free-item";
+  const burger = freeItem && /classic crunchy burger/i.test(reward.item || "");
+  const visual = document.querySelector("#firstVisitFlyer .first-visit-flyer-art");
+  if (image) { image.hidden = !burger; image.alt = burger ? reward.item : ""; }
+  if (emblem) emblem.hidden = burger;
+  if (visual) visual.classList.toggle("has-food-image", burger);
+  const value = freeItem ? `${formatRupees(reward.itemPrice)} VALUE`
+    : reward.kind === "bonus-points" ? `${Number(reward.points || 0)} POINTS`
+      : reward.kind === "free-delivery" ? "DELIVERY ON US"
+        : reward.kind === "percent-discount" ? `${Number(reward.percent || 0)}% OFF`
+          : reward.kind === "discount" ? `${formatRupees(reward.amount)} OFF`
+            : reward.kind === "double-points" ? "DOUBLE POINTS" : "A REWARD FOR YOU";
+  setText("firstVisitFlyerValue", value);
+  const rewardLabel = freeItem ? `${reward.item} · FREE`
+    : reward.kind === "bonus-points" ? `${Number(reward.points || 0)} Craving Points`
+      : reward.kind === "free-delivery" ? "Free delivery"
+        : reward.kind === "percent-discount" ? `${Number(reward.percent || 0)}% off`
+        : reward.kind === "discount" ? `${formatRupees(reward.amount)} off`
+            : reward.title || "Your reward";
+  setText("firstVisitFlyerReward", rewardLabel);
+  setText("firstVisitFlyerTitle", freeItem ? "Your first order unlocks a free treat!" : "A little reward is waiting for you!");
+  setText("firstVisitFlyerDescription", `Complete your first order and unlock ${rewardLabel} for a future order.`);
+  setText("firstVisitFlyerFoot", `UNLOCKS AFTER ORDER COMPLETION${freeItem && Number(REWARDS_CONFIG.freeItemExpiryDays) > 0 ? ` · USE WITHIN ${Number(REWARDS_CONFIG.freeItemExpiryDays)} DAYS` : " · REWARD RULES APPLY"}`);
+}
+syncFirstVisitFlyerReward();
 const businessConfigPromise = fetchRemoteBusinessConfig();
 businessConfigPromise.then(data => {
   if (data && applyRemoteBusinessConfig(data)) {
+    syncFirstVisitFlyerReward();
     try { localStorage.setItem(BUSINESS_CONFIG_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data })); } catch (_) { /* Remote config still works without a local cache. */ }
     if (!menuInitialized) return;
     cart = loadCart();
@@ -72,6 +107,8 @@ const FCM_VAPID_KEY =
 
   const customerLoginMessage =
     document.getElementById("customerLoginMessage");
+  const localDemoLogin = document.getElementById("localDemoLogin");
+  const localDemoLoginMessage = document.getElementById("localDemoLoginMessage");
 
   const otpLoginMessage =
     document.getElementById("otpLoginMessage");
@@ -81,6 +118,43 @@ const FCM_VAPID_KEY =
   let confirmationResult = null;
   let recaptchaVerifier = null;
   let customerLoggedIn = false;
+
+  if (localDemoLogin && window.useLocalFirebaseEmulators === true) {
+    localDemoLogin.hidden = false;
+  }
+
+  localDemoLogin?.querySelectorAll("[data-demo-customer]").forEach(button => {
+    button.addEventListener("click", async () => {
+      if (window.useLocalFirebaseEmulators !== true) return;
+      const customerNumber = Number(button.dataset.demoCustomer);
+      const buttons = [...localDemoLogin.querySelectorAll("[data-demo-customer]")];
+      buttons.forEach(item => { item.disabled = true; });
+      if (localDemoLoginMessage) localDemoLoginMessage.textContent = "Opening local demo account…";
+      try {
+        await window.firebaseAuthPersistenceReady;
+        const createSession = window.FirebaseFunctionsAPI.httpsCallable(
+          window.firebaseFunctions,
+          "localDemoCustomerSession"
+        );
+        const response = await createSession({ customerNumber });
+        await window.FirebaseAuthAPI.signInWithCustomToken(
+          window.firebaseAuth,
+          response.data.customToken
+        );
+        customerLoggedIn = true;
+        updatePlaceOrderButton();
+        refreshAccountScreens(window.firebaseAuth.currentUser);
+        closeCustomerLogin();
+      } catch (error) {
+        console.error("Local demo sign-in failed:", error);
+        if (localDemoLoginMessage) {
+          localDemoLoginMessage.textContent = error?.message || "Could not open this local demo account.";
+        }
+      } finally {
+        buttons.forEach(item => { item.disabled = false; });
+      }
+    });
+  });
 
 
   // ---------------------------------------------------------
@@ -2207,7 +2281,7 @@ function renderCart() {
           >+</button>
         </div>
       </div>`;
-  }).join("") + (selectedReward?.kind === "free-item" ? `<div class="cart-item sunday-freebie"><div class="cart-item-info"><div class="cart-name">🎁 ${esc(selectedReward.item)}</div><div class="cart-meta"><strong style="color:#16804a">FREE WITH ROYAL REWARDS</strong></div></div><div class="cart-free-label">FREE</div></div>` : "") + (selectedWelcomeOffer ? `<div class="cart-item sunday-freebie"><div class="cart-item-info"><div class="cart-name">🎁 ${esc(REWARDS_CONFIG.welcomeItem)}</div><div class="cart-meta"><strong style="color:#16804a">FREE · FIRST-ORDER GIFT</strong></div></div><div class="cart-free-label">FREE</div></div>` : "");
+  }).join("") + (selectedReward?.kind === "free-item" ? `<div class="cart-item sunday-freebie"><div class="cart-item-info"><div class="cart-name">🎁 ${esc(selectedReward.item)}</div><div class="cart-meta"><span>₹0</span><strong style="color:#16804a">FREE · REWARD ADDED</strong></div></div><div class="cart-free-label">FREE</div></div>` : "") + (selectedWelcomeOffer ? `<div class="cart-item sunday-freebie"><div class="cart-item-info"><div class="cart-name">🎁 ${esc(REWARDS_CONFIG.welcomeItem)}</div><div class="cart-meta"><span>₹0</span><strong style="color:#16804a">FREE · FIRST-ORDER GIFT</strong></div></div><div class="cart-free-label">FREE</div></div>` : "");
 
   // ====================== FREE OFFER SELECTOR ======================
 
@@ -2323,7 +2397,7 @@ ${esc(offer.freeItem)}
     if (!reward.expiresAt) return true;
     const expiry = reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt);
     return !Number.isNaN(expiry.getTime()) && expiry.getTime() > Date.now();
-  }).slice(0, 1).map(reward => {
+  }).map(reward => {
     const definition = REWARDS_CONFIG.rewardById[reward.id] || (["craving-dash", "craving-runner"].includes(reward.source) && ["free-item", "percent-discount"].includes(reward.kind) ? reward : null);
     if (!definition) return "";
     const rewardTicketId = reward.ticketId || reward.id;
@@ -2337,6 +2411,25 @@ ${esc(offer.freeItem)}
     return `<article class="cart-reward-choice ${chosen ? "is-selected" : ""}"><div><strong>${esc(definition.title)}</strong><small>${esc(rewardDescription)} · ${esc(definition.detail || "")}${esc(expiryLabel)}</small>${statusNote ? `<small class="reward-remaining">${esc(statusNote)}</small>` : ""}</div><button type="button" data-select-loyalty-reward="${esc(rewardTicketId)}" ${!eligible ? "disabled" : ""}>${chosen ? "SELECTED" : eligible ? "USE REWARD" : "LOCKED"}</button></article>`;
   }).filter(Boolean).join("");
   const rewardWallet = !isTestOrder && availableRewardCards ? `<div class="cart-benefit-box"><strong>YOUR ROYAL REWARDS</strong>${availableRewardCards}</div>` : "";
+
+  const orderOneRewardDefinition = (REWARDS_CONFIG.journey || []).find(item => Number(item.order) === 1 && item.kind && item.kind !== "progress");
+  const orderOneRewardAvailable = orderOneRewardDefinition && (currentLoyaltyAccount.availableRewards || []).some(reward => reward.id === orderOneRewardDefinition.id || reward.ticketId === orderOneRewardDefinition.id);
+  const showFirstOrderRewardProgress = !isTestOrder && orderOneRewardDefinition && !orderOneRewardAvailable
+    && (!customerLoggedIn || Number(currentLoyaltyAccount.completedOrders || 0) === 0);
+  const firstOrderRewardLabel = orderOneRewardDefinition?.kind === "free-item" ? `FREE ${orderOneRewardDefinition.item}`
+    : orderOneRewardDefinition?.kind === "bonus-points" ? `${Number(orderOneRewardDefinition.points || 0)} BONUS CRAVING POINTS`
+      : orderOneRewardDefinition?.kind === "free-delivery" ? "FREE DELIVERY"
+        : orderOneRewardDefinition?.kind === "percent-discount" ? `${Number(orderOneRewardDefinition.percent || 0)}% OFF`
+          : orderOneRewardDefinition?.kind === "discount" ? `${money(Number(orderOneRewardDefinition.amount || 0))} OFF`
+            : orderOneRewardDefinition?.title || "YOUR FIRST-ORDER REWARD";
+  const firstOrderRewardNote = !customerLoggedIn
+    ? "Sign in to check eligibility. Complete your first order to unlock this reward for a future order."
+    : customerHasOrderedOnline
+      ? "Your reward unlocks when your first order is completed and will be ready for a future order."
+      : loyaltyAccountLoaded
+        ? "Complete your first order to unlock this reward for a future order."
+        : "If eligible, your first completed order unlocks this reward for a future order.";
+  const firstOrderRewardProgress = showFirstOrderRewardProgress ? `<div class="cart-first-order-reward"><div class="cart-first-order-icon" aria-hidden="true">🎁</div><div class="cart-first-order-copy"><span>YOUR FIRST-ORDER REWARD</span><strong>${esc(firstOrderRewardLabel)}</strong><p>${esc(firstOrderRewardNote)}</p></div>${!customerLoggedIn ? `<button type="button" data-account-login>SIGN IN</button>` : ""}</div>` : "";
 
   const welcomeCard = "";
   const pointsBalance = Math.max(0, Number(currentLoyaltyAccount.points || 0));
@@ -2381,6 +2474,7 @@ ${esc(offer.freeItem)}
   cartSummaryEl.innerHTML = `
     ${freeOfferSelector}
     ${rewardWallet}
+    ${firstOrderRewardProgress}
     ${welcomeCard}
     ${testOrderNotice}
     ${cartPointsBalance}

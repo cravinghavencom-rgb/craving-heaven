@@ -24,6 +24,42 @@ const DELIVERY_AREAS = new Set([
 ]);
 const ORDERING_STATUS_REF = () => db.collection("restaurantSettings").doc("onlineOrdering");
 
+// Local-only customer fixtures. This callable is not exported in deployed
+// Functions; the emulator check prevents OTP-free sign-in on production.
+if (process.env.FUNCTIONS_EMULATOR === "true" && activeProjectId === "demo-craving-heaven-local") {
+  exports.localDemoCustomerSession = onCall({ region: REGION }, async request => {
+    const customerNumber = Number(request.data?.customerNumber);
+    if (!Number.isInteger(customerNumber) || customerNumber < 1 || customerNumber > 5) {
+      throw new HttpsError("invalid-argument", "Choose one of the five local demo accounts.");
+    }
+
+    const nationalNumber = `900000000${customerNumber}`;
+    const phoneNumber = `+91${nationalNumber}`;
+    const uid = `local-demo-customer-${customerNumber}`;
+    const auth = getAuth();
+    let user;
+    try {
+      user = await auth.getUser(uid);
+      if (user.phoneNumber !== phoneNumber) {
+        user = await auth.updateUser(uid, { phoneNumber, displayName: `Demo Customer ${customerNumber}` });
+      }
+    } catch (error) {
+      if (error.code !== "auth/user-not-found") throw error;
+      user = await auth.createUser({ uid, phoneNumber, displayName: `Demo Customer ${customerNumber}` });
+    }
+
+    const settingsRef = ORDERING_STATUS_REF();
+    const snapshot = await settingsRef.get();
+    const existingPhones = Array.isArray(snapshot.data()?.testPhones) ? snapshot.data().testPhones : [];
+    await settingsRef.set({
+      testModeEnabled: true,
+      testPhones: [...new Set([...existingPhones, ...Array.from({ length: 5 }, (_, index) => `+91900000000${index + 1}`)])]
+    }, { merge: true });
+
+    return { customToken: await auth.createCustomToken(user.uid), displayName: user.displayName };
+  });
+}
+
 function mumbaiDateKey(now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit"
@@ -269,7 +305,7 @@ async function requireActiveCustomer(request) {
     throw new HttpsError("permission-denied", "Customer account could not be verified.");
   }
   const block = await db.collection("customerBlocks").doc(uid).get();
-  if (user.disabled || block.exists) {
+  if (user.disabled || user.customClaims?.customerDataDeleted === true || block.exists) {
     throw new HttpsError("permission-denied", "This customer account is blocked. Please contact CRAVING HEAVEN.");
   }
   if (!request.auth.token.phone_number && !user.phoneNumber) {
@@ -1043,8 +1079,10 @@ exports.adminGetCustomerDetails = onCall({ region: REGION }, async request => {
     found: Boolean(user || orders.length), mobile,
     uid: user?.uid || "",
     accountDisabled: user?.disabled === true,
-    customerBlocked: Boolean(user && (user.disabled || blockSnapshot?.exists)),
-    customerBlockManaged: blockSnapshot?.data()?.blocked === true,
+    isTeamAccount: Boolean(user?.customClaims?.admin === true || user?.customClaims?.staff === true),
+    customerDataDeleted: Boolean(user?.customClaims?.customerDataDeleted === true),
+    customerBlocked: Boolean(user && !user.customClaims?.customerDataDeleted && (user.disabled || blockSnapshot?.exists)),
+    customerBlockManaged: Boolean(blockSnapshot?.data()?.blocked === true && !blockSnapshot?.data()?.deleted),
     name: String(profile.name || user?.displayName || orders.find(order => order.customerName)?.customerName || "Customer").slice(0, 80),
     addresses: safeFirestoreData(savedAddresses),
     orderAddresses: safeFirestoreData(orderAddresses),
@@ -1073,6 +1111,9 @@ exports.adminSetCustomerBlocked = onCall({ region: REGION }, async request => {
   }
   if (user.customClaims?.admin === true || user.customClaims?.staff === true) {
     throw new HttpsError("failed-precondition", "Team accounts cannot be blocked from the customer controls. Change team access in the Access tab.");
+  }
+  if (user.customClaims?.customerDataDeleted === true) {
+    throw new HttpsError("failed-precondition", "Customer data was deleted for this team account; staff and admin access remain separate.");
   }
 
   const blockRef = db.collection("customerBlocks").doc(user.uid);
@@ -1123,21 +1164,21 @@ exports.adminDeleteCustomerAccount = onCall({ region: REGION, timeoutSeconds: 54
       throw new HttpsError("unavailable", "Customer account could not be loaded.");
     }
   }
-  if (user?.customClaims?.admin === true || user?.customClaims?.staff === true) {
-    throw new HttpsError("failed-precondition", "Team accounts cannot be deleted from customer controls. Change team access in the Access tab.");
-  }
+  const isTeamAccount = Boolean(user?.customClaims?.admin === true || user?.customClaims?.staff === true);
 
   const uid = user?.uid || "";
   if (uid) {
-    // Keep a minimal tombstone so a previously issued ID token remains blocked by Firestore rules.
+    // Keep a tombstone so previously issued ID tokens cannot recreate or read customer data.
     await db.collection("customerBlocks").doc(uid).set({
       blocked: true,
       deleted: true,
       deletedBy: adminUid,
       deletedAt: FieldValue.serverTimestamp()
     });
-    if (!user.disabled) await getAuth().updateUser(uid, { disabled: true });
-    await getAuth().revokeRefreshTokens(uid);
+    if (!isTeamAccount) {
+      if (!user.disabled) await getAuth().updateUser(uid, { disabled: true });
+      await getAuth().revokeRefreshTokens(uid);
+    }
   }
 
   const matchingOrderRefs = new Map();
@@ -1171,9 +1212,9 @@ exports.adminDeleteCustomerAccount = onCall({ region: REGION, timeoutSeconds: 54
   if (uid) {
     const auditCollections = [
       { name: "adminCustomerBlockChanges", field: "customerUid", update: { customerUid: FieldValue.delete(), mobile: FieldValue.delete() } },
-      { name: "adminAccessChanges", field: "targetUid", update: { targetUid: FieldValue.delete(), mobile: FieldValue.delete() } },
       { name: "adminAdjustments", field: "customerUid", update: { customerUid: FieldValue.delete(), mobile: FieldValue.delete(), response: FieldValue.delete(), reason: "Customer account deleted; identifying details removed." } }
     ];
+    if (!isTeamAccount) auditCollections.push({ name: "adminAccessChanges", field: "targetUid", update: { targetUid: FieldValue.delete(), mobile: FieldValue.delete() } });
     for (const audit of auditCollections) {
       const auditSnapshot = await db.collection(audit.name).where(audit.field, "==", uid).get();
       for (let start = 0; start < auditSnapshot.docs.length; start += 400) {
@@ -1181,6 +1222,13 @@ exports.adminDeleteCustomerAccount = onCall({ region: REGION, timeoutSeconds: 54
         auditSnapshot.docs.slice(start, start + 400).forEach(document => batch.update(document.ref, audit.update));
         await batch.commit();
       }
+    }
+
+    const gameAuditSnapshot = await db.collection("gameRewardAudits").where("uid", "==", uid).get();
+    for (let start = 0; start < gameAuditSnapshot.docs.length; start += 400) {
+      const batch = db.batch();
+      gameAuditSnapshot.docs.slice(start, start + 400).forEach(document => batch.update(document.ref, { uid: FieldValue.delete() }));
+      await batch.commit();
     }
   }
 
@@ -1204,15 +1252,28 @@ exports.adminDeleteCustomerAccount = onCall({ region: REGION, timeoutSeconds: 54
       requestSnapshot.docs.slice(start, start + 400).forEach(document => batch.delete(document.ref));
       await batch.commit();
     }
+    const gameRef = db.collection("cravingDashAccounts").doc(uid);
+    const challengeSnapshot = await gameRef.collection("challenges").get();
+    for (let start = 0; start < challengeSnapshot.docs.length; start += 400) {
+      const batch = db.batch();
+      challengeSnapshot.docs.slice(start, start + 400).forEach(document => batch.delete(document.ref));
+      await batch.commit();
+    }
     await Promise.all([
       db.collection("customerProfiles").doc(uid).delete(),
-      loyaltyRef.delete()
+      loyaltyRef.delete(),
+      gameRef.delete()
     ]);
-    try {
-      await getAuth().deleteUser(uid);
-    } catch (error) {
-      console.error("Customer data was removed but Auth account deletion failed", error);
-      throw new HttpsError("internal", "Customer data was removed, but login cleanup did not finish. Retry account deletion or contact support.");
+    if (isTeamAccount) {
+      // Preserve the shared Auth identity and every existing staff/admin claim.
+      await getAuth().setCustomUserClaims(uid, { ...(user.customClaims || {}), customerDataDeleted: true });
+    } else {
+      try {
+        await getAuth().deleteUser(uid);
+      } catch (error) {
+        console.error("Customer data was removed but Auth account deletion failed", error);
+        throw new HttpsError("internal", "Customer data was removed, but login cleanup did not finish. Retry account deletion or contact support.");
+      }
     }
   }
 
@@ -1224,9 +1285,13 @@ exports.adminDeleteCustomerAccount = onCall({ region: REGION, timeoutSeconds: 54
   });
   return {
     deleted: true,
-    accountDeleted: Boolean(uid),
+    accountDeleted: Boolean(uid && !isTeamAccount),
+    customerDataDeleted: Boolean(uid),
     anonymizedOrders,
-    message: `Customer account data and rewards were deleted. ${anonymizedOrders} historical order${anonymizedOrders === 1 ? " was" : "s were"} retained without customer contact details.`
+    teamAccessPreserved: isTeamAccount,
+    message: isTeamAccount
+      ? `Customer profile, addresses, points, rewards, and customer ordering access were deleted. Staff/admin login and access remain active. ${anonymizedOrders} historical order${anonymizedOrders === 1 ? " was" : "s were"} retained without customer contact details.`
+      : `Customer account data and rewards were deleted. ${anonymizedOrders} historical order${anonymizedOrders === 1 ? " was" : "s were"} retained without customer contact details.`
   };
 });
 
