@@ -5,6 +5,9 @@ let menuInitialized = false;
 let welcomeFlyerShownThisPage = false;
 let customerOnlineOrderHistoryLoaded = false;
 let customerAuthStateResolved = false;
+function isCustomerSignedIn() {
+  return Boolean(window.firebaseAuth?.currentUser?.uid);
+}
 function applyRemoteBusinessConfig(data) {
   if (!data || !data.menu || !Array.isArray(data.combos) || !data.rewards) return false;
   for (const key of Object.keys(MENU_DATA)) delete MENU_DATA[key];
@@ -56,7 +59,7 @@ function syncFirstVisitFlyerReward() {
 }
 syncFirstVisitFlyerReward();
 function hasLocalWelcomeOrderMarker() {
-  if (customerLoggedIn) return false;
+  if (isCustomerSignedIn()) return false;
   try {
     const previousUid = localStorage.getItem("cravingHeavenLastCustomerUid_v1");
     return Boolean(previousUid && localStorage.getItem(`cravingHeavenWelcomeOrderPlaced_${previousUid}`) === "1");
@@ -67,7 +70,7 @@ function maybeShowFirstOrderFlyer() {
   if (!flyer || flyer.open || welcomeFlyerShownThisPage || !customerAuthStateResolved || orderAvailability?.isTestCustomer) return;
   const account = currentLoyaltyAccount || {};
   const welcomeAlreadyUsed = account.welcomeCompleted === true || Boolean(account.welcomeReservationId) || customerHasOrderedOnline || hasLocalWelcomeOrderMarker();
-  if (customerLoggedIn && (!loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded)) return;
+  if (isCustomerSignedIn() && (!loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded)) return;
   if (welcomeAlreadyUsed) {
     if (flyer.open) flyer.close();
     return;
@@ -129,7 +132,6 @@ const FCM_VAPID_KEY =
   let confirmationResult = null;
   let recaptchaVerifier = null;
   let recaptchaWidgetSequence = 0;
-  let customerLoggedIn = false;
 
   if (localDemoLogin && window.useLocalFirebaseEmulators === true) {
     localDemoLogin.hidden = false;
@@ -153,7 +155,6 @@ const FCM_VAPID_KEY =
           window.firebaseAuth,
           response.data.customToken
         );
-        customerLoggedIn = true;
         updatePlaceOrderButton();
         refreshAccountScreens(window.firebaseAuth.currentUser);
         closeCustomerLogin();
@@ -381,14 +382,17 @@ const FCM_VAPID_KEY =
     verifyOtpButton.textContent = "VERIFYING...";
 
     try {
-      await confirmationResult.confirm(otp);
-
-      customerLoggedIn = true;
+      const credential = await confirmationResult.confirm(otp);
+      if (!credential?.user) throw new Error("The verified customer session could not be loaded. Please try signing in again.");
 
       otpLoginMessage.textContent =
         "Mobile number verified successfully.";
 
       updatePlaceOrderButton();
+      // Update every customer surface from Firebase's single authenticated
+      // session immediately; do not wait for the auth listener/account reads.
+      refreshAccountScreens(credential.user);
+      if (cartOverlay?.classList.contains("open")) renderCart();
 
       setTimeout(() => {
         closeCustomerLogin();
@@ -569,7 +573,7 @@ const FCM_VAPID_KEY =
     "aria-disabled"
   );
 
-  if (customerLoggedIn) {
+  if (isCustomerSignedIn()) {
     placeOrderButton.textContent =
       "CONTINUE TO CHECKOUT";
   } else {
@@ -590,7 +594,7 @@ function handlePlaceOrderClick() {
     return;
   }
 
-  if (!customerLoggedIn) {
+  if (!isCustomerSignedIn()) {
 
     openCustomerLogin();
 
@@ -629,13 +633,13 @@ function handlePlaceOrderClick() {
           if (cartOverlay?.classList.contains("open")) renderCart();
         }
         lastCustomerAuthUid = nextUid;
-        customerLoggedIn = !!user;
         customerAuthStateResolved = true;
         if (user?.uid) {
           try { localStorage.setItem("cravingHeavenLastCustomerUid_v1", user.uid); } catch (_) { /* Login flow still works when browser storage is disabled. */ }
         }
 
         updatePlaceOrderButton();
+        if (cartOverlay?.classList.contains("open")) renderCart();
         refreshAccountScreens(user);
 
         if (user) {
@@ -1486,7 +1490,7 @@ function renderCheckoutSummary() {
 }
 
 
-function openCheckout() {
+async function openCheckout() {
 
   if (!ONLINE_CHECKOUT_ENABLED) {
 
@@ -1507,11 +1511,35 @@ function openCheckout() {
   }
 
 
-  if (!customerLoggedIn) {
+  if (!isCustomerSignedIn()) {
 
     openCustomerLogin();
 
     return;
+  }
+
+  // Keep checkout, cart, points, and the first-order gift in sync by waiting
+  // for the active Firebase account data before building the checkout bill.
+  if (!loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded) {
+    if (checkoutAccountCheckPending) return;
+    checkoutAccountCheckPending = true;
+    if (placeOrderButton) {
+      placeOrderButton.disabled = true;
+      placeOrderButton.textContent = "CHECKING YOUR ACCOUNT…";
+    }
+    if (placeOrderNote) placeOrderNote.textContent = "Checking your Craving Points and first-order gift…";
+    try {
+      await refreshAccountScreens(window.firebaseAuth.currentUser);
+    } finally {
+      checkoutAccountCheckPending = false;
+      updatePlaceOrderButton();
+    }
+    if (!loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded || customerAccountLoadFailed) {
+      if (placeOrderNote) placeOrderNote.textContent = "We couldn’t verify your customer account yet. Retry the account check, or sign in again after customer access is restored.";
+      if (cartOverlay?.classList.contains("open")) renderCart();
+      return;
+    }
+    if (cartOverlay?.classList.contains("open")) renderCart();
   }
 
   prefillCheckoutFromDefaultAddress();
@@ -1804,7 +1832,7 @@ let customerHasOrderedOnline = false;
 let lastCustomerAuthUid = "";
 function firstOrderWelcomeEligible() {
   const account = currentLoyaltyAccount || {};
-  return customerLoggedIn && loyaltyAccountLoaded && customerOnlineOrderHistoryLoaded
+  return isCustomerSignedIn() && loyaltyAccountLoaded && customerOnlineOrderHistoryLoaded
     && !customerHasOrderedOnline && account.welcomeCompleted !== true && !account.welcomeReservationId
     && orderAvailability.isTestCustomer !== true;
 }
@@ -1831,6 +1859,7 @@ let pendingGpsCoordinates = null;
   let loyaltyAccountLoaded = false;
   let customerAccountLoadFailed = false;
   let accountRefreshToken = 0;
+  let checkoutAccountCheckPending = false;
   
 
   const CART_STORAGE_KEY = "cravingHeavenCartV1";
@@ -2241,7 +2270,7 @@ function renderCart() {
   }
 
   if (placeOrderNote) {
-    placeOrderNote.textContent = customerLoggedIn
+      placeOrderNote.textContent = isCustomerSignedIn()
       ? "Continue to checkout to add or choose your delivery details."
       : "Log in with your mobile number to continue with your order.";
   }
@@ -2491,7 +2520,7 @@ ${esc(offer.freeItem)}
 
   const welcomeOfferAlreadyUsed = currentLoyaltyAccount.welcomeCompleted === true || Boolean(currentLoyaltyAccount.welcomeReservationId) || customerHasOrderedOnline || hasLocalWelcomeOrderMarker();
   const showFirstOrderWelcomeCard = !isTestOrder && !welcomeOfferAlreadyUsed;
-  const welcomeOfferNote = !customerLoggedIn
+  const welcomeOfferNote = !isCustomerSignedIn()
     ? "Sign in to check eligibility. Add a regular menu item to your first online order and the burger will be free."
     : customerAccountLoadFailed
       ? "We couldn’t verify your account. Retry the check, or sign in again after customer access has been restored."
@@ -2502,11 +2531,11 @@ ${esc(offer.freeItem)}
         : welcomeHasCompetingBenefit
           ? "Only one offer or reward can be used per order. Choose the free burger instead to add it."
           : `Your free ${REWARDS_CONFIG.welcomeItem} is included below at ₹0.`;
-  const firstOrderWelcomeCard = showFirstOrderWelcomeCard ? `<div class="cart-first-order-reward"><div class="cart-first-order-icon" aria-hidden="true">🎁</div><div class="cart-first-order-copy"><span>FIRST ONLINE ORDER GIFT</span><strong>${esc(REWARDS_CONFIG.welcomeItem)} · FREE</strong><p>${esc(welcomeOfferNote)}</p></div>${!customerLoggedIn ? `<button type="button" data-account-login>SIGN IN</button>` : customerAccountLoadFailed ? `<button type="button" data-reload-account>RETRY</button>` : welcomeEligible && welcomeHasCompetingBenefit ? `<button type="button" data-select-welcome>USE GIFT</button>` : welcomeEligible && selectedWelcomeOffer ? `<span class="cart-first-order-added">ADDED</span>` : !loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded ? `<span class="cart-first-order-added">CHECKING</span>` : ""}</div>` : "";
+  const firstOrderWelcomeCard = showFirstOrderWelcomeCard ? `<div class="cart-first-order-reward"><div class="cart-first-order-icon" aria-hidden="true">🎁</div><div class="cart-first-order-copy"><span>FIRST ONLINE ORDER GIFT</span><strong>${esc(REWARDS_CONFIG.welcomeItem)} · FREE</strong><p>${esc(welcomeOfferNote)}</p></div>${!isCustomerSignedIn() ? `<button type="button" data-account-login>SIGN IN</button>` : customerAccountLoadFailed ? `<button type="button" data-reload-account>RETRY</button>` : welcomeEligible && welcomeHasCompetingBenefit ? `<button type="button" data-select-welcome>USE GIFT</button>` : welcomeEligible && selectedWelcomeOffer ? `<span class="cart-first-order-added">ADDED</span>` : !loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded ? `<span class="cart-first-order-added">CHECKING</span>` : ""}</div>` : "";
 
   const welcomeCard = "";
   const pointsBalance = Math.max(0, Number(currentLoyaltyAccount.points || 0));
-  const cartPointsBalance = `<div class="cart-points-balance"><span>YOUR CRAVING POINTS</span><strong>${!customerLoggedIn ? "Sign in to view" : loyaltyAccountLoaded ? `${pointsBalance.toLocaleString("en-IN")} pts` : "Temporarily unavailable"}</strong></div>`;
+  const cartPointsBalance = `<div class="cart-points-balance"><span>YOUR CRAVING POINTS</span><strong>${!isCustomerSignedIn() ? "Sign in to view" : loyaltyAccountLoaded ? `${pointsBalance.toLocaleString("en-IN")} pts` : "Temporarily unavailable"}</strong></div>`;
   const testOrderNotice = isTestOrder ? `<p class="test-order-notice">TEST MODE · No payment is due. This order won’t be prepared or sent to staff; offers, rewards and points can’t be used or earned.</p>` : "";
   const pointsAvailable = loyaltyAccountLoaded && !isTestOrder ? Math.floor(Math.min(REWARDS_CONFIG.maxRedeemPointsPerOrder, pointsBalance, offerEligibleSubtotal * 10) / 100) * 100 : 0;
   const pointsControls = isTestOrder ? "" : pointsAvailable > 0
@@ -2693,7 +2722,7 @@ document.addEventListener("click", event => {
   const screenButton = event.target.closest("[data-screen]");
   if (screenButton) {
     event.preventDefault();
-    if (screenButton.id === "headerPointsButton" && !customerLoggedIn) {
+    if (screenButton.id === "headerPointsButton" && !isCustomerSignedIn()) {
       openCustomerLogin();
       return;
     }
