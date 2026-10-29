@@ -1504,6 +1504,7 @@ function renderCheckoutSummary() {
 
 
 async function openCheckout() {
+  let accountWarning = "";
 
   if (!ONLINE_CHECKOUT_ENABLED) {
 
@@ -1548,9 +1549,9 @@ async function openCheckout() {
       updatePlaceOrderButton();
     }
     if (!loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded || customerAccountLoadFailed) {
-      if (placeOrderNote) placeOrderNote.textContent = "We couldn’t verify your customer account yet. Retry the account check, or sign in again after customer access is restored.";
+      accountWarning = "We couldn’t verify your customer account yet. You can enter your address, but we’ll need to verify your account before placing the order. If this continues, restore customer access in Admin and sign in again.";
+      if (placeOrderNote) placeOrderNote.textContent = accountWarning;
       if (cartOverlay?.classList.contains("active")) renderCart();
-      return;
     }
     if (cartOverlay?.classList.contains("active")) renderCart();
   }
@@ -1565,7 +1566,7 @@ async function openCheckout() {
 
   renderCheckoutSummary();
 
-  checkoutMessage.textContent = "";
+  checkoutMessage.textContent = accountWarning;
 
   checkoutOverlay.classList.add("open");
 
@@ -1686,6 +1687,21 @@ async function continueToOrder() {
   if (!user) {
     checkoutMessage.textContent = "Your login session has expired. Please log in again.";
     return;
+  }
+  if (!loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded || customerAccountLoadFailed) {
+    checkoutSubmit.disabled = true;
+    checkoutSubmit.textContent = "CHECKING ACCOUNT…";
+    try {
+      await refreshAccountScreens(user);
+    } finally {
+      checkoutSubmit.disabled = false;
+      checkoutSubmit.textContent = "PLACE ORDER";
+    }
+    if (!loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded || customerAccountLoadFailed) {
+      checkoutMessage.textContent = "We still can’t verify this customer account, so the order can’t be placed yet. Close checkout, restore customer access in Admin if it is blocked, sign in again, then tap RETRY in the cart.";
+      return;
+    }
+    renderCheckoutSummary();
   }
   if (!window.FirebaseFunctionsAPI?.httpsCallable || !window.firebaseFunctions) {
     checkoutMessage.textContent = "The secure order service is not ready. Please try again later.";
