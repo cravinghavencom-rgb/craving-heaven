@@ -2,6 +2,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 const REWARDS_CONFIG = window.CRAVING_REWARDS || { journey: [], rewardById: {} };
 const REWARD_EXCLUDED_NAMES = new Set((MENU_DATA.extras?.items || []).map(item => item.name));
 let menuInitialized = false;
+let welcomeFlyerShownThisPage = false;
+let customerOnlineOrderHistoryLoaded = false;
+let customerAuthStateResolved = false;
 function applyRemoteBusinessConfig(data) {
   if (!data || !data.menu || !Array.isArray(data.combos) || !data.rewards) return false;
   for (const key of Object.keys(MENU_DATA)) delete MENU_DATA[key];
@@ -33,37 +36,45 @@ try {
 function syncFirstVisitFlyerReward() {
   const flyer = document.getElementById("firstVisitFlyer");
   if (!flyer) return;
-  const reward = (REWARDS_CONFIG.journey || []).find(item => Number(item.order) === 1 && item.kind && item.kind !== "progress");
-  if (!reward) return;
+  const welcomeItem = String(REWARDS_CONFIG.welcomeItem || "Classic Crunchy Burger");
+  const menuItem = Object.values(MENU_DATA).flatMap(section => section.items || [])
+    .flatMap(item => item.options || [item]).find(item => item.name === welcomeItem);
   const setText = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = value; };
   const formatRupees = value => `₹${Number(value || 0).toLocaleString("en-IN")}`;
   const image = document.getElementById("firstVisitFlyerImage");
   const emblem = document.getElementById("firstVisitFlyerEmblem");
-  const freeItem = reward.kind === "free-item";
-  const burger = freeItem && /classic crunchy burger/i.test(reward.item || "");
+  const burger = /classic crunchy burger/i.test(welcomeItem);
   const visual = document.querySelector("#firstVisitFlyer .first-visit-flyer-art");
-  if (image) { image.hidden = !burger; image.alt = burger ? reward.item : ""; }
+  if (image) { image.hidden = !burger; image.alt = burger ? welcomeItem : ""; }
   if (emblem) emblem.hidden = burger;
   if (visual) visual.classList.toggle("has-food-image", burger);
-  const value = freeItem ? `${formatRupees(reward.itemPrice)} VALUE`
-    : reward.kind === "bonus-points" ? `${Number(reward.points || 0)} POINTS`
-      : reward.kind === "free-delivery" ? "DELIVERY ON US"
-        : reward.kind === "percent-discount" ? `${Number(reward.percent || 0)}% OFF`
-          : reward.kind === "discount" ? `${formatRupees(reward.amount)} OFF`
-            : reward.kind === "double-points" ? "DOUBLE POINTS" : "A REWARD FOR YOU";
-  setText("firstVisitFlyerValue", value);
-  const rewardLabel = freeItem ? `${reward.item} · FREE`
-    : reward.kind === "bonus-points" ? `${Number(reward.points || 0)} Craving Points`
-      : reward.kind === "free-delivery" ? "Free delivery"
-        : reward.kind === "percent-discount" ? `${Number(reward.percent || 0)}% off`
-        : reward.kind === "discount" ? `${formatRupees(reward.amount)} off`
-            : reward.title || "Your reward";
-  setText("firstVisitFlyerReward", rewardLabel);
-  setText("firstVisitFlyerTitle", freeItem ? "Your first order unlocks a free treat!" : "A little reward is waiting for you!");
-  setText("firstVisitFlyerDescription", `Complete your first order and unlock ${rewardLabel} for a future order.`);
-  setText("firstVisitFlyerFoot", `UNLOCKS AFTER ORDER COMPLETION${freeItem && Number(REWARDS_CONFIG.freeItemExpiryDays) > 0 ? ` · USE WITHIN ${Number(REWARDS_CONFIG.freeItemExpiryDays)} DAYS` : " · REWARD RULES APPLY"}`);
+  setText("firstVisitFlyerValue", `${formatRupees(menuItem?.price)} VALUE`);
+  setText("firstVisitFlyerReward", `${welcomeItem} · FREE`);
+  setText("firstVisitFlyerTitle", "Your first order gets a free burger!");
+  setText("firstVisitFlyerDescription", `Add any regular menu item to your first online order and get a ${welcomeItem} free.`);
+  setText("firstVisitFlyerFoot", "FIRST ONLINE ORDER · ONE GIFT PER CUSTOMER");
 }
 syncFirstVisitFlyerReward();
+function hasLocalWelcomeOrderMarker() {
+  if (customerLoggedIn) return false;
+  try {
+    const previousUid = localStorage.getItem("cravingHeavenLastCustomerUid_v1");
+    return Boolean(previousUid && localStorage.getItem(`cravingHeavenWelcomeOrderPlaced_${previousUid}`) === "1");
+  } catch (_) { return false; }
+}
+function maybeShowFirstOrderFlyer() {
+  const flyer = document.getElementById("firstVisitFlyer");
+  if (!flyer || flyer.open || welcomeFlyerShownThisPage || !customerAuthStateResolved || orderAvailability?.isTestCustomer) return;
+  const account = currentLoyaltyAccount || {};
+  const welcomeAlreadyUsed = account.welcomeCompleted === true || Boolean(account.welcomeReservationId) || customerHasOrderedOnline || hasLocalWelcomeOrderMarker();
+  if (customerLoggedIn && (!loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded)) return;
+  if (welcomeAlreadyUsed) {
+    if (flyer.open) flyer.close();
+    return;
+  }
+  flyer.showModal();
+  welcomeFlyerShownThisPage = true;
+}
 const businessConfigPromise = fetchRemoteBusinessConfig();
 businessConfigPromise.then(data => {
   if (data && applyRemoteBusinessConfig(data)) {
@@ -589,13 +600,31 @@ function handlePlaceOrderClick() {
   function setupCustomerAuthListener() {
     if (!firebaseAuthReady()) {
       console.error("Firebase Authentication API is unavailable.");
+      customerAuthStateResolved = true;
       return;
     }
 
     window.FirebaseAuthAPI.onAuthStateChanged(
       window.firebaseAuth,
       user => {
+        const nextUid = user?.uid || "";
+        if (lastCustomerAuthUid && lastCustomerAuthUid !== nextUid) {
+          currentLoyaltyAccount = { points: 0, completedOrders: 0, availableRewards: [] };
+          loyaltyAccountLoaded = false;
+          customerOnlineOrderHistoryLoaded = false;
+          customerHasOrderedOnline = false;
+          selectedMilestoneRewardId = null;
+          selectedPointsToRedeem = 0;
+          selectedWelcomeOffer = false;
+          removeSelectedFreeOffer();
+          if (cartOverlay?.classList.contains("open")) renderCart();
+        }
+        lastCustomerAuthUid = nextUid;
         customerLoggedIn = !!user;
+        customerAuthStateResolved = true;
+        if (user?.uid) {
+          try { localStorage.setItem("cravingHeavenLastCustomerUid_v1", user.uid); } catch (_) { /* Login flow still works when browser storage is disabled. */ }
+        }
 
         updatePlaceOrderButton();
         refreshAccountScreens(user);
@@ -665,8 +694,14 @@ function handlePlaceOrderClick() {
     // Every 30 completed orders begins a fresh reward cycle at order 1.
     const previewOrder = cycleOrder === 30 ? 0 : cycleOrder;
     const availableIds = new Set(available.map(item => item.id));
-    const upcoming = REWARDS_CONFIG.journey.filter(item => item.id && item.order > previewOrder && !availableIds.has(item.id)).slice(0, 2);
+    const welcomeReward = REWARDS_CONFIG.journey.find(item => Number(item.order) === 1 && item.kind === "free-item" && item.item === REWARDS_CONFIG.welcomeItem);
+    const welcomeAvailableNow = completed === 0 && loyaltyAccountLoaded && customerOnlineOrderHistoryLoaded && !customerHasOrderedOnline
+      && account.welcomeCompleted !== true && !account.welcomeReservationId;
+    const upcoming = REWARDS_CONFIG.journey.filter(item => item.id && item.order > previewOrder && !availableIds.has(item.id)
+      && !(welcomeAvailableNow && item.id === welcomeReward?.id)).slice(0, 2);
+    const visibleReadyCount = Math.min(available.length, 1) + (welcomeAvailableNow ? 1 : 0);
     const cards = [
+      ...(welcomeAvailableNow ? [`<article class="journey-card journey-card-ready"><span class="journey-card-status">FIRST ONLINE ORDER GIFT</span><strong>${esc(REWARDS_CONFIG.welcomeItem)} · FREE</strong><p>Add any regular menu item to your first online order. The burger appears in your cart at ₹0; combos or extras alone do not qualify.</p><button type="button" class="journey-use-button" data-screen="menu">VIEW MENU</button></article>`] : []),
       ...available.slice(0, 1).map(reward => {
         const definition = REWARDS_CONFIG.rewardById[reward.id] || reward;
         const expiry = reward.expiresAt ? (reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt)) : null;
@@ -674,7 +709,7 @@ function handlePlaceOrderClick() {
         const expires = expiry && !Number.isNaN(expiry.getTime()) ? `${gameReward ? "Expires" : "Use by"} ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: gameReward ? "numeric" : undefined, minute: gameReward ? "2-digit" : undefined }).format(expiry)}` : "Ready to use";
         return `<article class="journey-card journey-card-ready"><span class="journey-card-status">✦ READY TO USE</span><strong>${esc(definition.title || reward.title)}</strong><p>${esc(definition.detail || reward.detail || "Use this reward on your next order")}</p><small>${esc(expires)}</small><button type="button" class="journey-use-button" data-use-reward="${esc(reward.ticketId || reward.id)}">USE IN CART</button></article>`;
       }),
-      ...upcoming.slice(0, Math.max(0, 2 - Math.min(available.length, 1))).map(item => `<article class="journey-card journey-card-locked"><span class="journey-card-status">🔒 ORDER ${item.order}</span><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p></article>`)
+      ...upcoming.slice(0, Math.max(0, 2 - visibleReadyCount)).map(item => `<article class="journey-card journey-card-locked"><span class="journey-card-status">🔒 ORDER ${item.order}</span><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p></article>`)
     ];
     root.innerHTML = cards.length ? cards.join("") : `<div class="rewards-login-hint">You’ve reached the end of this reward journey. Keep ordering to begin the next round.</div>`;
   }
@@ -912,8 +947,10 @@ function handlePlaceOrderClick() {
       currentLoyaltyAccount = { points: 0, completedOrders: 0, availableRewards: [] };
       loyaltyAccountLoaded = false;
       customerHasOrderedOnline = false;
+      customerOnlineOrderHistoryLoaded = false;
       renderRewardsJourney(currentLoyaltyAccount, false);
       if (cartOverlay?.classList.contains("open")) renderCart();
+      maybeShowFirstOrderFlyer();
       return;
     }
 
@@ -971,7 +1008,8 @@ function handlePlaceOrderClick() {
         ...orderDocuments.map(document => ({ id: document.id, ...document.data() })),
         ...testOrderDocuments.map(document => ({ id: document.id, ...document.data(), isTestOrder: true }))
       ];
-      customerHasOrderedOnline = orders.some(order => order.source === "website" && order.isTestOrder !== true);
+      customerOnlineOrderHistoryLoaded = ordersResult.status === "fulfilled";
+      customerHasOrderedOnline = orders.some(order => order.source === "website" && order.isTestOrder !== true && !["cancelled", "canceled"].includes(String(order.status || "").toLowerCase()));
       const getTime = value => value?.toDate ? value.toDate().getTime() : new Date(value || 0).getTime();
       orders.sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt));
       const pointsBalance = document.getElementById("loyaltyPointsBalance");
@@ -979,6 +1017,15 @@ function handlePlaceOrderClick() {
       currentLoyaltyAccount = { ...loyaltyData, points: cravingPointsBalance(loyaltyData) };
       loyaltyAccountLoaded = loyaltyResult.status === "fulfilled";
       if (!Array.isArray(currentLoyaltyAccount.availableRewards)) currentLoyaltyAccount.availableRewards = [];
+      if (currentLoyaltyAccount.welcomeReservationId) {
+        const reservationOrder = orders.find(order => order.id === currentLoyaltyAccount.welcomeReservationId);
+        if (reservationOrder && ["cancelled", "canceled"].includes(String(reservationOrder.status || "").toLowerCase())) currentLoyaltyAccount.welcomeReservationId = "";
+      }
+      try {
+        const welcomeIsUsed = currentLoyaltyAccount.welcomeCompleted === true || customerHasOrderedOnline || Boolean(currentLoyaltyAccount.welcomeReservationId);
+        if (welcomeIsUsed) localStorage.setItem(`cravingHeavenWelcomeOrderPlaced_${user.uid}`, "1");
+        else if (loyaltyAccountLoaded && customerOnlineOrderHistoryLoaded) localStorage.removeItem(`cravingHeavenWelcomeOrderPlaced_${user.uid}`);
+      } catch (_) { /* Server account state remains authoritative. */ }
       const points = Math.max(0, Number(currentLoyaltyAccount.points || 0));
       const pointsText = points.toLocaleString("en-IN");
       if (pointsBalance) pointsBalance.textContent = loyaltyAccountLoaded ? pointsText : "—";
@@ -998,6 +1045,7 @@ function handlePlaceOrderClick() {
       if (homePointsSummary) homePointsSummary.textContent = loyaltyAccountLoaded ? "Craving Points · combos earn half rate" : "Points could not load · try again";
       renderRewardsJourney(currentLoyaltyAccount, loyaltyResult.status === "fulfilled");
       if (cartOverlay?.classList.contains("open")) renderCart();
+      maybeShowFirstOrderFlyer();
       if (ordersResult.status === "rejected" || testOrdersResult.status === "rejected") {
         console.error("Could not load one or more customer order histories:", ordersResult.status === "rejected" ? ordersResult.reason : testOrdersResult.reason);
         ordersContent.innerHTML = `<div class="account-empty"><h2>Orders couldn’t load</h2><p>Your profile, address and points loaded. Check your connection and try the order history again.</p><button type="button" class="account-primary-button" data-reload-orders>TRY AGAIN</button></div>`;
@@ -1619,6 +1667,12 @@ async function continueToOrder() {
     });
     const order = response.data;
     if (!order?.orderId || !Array.isArray(order.items)) throw new Error("The order service returned an invalid confirmation.");
+    if (order.welcomeUsed === true && user.uid) {
+      try {
+        localStorage.setItem("cravingHeavenLastCustomerUid_v1", user.uid);
+        localStorage.setItem(`cravingHeavenWelcomeOrderPlaced_${user.uid}`, "1");
+      } catch (_) { /* The server remains the source of truth for offer eligibility. */ }
+    }
 
     cart = order.items.map(item => ({
       name: item.name,
@@ -1732,6 +1786,13 @@ let selectedMilestoneRewardId = null;
 let selectedPointsToRedeem = 0;
 let selectedWelcomeOffer = false;
 let customerHasOrderedOnline = false;
+let lastCustomerAuthUid = "";
+function firstOrderWelcomeEligible() {
+  const account = currentLoyaltyAccount || {};
+  return customerLoggedIn && loyaltyAccountLoaded && customerOnlineOrderHistoryLoaded
+    && !customerHasOrderedOnline && account.welcomeCompleted !== true && !account.welcomeReservationId
+    && orderAvailability.isTestCustomer !== true;
+}
 
   const nav = document.getElementById("categoryNav");
   const sectionsRoot = document.getElementById("menuSections");
@@ -2185,11 +2246,11 @@ function renderCart() {
   }
   const maxRedeemablePoints = Math.min(REWARDS_CONFIG.maxRedeemPointsPerOrder, Math.max(0, Number(currentLoyaltyAccount.points || 0)), Math.floor(offerEligibleSubtotal / 10) * 100);
   if (selectedPointsToRedeem > maxRedeemablePoints) selectedPointsToRedeem = maxRedeemablePoints;
-  if (selectedFreeOfferId || selectedMilestoneRewardId || selectedPointsToRedeem) selectedWelcomeOffer = false;
-  // The old first-checkout gift is replaced by the order-1 journey reward,
-  // which is unlocked only after that order completes and can be used later.
-  const welcomeEligible = false;
-  selectedWelcomeOffer = false;
+  const welcomeHasCompetingBenefit = Boolean(selectedFreeOfferId || selectedMilestoneRewardId || selectedPointsToRedeem);
+  const welcomeEligible = firstOrderWelcomeEligible() && offerEligibleSubtotal > 0;
+  if (!welcomeEligible) selectedWelcomeOffer = false;
+  else if (welcomeHasCompetingBenefit) selectedWelcomeOffer = false;
+  else selectedWelcomeOffer = true;
 
   if (selectedFreeOfferId) {
     const selectedOffer = FREE_OFFERS[selectedFreeOfferId];
@@ -2412,24 +2473,18 @@ ${esc(offer.freeItem)}
   }).filter(Boolean).join("");
   const rewardWallet = !isTestOrder && availableRewardCards ? `<div class="cart-benefit-box"><strong>YOUR ROYAL REWARDS</strong>${availableRewardCards}</div>` : "";
 
-  const orderOneRewardDefinition = (REWARDS_CONFIG.journey || []).find(item => Number(item.order) === 1 && item.kind && item.kind !== "progress");
-  const orderOneRewardAvailable = orderOneRewardDefinition && (currentLoyaltyAccount.availableRewards || []).some(reward => reward.id === orderOneRewardDefinition.id || reward.ticketId === orderOneRewardDefinition.id);
-  const showFirstOrderRewardProgress = !isTestOrder && orderOneRewardDefinition && !orderOneRewardAvailable
-    && (!customerLoggedIn || Number(currentLoyaltyAccount.completedOrders || 0) === 0);
-  const firstOrderRewardLabel = orderOneRewardDefinition?.kind === "free-item" ? `FREE ${orderOneRewardDefinition.item}`
-    : orderOneRewardDefinition?.kind === "bonus-points" ? `${Number(orderOneRewardDefinition.points || 0)} BONUS CRAVING POINTS`
-      : orderOneRewardDefinition?.kind === "free-delivery" ? "FREE DELIVERY"
-        : orderOneRewardDefinition?.kind === "percent-discount" ? `${Number(orderOneRewardDefinition.percent || 0)}% OFF`
-          : orderOneRewardDefinition?.kind === "discount" ? `${money(Number(orderOneRewardDefinition.amount || 0))} OFF`
-            : orderOneRewardDefinition?.title || "YOUR FIRST-ORDER REWARD";
-  const firstOrderRewardNote = !customerLoggedIn
-    ? "Sign in to check eligibility. Complete your first order to unlock this reward for a future order."
-    : customerHasOrderedOnline
-      ? "Your reward unlocks when your first order is completed and will be ready for a future order."
-      : loyaltyAccountLoaded
-        ? "Complete your first order to unlock this reward for a future order."
-        : "If eligible, your first completed order unlocks this reward for a future order.";
-  const firstOrderRewardProgress = showFirstOrderRewardProgress ? `<div class="cart-first-order-reward"><div class="cart-first-order-icon" aria-hidden="true">🎁</div><div class="cart-first-order-copy"><span>YOUR FIRST-ORDER REWARD</span><strong>${esc(firstOrderRewardLabel)}</strong><p>${esc(firstOrderRewardNote)}</p></div>${!customerLoggedIn ? `<button type="button" data-account-login>SIGN IN</button>` : ""}</div>` : "";
+  const welcomeOfferAlreadyUsed = currentLoyaltyAccount.welcomeCompleted === true || Boolean(currentLoyaltyAccount.welcomeReservationId) || customerHasOrderedOnline || hasLocalWelcomeOrderMarker();
+  const showFirstOrderWelcomeCard = !isTestOrder && !welcomeOfferAlreadyUsed;
+  const welcomeOfferNote = !customerLoggedIn
+    ? "Sign in to check eligibility. Add a regular menu item to your first online order and the burger will be free."
+    : !loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded
+      ? "We’re checking your account so we can confirm this first-order gift."
+      : !welcomeEligible
+        ? "Add any regular menu item to claim the gift. Combos and extras alone don’t qualify."
+        : welcomeHasCompetingBenefit
+          ? "Only one offer or reward can be used per order. Choose the free burger instead to add it."
+          : `Your free ${REWARDS_CONFIG.welcomeItem} is included below at ₹0.`;
+  const firstOrderWelcomeCard = showFirstOrderWelcomeCard ? `<div class="cart-first-order-reward"><div class="cart-first-order-icon" aria-hidden="true">🎁</div><div class="cart-first-order-copy"><span>FIRST ONLINE ORDER GIFT</span><strong>${esc(REWARDS_CONFIG.welcomeItem)} · FREE</strong><p>${esc(welcomeOfferNote)}</p></div>${!customerLoggedIn ? `<button type="button" data-account-login>SIGN IN</button>` : welcomeEligible && welcomeHasCompetingBenefit ? `<button type="button" data-select-welcome>USE GIFT</button>` : welcomeEligible && selectedWelcomeOffer ? `<span class="cart-first-order-added">ADDED</span>` : !loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded ? `<span class="cart-first-order-added">CHECKING</span>` : ""}</div>` : "";
 
   const welcomeCard = "";
   const pointsBalance = Math.max(0, Number(currentLoyaltyAccount.points || 0));
@@ -2474,7 +2529,7 @@ ${esc(offer.freeItem)}
   cartSummaryEl.innerHTML = `
     ${freeOfferSelector}
     ${rewardWallet}
-    ${firstOrderRewardProgress}
+    ${firstOrderWelcomeCard}
     ${welcomeCard}
     ${testOrderNotice}
     ${cartPointsBalance}
@@ -2683,7 +2738,7 @@ document.addEventListener("click", event => {
   }
 
   if (event.target.closest("[data-select-welcome]")) {
-    if (!customerHasOrderedOnline && getOfferEligibleSubtotal() > 0) {
+    if (firstOrderWelcomeEligible() && getOfferEligibleSubtotal() > 0) {
       removeSelectedFreeOffer();
       selectedMilestoneRewardId = null;
       selectedPointsToRedeem = 0;
@@ -2928,11 +2983,6 @@ document.addEventListener("click", event => {
   setAppScreen(isAdminGameTest ? "game" : "home");
 
   const firstVisitFlyer = document.getElementById("firstVisitFlyer");
-  const firstVisitFlyerSeenKey = "cravingHeavenFirstVisitFlyerSeen_v8";
-  const markFirstVisitFlyerSeen = () => {
-    try { localStorage.setItem(firstVisitFlyerSeenKey, "1"); } catch (_) { /* Flyer may still be dismissed if storage is unavailable. */ }
-  };
-  firstVisitFlyer?.addEventListener("close", markFirstVisitFlyerSeen);
   firstVisitFlyer?.addEventListener("click", event => {
     if (event.target === firstVisitFlyer) firstVisitFlyer.close();
     const closeButton = event.target.closest("[data-close-first-visit]");
@@ -2942,13 +2992,7 @@ document.addEventListener("click", event => {
       setAppScreen("menu");
     }
   });
-  let firstVisitFlyerAlreadySeen = false;
-  try { firstVisitFlyerAlreadySeen = localStorage.getItem(firstVisitFlyerSeenKey) === "1"; } catch (_) { /* Show the offer for this visit if storage is unavailable. */ }
-  if (firstVisitFlyer && !firstVisitFlyerAlreadySeen) {
-    window.setTimeout(() => {
-      if (!firstVisitFlyer.open) firstVisitFlyer.showModal();
-    }, 450);
-  }
+  if (firstVisitFlyer) window.setTimeout(maybeShowFirstOrderFlyer, 450);
 
   const sections = [...document.querySelectorAll(".menu-section")];
   const observer = new IntersectionObserver(entries => {

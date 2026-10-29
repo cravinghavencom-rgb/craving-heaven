@@ -1479,7 +1479,6 @@ exports.createOrder = onCall({ region: REGION }, async request => {
     const loyaltyRewardTicketId = typeof data.loyaltyRewardId === "string" ? data.loyaltyRewardId : "";
     const requestedPoints = Number(data.redeemPoints || 0);
     const applyFirstOrderReward = data.applyFirstOrderReward === true;
-    if (applyFirstOrderReward) throw new HttpsError("failed-precondition", "The first-order welcome gift has moved to the reward journey: complete your first order to unlock a reward for your next order.");
     const hasOtherBenefit = Boolean(freeOffer || loyaltyRewardTicketId || requestedPoints > 0);
     let welcomeUsed = false;
     let pointsDiscount = 0;
@@ -1545,11 +1544,18 @@ exports.createOrder = onCall({ region: REGION }, async request => {
       }
     }
     if (applyFirstOrderReward) {
-      if (hasOtherBenefit || account.welcomeCompleted || account.welcomeReservationId || eligibleSubtotal <= 0) {
+      let activeWelcomeReservationId = account.welcomeReservationId || "";
+      if (activeWelcomeReservationId) {
+        const reservedOrderSnapshot = await transaction.get(db.collection("orders").doc(String(activeWelcomeReservationId)));
+        const reservedStatus = String(reservedOrderSnapshot.data()?.status || "").toLowerCase();
+        if (!reservedOrderSnapshot.exists || ["cancelled", "canceled"].includes(reservedStatus)) activeWelcomeReservationId = "";
+      }
+      if (hasOtherBenefit || account.welcomeCompleted || activeWelcomeReservationId || eligibleSubtotal <= 0) {
         throw new HttpsError("failed-precondition", "Your first-order burger reward needs a paid regular-menu item and cannot be combined with another offer or reward.");
       }
-      const oldOrders = await transaction.get(db.collection("orders").where("uid", "==", uid).where("source", "==", "website").limit(1));
-      if (!oldOrders.empty) throw new HttpsError("failed-precondition", "The free burger reward is only for your first online order.");
+      const priorOnlineOrders = await transaction.get(db.collection("orders").where("uid", "==", uid).where("source", "==", "website"));
+      const hasPriorNonCancelledOnlineOrder = priorOnlineOrders.docs.some(snapshot => !["cancelled", "canceled"].includes(String(snapshot.data()?.status || "").toLowerCase()));
+      if (hasPriorNonCancelledOnlineOrder) throw new HttpsError("failed-precondition", "The free burger reward is only for your first active online order.");
       welcomeUsed = true;
       const welcomeItemPrice = priceByName.get(rewardConfig.welcomeItem);
       if (!Number.isSafeInteger(welcomeItemPrice) || welcomeItemPrice <= 0) throw new HttpsError("failed-precondition", "The first-order reward item is unavailable.");
@@ -1632,7 +1638,7 @@ exports.createOrder = onCall({ region: REGION }, async request => {
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
     }
-    const response = { orderId: orderRef.id, orderNumber, subtotal, discountAmount: totalDiscount, deliveryCharge, total, pointsRedeemed: requestedPoints, pointsToAward, addressSaved, items: pricedItems, isTestOrder: testModeEnabled };
+    const response = { orderId: orderRef.id, orderNumber, subtotal, discountAmount: totalDiscount, deliveryCharge, total, pointsRedeemed: requestedPoints, pointsToAward, welcomeUsed, addressSaved, items: pricedItems, isTestOrder: testModeEnabled };
     transaction.create(activeRequestRef, { uid, orderId: orderRef.id, response, createdAt: FieldValue.serverTimestamp() });
     return response;
   });
@@ -2113,7 +2119,14 @@ exports.onOrderStatusChanged = onDocumentUpdated({ document: "orders/{orderId}",
       // A milestone is earned only after its order completes; vouchers are then usable on a later order.
       const step = ((completedOrders - 1) % 30) + 1;
       const candidateMilestone = rewardConfig.journey.find(item => item.order === step && item.id);
-      const milestone = candidateMilestone?.kind === "bonus-points" && Number(order.eligibleSubtotal || 0) < Number(candidateMilestone.minimum || 0) ? null : candidateMilestone;
+      // The welcome burger is the first-order/order-1 burger benefit. Do not issue the
+      // same free item again as a second ticket when that welcome order is completed.
+      const sameAsWelcomeGift = order.welcomeUsed === true
+        && candidateMilestone?.kind === "free-item"
+        && candidateMilestone.item === rewardConfig.welcomeItem;
+      const milestone = sameAsWelcomeGift
+        ? null
+        : candidateMilestone?.kind === "bonus-points" && Number(order.eligibleSubtotal || 0) < Number(candidateMilestone.minimum || 0) ? null : candidateMilestone;
       const availableRewards = Array.isArray(account.availableRewards) ? [...account.availableRewards] : [];
       const milestonePoints = milestone?.kind === "bonus-points" ? Number(milestone.points || 0) : 0;
       if (milestone && milestone.kind !== "bonus-points") {

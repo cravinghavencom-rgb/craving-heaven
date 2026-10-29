@@ -2677,6 +2677,7 @@ body { background:#fbf7f1; color:var(--premium-ink); }
 .cart-first-order-copy > strong { color:#41251d; font-size:13px; line-height:1.3; }
 .cart-first-order-copy > p { margin:0; color:#76685f; font-size:11px; line-height:1.4; }
 .cart-first-order-reward > button { flex:0 0 auto; padding:9px 11px; border:0; border-radius:9px; background:#a90d17; color:white; font-size:9px; font-weight:900; }
+.cart-first-order-added { flex:0 0 auto; padding:8px 10px; border:1px solid #b7dbc4; border-radius:9px; background:#edf8f0; color:#187541; font-size:9px; font-weight:950; letter-spacing:.04em; }
 @media(max-width:480px){.cart-first-order-reward{align-items:flex-start;gap:9px;padding:11px}.cart-first-order-icon{width:34px;height:34px;flex-basis:34px;font-size:18px}.cart-first-order-copy>strong{font-size:12px}.cart-first-order-copy>p{font-size:10px}.cart-first-order-reward>button{padding:8px;font-size:8px}}
 
 .checkout-address-note{display:block;margin-top:6px;color:#766d68;font-size:12px;line-height:1.4}
