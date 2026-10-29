@@ -392,7 +392,7 @@ const FCM_VAPID_KEY =
       // Update every customer surface from Firebase's single authenticated
       // session immediately; do not wait for the auth listener/account reads.
       refreshAccountScreens(credential.user);
-      if (cartOverlay?.classList.contains("open")) renderCart();
+      if (cartOverlay?.classList.contains("active")) renderCart();
 
       setTimeout(() => {
         closeCustomerLogin();
@@ -630,7 +630,7 @@ function handlePlaceOrderClick() {
           selectedPointsToRedeem = 0;
           selectedWelcomeOffer = false;
           removeSelectedFreeOffer();
-          if (cartOverlay?.classList.contains("open")) renderCart();
+          if (cartOverlay?.classList.contains("active")) renderCart();
         }
         lastCustomerAuthUid = nextUid;
         customerAuthStateResolved = true;
@@ -639,7 +639,8 @@ function handlePlaceOrderClick() {
         }
 
         updatePlaceOrderButton();
-        if (cartOverlay?.classList.contains("open")) renderCart();
+        renderRewardsJourney(currentLoyaltyAccount, isCustomerSignedIn());
+        if (cartOverlay?.classList.contains("active")) renderCart();
         refreshAccountScreens(user);
 
         if (user) {
@@ -694,6 +695,16 @@ function handlePlaceOrderClick() {
     if (!signedIn) {
       count.textContent = "Sign in to track";
       root.innerHTML = `<div class="rewards-login-hint">Sign in to see your Craving Points and next rewards.<br><button type="button" class="account-primary-button" data-account-login>LOG IN</button></div>`;
+      return;
+    }
+    if (customerAccountLoadFailed) {
+      count.textContent = "Account unavailable";
+      root.innerHTML = `<div class="rewards-login-hint">We couldn’t load your rewards. Check your account access or connection, then <button type="button" class="account-inline-retry" data-reload-account>try again</button>.</div>`;
+      return;
+    }
+    if (!loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded) {
+      count.textContent = "Loading account…";
+      root.innerHTML = `<div class="rewards-login-hint">Loading your Craving Points and rewards…</div>`;
       return;
     }
     const completed = Math.max(0, Number(account.completedOrders || 0));
@@ -963,7 +974,7 @@ function handlePlaceOrderClick() {
       customerHasOrderedOnline = false;
       customerOnlineOrderHistoryLoaded = false;
       renderRewardsJourney(currentLoyaltyAccount, false);
-      if (cartOverlay?.classList.contains("open")) renderCart();
+      if (cartOverlay?.classList.contains("active")) renderCart();
       maybeShowFirstOrderFlyer();
       return;
     }
@@ -984,6 +995,7 @@ function handlePlaceOrderClick() {
     const firestoreApi = window.FirebaseFirestoreAPI;
     if (!window.firebaseDB || !firestoreApi?.getDocs || !firestoreApi?.getDoc || !firestoreApi?.query || !firestoreApi?.where) {
       customerAccountLoadFailed = true;
+      renderRewardsJourney(currentLoyaltyAccount, isCustomerSignedIn());
       if (homePointsBalance) homePointsBalance.textContent = "—";
       if (headerPointsBalance) headerPointsBalance.textContent = "—";
       if (homePointsSummary) homePointsSummary.textContent = "points are temporarily unavailable.";
@@ -1061,7 +1073,7 @@ function handlePlaceOrderClick() {
       const homePointsSummary = document.getElementById("homeLoyaltySummary");
       if (homePointsSummary) homePointsSummary.textContent = loyaltyAccountLoaded ? "Craving Points · combos earn half rate" : "Points could not load · try again";
       renderRewardsJourney(currentLoyaltyAccount, loyaltyResult.status === "fulfilled");
-      if (cartOverlay?.classList.contains("open")) renderCart();
+      if (cartOverlay?.classList.contains("active")) renderCart();
       maybeShowFirstOrderFlyer();
       if (ordersResult.status === "rejected" || testOrdersResult.status === "rejected") {
         console.error("Could not load one or more customer order histories:", ordersResult.status === "rejected" ? ordersResult.reason : testOrdersResult.reason);
@@ -1082,7 +1094,8 @@ function handlePlaceOrderClick() {
     } catch (error) {
       console.error("Could not load customer orders:", error);
       customerAccountLoadFailed = true;
-      if (cartOverlay?.classList.contains("open")) renderCart();
+      renderRewardsJourney(currentLoyaltyAccount, isCustomerSignedIn());
+      if (cartOverlay?.classList.contains("active")) renderCart();
       if (savedAddresses?.querySelector(".account-loading")) {
         savedAddresses.innerHTML = `<div class="address-empty">Saved addresses could not load. <button type="button" class="account-inline-retry" data-reload-account>TRY AGAIN</button></div>`;
       }
@@ -1536,10 +1549,10 @@ async function openCheckout() {
     }
     if (!loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded || customerAccountLoadFailed) {
       if (placeOrderNote) placeOrderNote.textContent = "We couldn’t verify your customer account yet. Retry the account check, or sign in again after customer access is restored.";
-      if (cartOverlay?.classList.contains("open")) renderCart();
+      if (cartOverlay?.classList.contains("active")) renderCart();
       return;
     }
-    if (cartOverlay?.classList.contains("open")) renderCart();
+    if (cartOverlay?.classList.contains("active")) renderCart();
   }
 
   prefillCheckoutFromDefaultAddress();
