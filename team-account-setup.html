@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#a90d12">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Team Email Setup | CRAVING HEAVEN</title>
+  <link rel="icon" type="image/png" href="images/logo.png">
+  <link rel="stylesheet" href="staff.css?v=20261030-team-email-v1">
+</head>
+<body>
+  <header class="staff-header"><a class="brand" href="/" aria-label="Craving Heaven home"><img src="images/logo.png" alt=""><span>CRAVING HEAVEN<small>SECURE TEAM SIGN-IN</small></span></a><a class="quiet-button" href="/staff.html">Staff Desk</a></header>
+  <main class="staff-main team-setup-main">
+    <section class="panel login-panel">
+      <p class="eyebrow">ONE ACCOUNT SYSTEM</p><h1>Set up team email sign-in</h1>
+      <p class="muted">Customers continue to sign in with mobile OTP. Staff and Admin use verified email and password. Team permissions are assigned separately by Admin.</p>
+      <div class="team-setup-block">
+        <h2>New team account</h2><p class="muted">Create an email account, verify it, then ask the existing Admin to grant Staff access. This form never grants Admin rights.</p>
+        <form id="newTeamAccountForm"><label for="newTeamEmail">EMAIL</label><input id="newTeamEmail" type="email" autocomplete="email" required><label for="newTeamPassword">PASSWORD (AT LEAST 8 CHARACTERS)</label><input id="newTeamPassword" type="password" autocomplete="new-password" minlength="8" required><button class="primary-button full-button" type="submit">Create email account</button></form>
+      </div>
+      <details class="team-setup-block"><summary>Move an existing phone-based Admin or Staff account</summary>
+        <p class="muted">Use the current team phone number once to prove account ownership. After verification, link a verified email and the phone is freed for customer OTP login. This does not grant team access to a customer account.</p>
+        <form id="migrationPhoneForm"><label for="migrationPhone">CURRENT TEAM MOBILE</label><div class="phone-row"><span>+91</span><input id="migrationPhone" inputmode="numeric" autocomplete="tel-national" maxlength="10" placeholder="10-digit number" required><button class="primary-button" id="migrationSendOtp" type="submit">Send OTP</button></div></form>
+        <form id="migrationOtpForm" hidden><label for="migrationOtp">VERIFICATION CODE</label><div class="phone-row"><input id="migrationOtp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" required><button class="primary-button" type="submit">Verify phone</button></div></form>
+        <form id="migrationEmailForm" hidden><label for="migrationEmail">TEAM EMAIL</label><input id="migrationEmail" type="email" autocomplete="email" required><label for="migrationPassword">PASSWORD (AT LEAST 8 CHARACTERS)</label><input id="migrationPassword" type="password" autocomplete="new-password" minlength="8" required><button class="primary-button full-button" type="submit">Link email and send verification</button></form>
+        <button id="finishMigrationButton" class="primary-button full-button" type="button" hidden>Finish after verifying email</button>
+        <div id="migrationRecaptcha"></div>
+      </details>
+      <p id="setupMessage" class="message" role="status" aria-live="polite"></p>
+    </section>
+  </main>
+  <script type="module" src="team-account-setup.js?v=20261030-team-email-v1"></script>
+</body>
+</html>

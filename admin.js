@@ -1,26 +1,6 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app-check.js";
-import { getAuth, RecaptchaVerifier, signInWithPhoneNumber, onAuthStateChanged, setPersistence, browserLocalPersistence, connectAuthEmulator, signOut } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
-import { getFunctions, connectFunctionsEmulator, httpsCallable } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-functions.js";
-
-const hostname = location.hostname;
-const local = ["localhost", "127.0.0.1"].includes(hostname);
-const privateLan = /^10\./.test(hostname) || /^192\.168\./.test(hostname) || /^172\.(1[6-9]|2\d|3[01])\./.test(hostname);
-const useEmulator = local || (new URLSearchParams(location.search).get("emulator") === "1" && privateLan);
-const app = initializeApp({
-  apiKey: "AIzaSyDVYYv3TMRKWktXA33jOGjniz43hDfRVe4",
-  authDomain: "craving-heaven-e2e94.firebaseapp.com",
-  projectId: useEmulator ? "demo-craving-heaven-local" : "craving-heaven-e2e94",
-  storageBucket: "craving-heaven-e2e94.firebasestorage.app",
-  messagingSenderId: "20081214048",
-  appId: "1:20081214048:web:cae6c7b0874111ab653905"
-});
-if (!useEmulator) initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider("6LdBasMtAAAAAJE5V6ZDZefojEfJx9vfDFowfIjU"), isTokenAutoRefreshEnabled: true });
-const auth = getAuth(app);
-if (useEmulator) connectAuthEmulator(auth, `http://${hostname}:9400`, { disableWarnings: true });
-const authPersistence = setPersistence(auth, browserLocalPersistence);
-const functions = getFunctions(app, "asia-south1");
-if (useEmulator) connectFunctionsEmulator(functions, hostname, 9402);
+import { firebaseAuth as auth, firebaseFunctions as functions, firebaseAuthPersistenceReady as authPersistence, FirebaseAuthAPI, FirebaseFunctionsAPI } from "./firebase-client.js?v=20261030-central-auth-v1";
+const { signInWithEmailAndPassword, sendPasswordResetEmail, verifyBeforeUpdateEmail, onAuthStateChanged, signOut } = FirebaseAuthAPI;
+const { httpsCallable } = FirebaseFunctionsAPI;
 
 const $ = id => document.getElementById(id);
 const gameTestDialog = $("adminGameTestDialog");
@@ -36,9 +16,8 @@ window.addEventListener("message", event => {
 const call = (name, data = {}) => httpsCallable(functions, name)(data).then(result => result.data);
 const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
 const money = value => `₹${Number(value || 0).toLocaleString("en-IN")}`;
-const mobileDigits = value => String(value || "").replace(/\D/g, "").replace(/^91(?=[6-9]\d{9}$)/, "").slice(-10);
 const dateText = value => value ? new Date(value).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—";
-let verifier = null, confirmation = null, currentUser = null, menu = {}, combos = [], rewards = [], gameConfig = { enabled: false, campaignId: "campaign-v1", stages: [] }, gameIsLive = false, gameHasUnpublishedChanges = false, customers = [], analyticsRange = "today", orderingStatus = null;
+let currentUser = null, menu = {}, combos = [], rewards = [], gameConfig = { enabled: false, campaignId: "campaign-v1", stages: [] }, gameIsLive = false, gameHasUnpublishedChanges = false, customers = [], analyticsRange = "today", orderingStatus = null;
 
 function message(el, text, state = "") { el.textContent = text; el.className = `message ${state}`.trim(); }
 function resetRecaptcha() { if (verifier) verifier.clear(); verifier = null; $("adminRecaptcha").replaceChildren(); }
@@ -46,47 +25,40 @@ function requireSignedInAdmin(user) {
   currentUser = user;
   if (!user) { $("adminApp").hidden = true; $("adminLogin").hidden = false; $("adminLogout").hidden = true; return; }
   user.getIdTokenResult(true).then(token => {
-    if (token.claims.admin !== true) {
-      message($("adminAuthMessage"), "This account does not have administrator access. Ask an admin to grant it.", "error");
+    const emailTeamSignInReady = Boolean(user.email && user.emailVerified && user.providerData?.some(provider => provider.providerId === "password") && !user.phoneNumber);
+    if (token.claims.admin !== true || !emailTeamSignInReady) {
+      message($("adminAuthMessage"), token.claims.admin === true ? "Complete Team Email Setup first. Admin access requires a verified email and password; phone OTP accounts belong to customers." : "This account does not have administrator access. Ask an admin to grant it.", "error");
       return signOut(auth);
     }
     $("adminLogin").hidden = true; $("adminApp").hidden = false; $("adminLogout").hidden = false;
-    $("adminSignedInAs").textContent = user.phoneNumber || user.displayName || "Administrator";
+    $("adminSignedInAs").textContent = user.email || user.displayName || "Administrator";
     loadInitial();
   }).catch(error => message($("adminAuthMessage"), friendlyError(error), "error"));
 }
 function friendlyError(error) {
   const code = error?.code || "";
-  if (code.includes("permission-denied")) return "Administrator access is required. Sign in with an authorized admin number.";
-  if (code.includes("not-found")) return "No account found for that number. Sign in on the website with OTP once first.";
+  if (code.includes("permission-denied")) return "Administrator access is required. Sign in with the authorized admin email.";
+  if (code.includes("not-found")) return "No matching email account was found.";
   if (code.includes("failed-precondition")) return error.message || "This action cannot be completed yet.";
+  if (code.includes("auth/requires-recent-login")) return "For security, sign out and sign in again before changing the administrator email.";
   if (code.includes("unauthenticated") || code.includes("app-check")) return "Firebase could not verify this secure request. Refresh the Admin page and try again. If it continues, check the website domain and App Check setup in Firebase.";
   if (code.includes("internal")) return "Firebase could not complete this request. Refresh the Admin page and retry. If it repeats, check the Firebase App Check and Functions logs.";
   return error?.message?.replace(/^FirebaseError:\s*/i, "") || "Something went wrong. Please try again.";
 }
 
-$("adminPhoneForm").addEventListener("submit", async event => {
+$("adminEmailForm").addEventListener("submit", async event => {
   event.preventDefault(); await authPersistence;
-  const digits = mobileDigits($("adminPhone").value);
-  if (!/^[6-9]\d{9}$/.test(digits)) return message($("adminAuthMessage"), "Enter a valid 10-digit Indian mobile number.", "error");
-  const button = $("adminSendOtp"); button.disabled = true; message($("adminAuthMessage"), "Sending verification code…");
-  try {
-    if (!verifier) verifier = new RecaptchaVerifier(auth, "adminRecaptcha", { size: "invisible" });
-    confirmation = await signInWithPhoneNumber(auth, `+91${digits}`, verifier);
-    $("adminPhoneForm").hidden = true; $("adminOtpForm").hidden = false; message($("adminAuthMessage"), `Verification code sent to +91 ${digits}.`);
-    $("adminOtp").focus();
-  } catch (error) { resetRecaptcha(); message($("adminAuthMessage"), friendlyError(error), "error"); }
+  const button = $("adminEmailSignIn"); button.disabled = true; message($("adminAuthMessage"), "Checking Admin access…");
+  try { await signInWithEmailAndPassword(auth, $("adminEmail").value.trim().toLowerCase(), $("adminPassword").value); }
+  catch (error) { message($("adminAuthMessage"), error.code === "auth/invalid-credential" ? "Email or password is incorrect, or this email is not registered." : friendlyError(error), "error"); }
   finally { button.disabled = false; }
 });
-$("adminOtpForm").addEventListener("submit", async event => {
-  event.preventDefault(); const code = $("adminOtp").value.replace(/\D/g, "");
-  if (!confirmation || code.length !== 6) return message($("adminAuthMessage"), "Enter the 6-digit verification code.", "error");
-  $("adminVerifyOtp").disabled = true;
-  try { await confirmation.confirm(code); }
-  catch (error) { message($("adminAuthMessage"), friendlyError(error), "error"); resetRecaptcha(); }
-  finally { $("adminVerifyOtp").disabled = false; }
+$("adminForgotPassword").addEventListener("click", async () => {
+  const email = $("adminEmail").value.trim().toLowerCase();
+  if (!email) return message($("adminAuthMessage"), "Enter your admin email first.", "error");
+  try { await sendPasswordResetEmail(auth, email); message($("adminAuthMessage"), "If the email is registered, Firebase has sent password reset instructions.", "success"); }
+  catch (error) { message($("adminAuthMessage"), friendlyError(error), "error"); }
 });
-$("adminChangeNumber").addEventListener("click", () => { confirmation = null; resetRecaptcha(); $("adminOtpForm").hidden = true; $("adminPhoneForm").hidden = false; $("adminOtp").value = ""; });
 $("adminLogout").addEventListener("click", () => signOut(auth));
 onAuthStateChanged(auth, requireSignedInAdmin);
 
@@ -204,15 +176,47 @@ async function loadCustomerDetails(uid, mobile) {
 async function loadAccess() {
   try {
     const result = await call("adminListAccessUsers");
-    $("accessRows").innerHTML = result.users.length ? result.users.map(user => `<tr><td>${escapeHtml(user.name || "—")}</td><td>${escapeHtml(user.mobile)}</td><td><span class="role-pill">${user.role === "admin" ? "Admin" : "Staff"}</span></td><td>${dateText(user.lastSignIn)}</td><td>${user.disabled ? "Disabled" : "Active"}</td></tr>`).join("") : '<tr><td colspan="5" class="empty-cell">No staff or admin accounts found.</td></tr>';
-  } catch (error) { $("accessRows").innerHTML = `<tr><td colspan="5" class="message error">${escapeHtml(friendlyError(error))}</td></tr>`; }
+    $("accessRows").innerHTML = result.users.length ? result.users.map(user => `<tr><td>${escapeHtml(user.name || "—")}</td><td>${escapeHtml(user.email || "—")}</td><td>${escapeHtml(user.mobile || "—")}</td><td><span class="role-pill">${user.role === "admin" ? "Admin" : "Staff"}</span></td><td>${dateText(user.lastSignIn)}</td><td>${user.disabled ? "Disabled" : "Active"}</td></tr>`).join("") : '<tr><td colspan="6" class="empty-cell">No staff or admin accounts found.</td></tr>';
+  } catch (error) { $("accessRows").innerHTML = `<tr><td colspan="6" class="message error">${escapeHtml(friendlyError(error))}</td></tr>`; }
 }
 $("refreshAccess").addEventListener("click", loadAccess);
 $("accessForm").addEventListener("submit", async event => {
   event.preventDefault(); const button = event.submitter; button.disabled = true;
-  try { const result = await call("adminSetUserRole", { mobile: $("accessMobile").value, role: $("accessRole").value }); message($("accessMessage"), `${result.message} The user will need to sign in again.`, "success"); event.target.reset(); await loadAccess(); }
+  try { const result = await call("adminSetUserRole", { email: $("accessEmail").value.trim().toLowerCase(), role: $("accessRole").value }); message($("accessMessage"), result.message, "success"); event.target.reset(); await loadAccess(); }
   catch (error) { message($("accessMessage"), friendlyError(error), "error"); }
   finally { button.disabled = false; }
+});
+
+$("adminEmailChangeForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = event.submitter;
+  button.disabled = true;
+  message($("adminEmailChangeMessage"), "Sending verification link…");
+  try {
+    const email = $("newAdminEmail").value.trim().toLowerCase();
+    await verifyBeforeUpdateEmail(auth.currentUser, email);
+    message($("adminEmailChangeMessage"), `Verification link sent to ${email}. Confirm it before signing in with the new email.`, "success");
+    event.target.reset();
+  } catch (error) {
+    message($("adminEmailChangeMessage"), friendlyError(error), "error");
+  } finally { button.disabled = false; }
+});
+
+$("adminTransferForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = event.submitter;
+  const email = $("successorAdminEmail").value.trim().toLowerCase();
+  if (!confirm(`Transfer the sole Admin role to ${email}? Your current Admin session will be signed out.`)) return;
+  button.disabled = true;
+  message($("adminTransferMessage"), "Transferring Admin access…");
+  try {
+    const result = await call("adminTransferSoleAdmin", { email });
+    message($("adminTransferMessage"), result.message, "success");
+    setTimeout(() => signOut(auth), 1200);
+  } catch (error) {
+    message($("adminTransferMessage"), friendlyError(error), "error");
+    button.disabled = false;
+  }
 });
 
 async function loadBusinessConfig() {

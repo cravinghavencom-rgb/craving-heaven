@@ -259,7 +259,7 @@ exports.staffSetOnlineOrderingPaused = onCall({ region: REGION }, async request 
 });
 
 async function requireStaff(request) {
-  if (!request.auth?.uid || (request.auth.token.staff !== true && request.auth.token.admin !== true)) {
+  if (!request.auth?.uid || request.auth.token.staff !== true) {
     throw new HttpsError("permission-denied", "Staff access is required.");
   }
   // Check the current Auth record as well as the ID token. This makes staff
@@ -271,7 +271,8 @@ async function requireStaff(request) {
     console.error("Could not verify current staff access", error);
     throw new HttpsError("permission-denied", "Staff access could not be verified.");
   }
-  if (currentUser.disabled || (currentUser.customClaims?.staff !== true && currentUser.customClaims?.admin !== true)) {
+  const emailTeamSignInReady = Boolean(currentUser.email && currentUser.emailVerified && currentUser.providerData?.some(provider => provider.providerId === "password") && !currentUser.phoneNumber);
+  if (currentUser.disabled || !emailTeamSignInReady || currentUser.customClaims?.staff !== true) {
     throw new HttpsError("permission-denied", "Staff access is required.");
   }
   return request.auth.uid;
@@ -283,7 +284,8 @@ async function requireAdmin(request) {
   }
   try {
     const currentUser = await getAuth().getUser(request.auth.uid);
-    if (currentUser.disabled || currentUser.customClaims?.admin !== true) {
+    const emailTeamSignInReady = Boolean(currentUser.email && currentUser.emailVerified && currentUser.providerData?.some(provider => provider.providerId === "password") && !currentUser.phoneNumber);
+    if (currentUser.disabled || !emailTeamSignInReady || currentUser.customClaims?.admin !== true) {
       throw new HttpsError("permission-denied", "Administrator access is required.");
     }
   } catch (error) {
@@ -308,11 +310,68 @@ async function requireActiveCustomer(request) {
   if (user.disabled || user.customClaims?.customerDataDeleted === true || block.exists) {
     throw new HttpsError("permission-denied", "This customer account is blocked. Please contact CRAVING HEAVEN.");
   }
+  if (user.customClaims?.admin === true || user.customClaims?.staff === true) {
+    throw new HttpsError("permission-denied", "Team accounts sign in through the Staff or Admin Desk and cannot use customer ordering.");
+  }
   if (!request.auth.token.phone_number && !user.phoneNumber) {
     throw new HttpsError("unauthenticated", "Sign in with your mobile number to continue.");
   }
   return uid;
 }
+
+exports.getCustomerAccount = onCall({ region: REGION }, async request => {
+  const uid = await requireActiveCustomer(request);
+  const [profileSnapshot, loyaltySnapshot, orderSnapshot, testOrderSnapshot] = await Promise.all([
+    db.collection("customerProfiles").doc(uid).get(),
+    db.collection("loyaltyAccounts").doc(uid).get(),
+    db.collection("orders").where("uid", "==", uid).limit(500).get(),
+    db.collection("testOrders").where("uid", "==", uid).where("isTestOrder", "==", true).limit(200).get()
+  ]);
+  const orders = [...orderSnapshot.docs, ...testOrderSnapshot.docs]
+    .map(document => ({ id: document.id, ...safeFirestoreData(document.data()), ...(testOrderSnapshot.docs.some(test => test.id === document.id) ? { isTestOrder: true } : {}) }))
+    .sort((left, right) => timestampMillis(right.createdAt) - timestampMillis(left.createdAt));
+  const profile = profileSnapshot.exists ? profileSnapshot.data() : { name: "", addresses: [] };
+  const loyalty = loyaltySnapshot.exists ? loyaltySnapshot.data() : { points: 0, completedOrders: 0, availableRewards: [] };
+  return {
+    profile: safeFirestoreData({ ...profile, addresses: Array.isArray(profile.addresses) ? profile.addresses : [] }),
+    loyalty: safeFirestoreData({ ...loyalty, points: availableCravingPoints(loyalty), availableRewards: Array.isArray(loyalty.availableRewards) ? loyalty.availableRewards : [] }),
+    orders
+  };
+});
+
+exports.saveCustomerProfile = onCall({ region: REGION }, async request => {
+  const uid = await requireActiveCustomer(request);
+  const data = request.data || {};
+  const name = typeof data.name === "string" ? data.name.trim() : "";
+  const addresses = data.addresses;
+  if (name.length < 2 || name.length > 80 || !Array.isArray(addresses) || addresses.length > 10) {
+    throw new HttpsError("invalid-argument", "Enter a name and save no more than 10 addresses.");
+  }
+  const ids = new Set();
+  const cleanAddresses = addresses.map(address => {
+    if (!address || typeof address !== "object" || Array.isArray(address)) throw new HttpsError("invalid-argument", "One of the saved addresses is invalid.");
+    const id = String(address.id || "").trim();
+    const label = String(address.label || "Address").trim();
+    const contactName = String(address.name || "").trim();
+    const line = String(address.address || "").trim();
+    const landmark = String(address.landmark || "").trim();
+    const area = String(address.area || "").trim();
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(id) || ids.has(id) || label.length > 30 || contactName.length < 2 || contactName.length > 80 || line.length < 8 || line.length > 300 || landmark.length > 100 || !DELIVERY_AREAS.has(area)) {
+      throw new HttpsError("invalid-argument", "Check each address label, contact name, address, and delivery area.");
+    }
+    ids.add(id);
+    const clean = { id, label, name: contactName, address: line, landmark, area, isDefault: address.isDefault === true };
+    const location = address.location;
+    if (location && typeof location === "object" && Number.isFinite(Number(location.latitude)) && Number.isFinite(Number(location.longitude)) && Math.abs(Number(location.latitude)) <= 90 && Math.abs(Number(location.longitude)) <= 180) {
+      clean.location = { latitude: Number(location.latitude), longitude: Number(location.longitude) };
+    }
+    return clean;
+  });
+  if (cleanAddresses.length && !cleanAddresses.some(address => address.isDefault)) cleanAddresses[0].isDefault = true;
+  if (cleanAddresses.filter(address => address.isDefault).length > 1) throw new HttpsError("invalid-argument", "Choose only one default address.");
+  await db.collection("customerProfiles").doc(uid).set({ name, addresses: cleanAddresses, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  return { name, addresses: cleanAddresses };
+});
 
 exports.adminUpdateRestaurantSettings = onCall({ region: REGION }, async request => {
   const adminUid = await requireAdmin(request);
@@ -982,6 +1041,7 @@ exports.adminListAccessUsers = onCall({ region: REGION }, async request => {
     const page = await getAuth().listUsers(1000, pageToken);
     users.push(...page.users.filter(user => user.customClaims?.staff === true || user.customClaims?.admin === true).map(user => ({
       uid: user.uid,
+      email: user.email || "",
       mobile: user.phoneNumber || "",
       name: user.displayName || "",
       role: user.customClaims?.admin === true ? "admin" : "staff",
@@ -995,21 +1055,21 @@ exports.adminListAccessUsers = onCall({ region: REGION }, async request => {
 
 exports.adminSetUserRole = onCall({ region: REGION }, async request => {
   const adminUid = await requireAdmin(request);
-  const mobile = normalizeIndianMobile(request.data?.mobile);
+  const email = String(request.data?.email || "").trim().toLowerCase();
   const role = String(request.data?.role || "");
-  if (!mobile || !["admin", "staff", "customer"].includes(role)) throw new HttpsError("invalid-argument", "Enter a valid mobile number and choose customer, staff, or admin.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !["staff", "customer"].includes(role)) throw new HttpsError("invalid-argument", "Enter a valid email and choose Staff or remove team access.");
   let user;
   try {
-    user = await getAuth().getUserByPhoneNumber(mobile);
+    user = await getAuth().getUserByEmail(email);
   } catch (error) {
-    if (error.code === "auth/user-not-found") throw new HttpsError("not-found", "This number must sign in with OTP on the website once before access can be assigned.");
-    throw new HttpsError("unavailable", "Could not look up this phone account. Please retry.");
+    if (error.code === "auth/user-not-found") throw new HttpsError("not-found", "This person must create an email sign-in account before access can be assigned.");
+    throw new HttpsError("unavailable", "Could not look up this email account. Please retry.");
   }
+  if (user.disabled || !user.emailVerified || !user.providerData.some(provider => provider.providerId === "password")) throw new HttpsError("failed-precondition", "The email-and-password account must be active and verified before team access can be assigned.");
   const claims = { ...(user.customClaims || {}) };
-  if (role === "admin") { claims.admin = true; claims.staff = true; }
-  else if (role === "staff") { delete claims.admin; claims.staff = true; }
+  if (role === "staff") { delete claims.admin; claims.staff = true; }
   else { delete claims.admin; delete claims.staff; }
-  if (role !== "admin" && user.customClaims?.admin === true) {
+  if (user.customClaims?.admin === true) {
     let adminCount = 0;
     let pageToken;
     do {
@@ -1021,8 +1081,57 @@ exports.adminSetUserRole = onCall({ region: REGION }, async request => {
   }
   await getAuth().setCustomUserClaims(user.uid, claims);
   await getAuth().revokeRefreshTokens(user.uid);
-  await db.collection("adminAccessChanges").add({ changedBy: adminUid, targetUid: user.uid, mobile, role, createdAt: FieldValue.serverTimestamp() });
-  return { mobile, role, changedBy: adminUid, message: "The account must sign in again for the new access to take effect." };
+  await db.collection("adminAccessChanges").add({ changedBy: adminUid, targetUid: user.uid, email, role, createdAt: FieldValue.serverTimestamp() });
+  return { email, role, changedBy: adminUid, message: "The account must sign in again for the new access to take effect." };
+});
+
+exports.adminTransferSoleAdmin = onCall({ region: REGION }, async request => {
+  const currentAdminUid = await requireAdmin(request);
+  const email = String(request.data?.email || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpsError("invalid-argument", "Enter the verified email account that should become the administrator.");
+  let successor;
+  try { successor = await getAuth().getUserByEmail(email); }
+  catch (error) { if (error.code === "auth/user-not-found") throw new HttpsError("not-found", "That person must create an email account before becoming the administrator."); throw new HttpsError("unavailable", "Could not look up that email account."); }
+  if (successor.disabled || !successor.emailVerified || !successor.providerData.some(provider => provider.providerId === "password")) {
+    throw new HttpsError("failed-precondition", "The new administrator must use an active, verified email-and-password account.");
+  }
+  if (successor.customClaims?.staff === true && successor.uid !== currentAdminUid) {
+    throw new HttpsError("failed-precondition", "Keep Admin and Staff sign-ins separate. Grant Staff access to a different verified email before transferring Admin access.");
+  }
+  const auth = getAuth();
+  const nextClaims = { ...(successor.customClaims || {}), admin: true };
+  delete nextClaims.staff;
+  await auth.setCustomUserClaims(successor.uid, nextClaims);
+  let pageToken;
+  do {
+    const page = await auth.listUsers(1000, pageToken);
+    for (const user of page.users) {
+      if (user.uid === successor.uid || user.customClaims?.admin !== true) continue;
+      const claims = { ...(user.customClaims || {}) };
+      delete claims.admin;
+      // A former Admin does not inherit Staff implicitly during a transfer.
+      // Staff access must be granted explicitly from the team access screen.
+      delete claims.staff;
+      await auth.setCustomUserClaims(user.uid, claims);
+      await auth.revokeRefreshTokens(user.uid);
+    }
+    pageToken = page.pageToken;
+  } while (pageToken);
+  await auth.revokeRefreshTokens(successor.uid);
+  await db.collection("adminAccessChanges").add({ changedBy: currentAdminUid, targetUid: successor.uid, email, role: "admin-transfer", createdAt: FieldValue.serverTimestamp() });
+  return { email, message: "Administrator access transferred. Sign in again using the new admin email." };
+});
+
+exports.finishTeamEmailSetup = onCall({ region: REGION }, async request => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to finish team email setup.");
+  const user = await getAuth().getUser(uid);
+  if (user.disabled || (user.customClaims?.admin !== true && user.customClaims?.staff !== true)) throw new HttpsError("permission-denied", "Only an authorized staff or admin account can finish this setup.");
+  if (!user.email || !user.emailVerified || !user.providerData.some(provider => provider.providerId === "password")) throw new HttpsError("failed-precondition", "Create and verify the email-and-password sign-in first.");
+  if (user.phoneNumber) await getAuth().updateUser(uid, { phoneNumber: null });
+  await getAuth().revokeRefreshTokens(uid);
+  await db.collection("adminAccessChanges").add({ changedBy: uid, targetUid: uid, email: user.email, role: "team-email-setup", createdAt: FieldValue.serverTimestamp() });
+  return { email: user.email, message: "Team email sign-in is ready. This phone number can now be used for a customer account." };
 });
 
 exports.adminListCustomers = onCall({ region: REGION }, async request => {

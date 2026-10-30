@@ -5,8 +5,12 @@ let menuInitialized = false;
 let welcomeFlyerShownThisPage = false;
 let customerOnlineOrderHistoryLoaded = false;
 let customerAuthStateResolved = false;
+let customerSessionType = "signed-out";
 function isCustomerSignedIn() {
-  return Boolean(window.firebaseAuth?.currentUser?.uid);
+  return customerSessionType === "customer" && Boolean(window.firebaseAuth?.currentUser?.uid);
+}
+function currentCustomerUser() {
+  return isCustomerSignedIn() ? window.firebaseAuth.currentUser : null;
 }
 function applyRemoteBusinessConfig(data) {
   if (!data || !data.menu || !Array.isArray(data.combos) || !data.rewards) return false;
@@ -384,6 +388,15 @@ const FCM_VAPID_KEY =
     try {
       const credential = await confirmationResult.confirm(otp);
       if (!credential?.user) throw new Error("The verified customer session could not be loaded. Please try signing in again.");
+      const token = await credential.user.getIdTokenResult(true);
+      if (token.claims.admin === true || token.claims.staff === true) {
+        customerSessionType = "team";
+        otpLoginMessage.textContent = "This is a team account. Use the Staff or Admin Desk email sign-in.";
+        updatePlaceOrderButton();
+        if (cartOverlay?.classList.contains("active")) renderCart();
+        return;
+      }
+      customerSessionType = "customer";
 
       otpLoginMessage.textContent =
         "Mobile number verified successfully.";
@@ -618,7 +631,18 @@ function handlePlaceOrderClick() {
 
     window.FirebaseAuthAPI.onAuthStateChanged(
       window.firebaseAuth,
-      user => {
+      async user => {
+        customerAuthStateResolved = false;
+        customerSessionType = user ? "checking" : "signed-out";
+        if (user) {
+          try {
+            const token = await user.getIdTokenResult(true);
+            customerSessionType = token.claims.admin === true || token.claims.staff === true ? "team" : "customer";
+          } catch (error) {
+            console.error("Could not classify the signed-in session:", error);
+            customerSessionType = "unknown";
+          }
+        }
         const nextUid = user?.uid || "";
         if (lastCustomerAuthUid && lastCustomerAuthUid !== nextUid) {
           currentLoyaltyAccount = { points: 0, completedOrders: 0, availableRewards: [] };
@@ -641,7 +665,7 @@ function handlePlaceOrderClick() {
         updatePlaceOrderButton();
         renderRewardsJourney(currentLoyaltyAccount, isCustomerSignedIn());
         if (cartOverlay?.classList.contains("active")) renderCart();
-        refreshAccountScreens(user);
+        refreshAccountScreens(customerSessionType === "customer" ? user : null);
 
         if (user) {
           console.log(
@@ -672,7 +696,7 @@ function handlePlaceOrderClick() {
     if (categoryNavigation) categoryNavigation.hidden = screenName !== "menu";
     if (screenName === "game") window.dispatchEvent(new Event("craving-heaven:show-game"));
     window.scrollTo({ top: 0, behavior: "smooth" });
-    if (screenName === "orders" || screenName === "profile" || screenName === "rewards") refreshAccountScreens(window.firebaseAuth?.currentUser || null);
+    if (screenName === "orders" || screenName === "profile" || screenName === "rewards") refreshAccountScreens(currentCustomerUser());
   }
 
   function accountSignInCard(message) {
@@ -688,7 +712,7 @@ function handlePlaceOrderClick() {
     return Math.max(0, Number(account?.points || 0)) + gamePointLots(account).reduce((sum, lot) => sum + Math.max(0, Number(lot.points || 0)), 0);
   }
 
-  function renderRewardsJourney(account = currentLoyaltyAccount, signedIn = !!window.firebaseAuth?.currentUser) {
+  function renderRewardsJourney(account = currentLoyaltyAccount, signedIn = isCustomerSignedIn()) {
     const root = document.getElementById("rewardsJourneyCards");
     const count = document.getElementById("rewardOrderCount");
     if (!root || !count) return;
@@ -748,7 +772,7 @@ function handlePlaceOrderClick() {
   function renderSavedAddresses() {
     if (!savedAddresses) return;
     const addresses = Array.isArray(currentCustomerProfile.addresses) ? currentCustomerProfile.addresses : [];
-    if (!window.firebaseAuth?.currentUser) {
+    if (!isCustomerSignedIn()) {
       savedAddresses.innerHTML = `<div class="address-empty">Log in to save delivery addresses.</div>`;
       return;
     }
@@ -769,14 +793,14 @@ function handlePlaceOrderClick() {
   }
 
   async function saveCustomerProfile(nextProfile) {
-    const user = window.firebaseAuth?.currentUser;
+    const user = currentCustomerUser();
     if (!user) throw new Error("Please log in to save your address.");
-    const api = window.FirebaseFirestoreAPI;
-    await api.setDoc(api.doc(window.firebaseDB, "customerProfiles", user.uid), {
+    const callable = window.FirebaseFunctionsAPI?.httpsCallable;
+    if (!callable || !window.firebaseFunctions) throw new Error("The secure address service is unavailable. Please try again.");
+    const response = await callable(window.firebaseFunctions, "saveCustomerProfile")({
       name: String(nextProfile.name || "").trim(),
-      addresses: Array.isArray(nextProfile.addresses) ? nextProfile.addresses : [],
-      updatedAt: api.serverTimestamp()
-    }, { merge: true });
+      addresses: Array.isArray(nextProfile.addresses) ? nextProfile.addresses : []
+    });
     currentCustomerProfile = { ...currentCustomerProfile, ...nextProfile };
     renderSavedAddresses();
     refreshHomeDeliverySelector();
@@ -893,7 +917,7 @@ function handlePlaceOrderClick() {
   function renderHomeDeliveryAddresses() {
     if (!homeSavedAddressList) return;
     const addresses = Array.isArray(currentCustomerProfile.addresses) ? currentCustomerProfile.addresses : [];
-    if (!window.firebaseAuth?.currentUser) {
+    if (!isCustomerSignedIn()) {
       homeSavedAddressList.innerHTML = `<p class="delivery-address-empty">Sign in to keep Home, Work, and other addresses saved to your account.</p>`;
       return;
     }
@@ -948,6 +972,7 @@ function handlePlaceOrderClick() {
   }
 
   async function refreshAccountScreens(user) {
+    if (user && (customerSessionType !== "customer" || user.uid !== window.firebaseAuth?.currentUser?.uid)) user = null;
     const refreshId = ++accountRefreshToken;
     if (!ordersContent || !profileContent) return;
     const addAddressButton = document.getElementById("addAddressButton");
@@ -971,6 +996,7 @@ function handlePlaceOrderClick() {
       currentLoyaltyAccount = { points: 0, completedOrders: 0, availableRewards: [] };
       loyaltyAccountLoaded = false;
       customerAccountLoadFailed = false;
+      customerAccountLoadDiagnostic = "";
       customerHasOrderedOnline = false;
       customerOnlineOrderHistoryLoaded = false;
       renderRewardsJourney(currentLoyaltyAccount, false);
@@ -983,6 +1009,7 @@ function handlePlaceOrderClick() {
     const phone = user.phoneNumber || "Mobile number verified";
     loyaltyAccountLoaded = false;
     customerAccountLoadFailed = false;
+    customerAccountLoadDiagnostic = "";
     const homePointsBalance = document.getElementById("homeLoyaltyPointsBalance");
     const homePointsSummary = document.getElementById("homeLoyaltySummary");
     if (homePointsBalance) homePointsBalance.textContent = "Loading…";
@@ -992,9 +1019,10 @@ function handlePlaceOrderClick() {
     profileContent.innerHTML = `<div class="profile-account-card"><div class="profile-avatar">${esc(phone.slice(-2))}</div><div><span>LOGGED IN AS</span><strong>${esc(phone)}</strong><p>Your account is ready.</p></div><button type="button" class="account-secondary-button" data-account-logout>LOG OUT</button></div>`;
     if (savedAddresses) savedAddresses.innerHTML = `<div class="account-loading">Loading saved addresses…</div>`;
     ordersContent.innerHTML = `<div class="account-loading">Loading your orders…</div>`;
-    const firestoreApi = window.FirebaseFirestoreAPI;
-    if (!window.firebaseDB || !firestoreApi?.getDocs || !firestoreApi?.getDoc || !firestoreApi?.query || !firestoreApi?.where) {
+    const callable = window.FirebaseFunctionsAPI?.httpsCallable;
+    if (!window.firebaseFunctions || !callable) {
       customerAccountLoadFailed = true;
+      customerAccountLoadDiagnostic = "account-service-unavailable";
       renderRewardsJourney(currentLoyaltyAccount, isCustomerSignedIn());
       if (homePointsBalance) homePointsBalance.textContent = "—";
       if (headerPointsBalance) headerPointsBalance.textContent = "—";
@@ -1004,47 +1032,26 @@ function handlePlaceOrderClick() {
     }
 
     try {
-      const profileRef = firestoreApi.doc(window.firebaseDB, "customerProfiles", user.uid);
-      const loyaltyRef = firestoreApi.doc(window.firebaseDB, "loyaltyAccounts", user.uid);
-      const ordersQuery = firestoreApi.query(firestoreApi.collection(window.firebaseDB, "orders"), firestoreApi.where("uid", "==", user.uid));
-      // Firestore rules are not query filters: the testOrders read must include
-      // the isTestOrder constraint or the whole account refresh is rejected.
-      const testOrdersQuery = firestoreApi.query(
-        firestoreApi.collection(window.firebaseDB, "testOrders"),
-        firestoreApi.where("uid", "==", user.uid),
-        firestoreApi.where("isTestOrder", "==", true)
-      );
-      // A history-query hiccup must not discard saved addresses or the points
-      // balance. Each panel can now display/retry its own failed read.
-      const [profileResult, loyaltyResult, ordersResult, testOrdersResult] = await Promise.allSettled([
-        firestoreApi.getDoc(profileRef), firestoreApi.getDoc(loyaltyRef), firestoreApi.getDocs(ordersQuery), firestoreApi.getDocs(testOrdersQuery)
-      ]);
+      const response = await callable(window.firebaseFunctions, "getCustomerAccount")({});
       if (refreshId !== accountRefreshToken || window.firebaseAuth?.currentUser?.uid !== user.uid) return;
-      customerAccountLoadFailed = [profileResult, loyaltyResult, ordersResult].some(result => result.status === "rejected");
-      if (profileResult.status !== "fulfilled") throw profileResult.reason;
-      const profileSnapshot = profileResult.value;
-      const loyaltySnapshot = loyaltyResult.status === "fulfilled" ? loyaltyResult.value : null;
-      if (loyaltyResult.status === "rejected") console.error("Could not load customer Craving Points:", loyaltyResult.reason);
-      currentCustomerProfile = profileSnapshot.exists() ? profileSnapshot.data() : { addresses: [] };
+      const account = response.data || {};
+      customerAccountLoadFailed = false;
+      customerAccountLoadDiagnostic = "";
+      currentCustomerProfile = account.profile || { name: "", addresses: [] };
       if (!Array.isArray(currentCustomerProfile.addresses)) currentCustomerProfile.addresses = [];
       const name = currentCustomerProfile.name || "";
       profileContent.innerHTML = `<div class="profile-account-card"><div class="profile-avatar">${esc(phone.slice(-2))}</div><div><span>LOGGED IN AS</span><strong>${esc(name || phone)}</strong><p>${name ? `${esc(phone)} · Your account is ready.` : "Your account is ready."}</p></div><button type="button" class="account-secondary-button" data-account-logout>LOG OUT</button></div>`;
       renderSavedAddresses();
       prefillCheckoutFromDefaultAddress();
-      const orderDocuments = ordersResult.status === "fulfilled" ? ordersResult.value.docs : [];
-      const testOrderDocuments = testOrdersResult.status === "fulfilled" ? testOrdersResult.value.docs : [];
-      const orders = [
-        ...orderDocuments.map(document => ({ id: document.id, ...document.data() })),
-        ...testOrderDocuments.map(document => ({ id: document.id, ...document.data(), isTestOrder: true }))
-      ];
-      customerOnlineOrderHistoryLoaded = ordersResult.status === "fulfilled";
+      const orders = Array.isArray(account.orders) ? account.orders : [];
+      customerOnlineOrderHistoryLoaded = true;
       customerHasOrderedOnline = orders.some(order => order.source === "website" && order.isTestOrder !== true && !["cancelled", "canceled"].includes(String(order.status || "").toLowerCase()));
       const getTime = value => value?.toDate ? value.toDate().getTime() : new Date(value || 0).getTime();
       orders.sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt));
       const pointsBalance = document.getElementById("loyaltyPointsBalance");
-      const loyaltyData = loyaltySnapshot?.exists() ? loyaltySnapshot.data() : { points: 0, completedOrders: 0, availableRewards: [] };
+      const loyaltyData = account.loyalty || { points: 0, completedOrders: 0, availableRewards: [] };
       currentLoyaltyAccount = { ...loyaltyData, points: cravingPointsBalance(loyaltyData) };
-      loyaltyAccountLoaded = loyaltyResult.status === "fulfilled";
+      loyaltyAccountLoaded = true;
       if (!Array.isArray(currentLoyaltyAccount.availableRewards)) currentLoyaltyAccount.availableRewards = [];
       if (currentLoyaltyAccount.welcomeReservationId) {
         const reservationOrder = orders.find(order => order.id === currentLoyaltyAccount.welcomeReservationId);
@@ -1072,14 +1079,9 @@ function handlePlaceOrderClick() {
       if (headerPointsBalance) headerPointsBalance.textContent = loyaltyAccountLoaded ? `${pointsText} pts` : "Retry";
       const homePointsSummary = document.getElementById("homeLoyaltySummary");
       if (homePointsSummary) homePointsSummary.textContent = loyaltyAccountLoaded ? "Craving Points · combos earn half rate" : "Points could not load · try again";
-      renderRewardsJourney(currentLoyaltyAccount, loyaltyResult.status === "fulfilled");
+      renderRewardsJourney(currentLoyaltyAccount, true);
       if (cartOverlay?.classList.contains("active")) renderCart();
       maybeShowFirstOrderFlyer();
-      if (ordersResult.status === "rejected" || testOrdersResult.status === "rejected") {
-        console.error("Could not load one or more customer order histories:", ordersResult.status === "rejected" ? ordersResult.reason : testOrdersResult.reason);
-        ordersContent.innerHTML = `<div class="account-empty"><h2>Orders couldn’t load</h2><p>Your profile, address and points loaded. Check your connection and try the order history again.</p><button type="button" class="account-primary-button" data-reload-orders>TRY AGAIN</button></div>`;
-        return;
-      }
       if (!orders.length) {
         ordersContent.innerHTML = `<div class="account-empty"><div class="account-empty-icon">▤</div><h2>No orders yet</h2><p>Your order history will show here after your first order.</p><button type="button" class="account-primary-button" data-screen="menu">EXPLORE MENU</button></div>`;
         return;
@@ -1094,6 +1096,7 @@ function handlePlaceOrderClick() {
     } catch (error) {
       console.error("Could not load customer orders:", error);
       customerAccountLoadFailed = true;
+      customerAccountLoadDiagnostic = String(error?.code || "account-read-failed").replace(/^firestore\//, "");
       renderRewardsJourney(currentLoyaltyAccount, isCustomerSignedIn());
       if (cartOverlay?.classList.contains("active")) renderCart();
       if (savedAddresses?.querySelector(".account-loading")) {
@@ -1442,7 +1445,7 @@ function renderCheckoutSummary() {
               🎁 ${esc(item.name)}
             </span>
 
-            <strong>FREE</strong>
+            <strong>₹0 · FREE</strong>
           </div>
         `;
       }
@@ -1462,7 +1465,7 @@ function renderCheckoutSummary() {
         </div>
       `;
     })
-    .join("") + (selectedReward?.kind === "free-item" ? `<div class="checkout-summary-item"><span>🎁 ${esc(selectedReward.item)} · Royal reward</span><strong>FREE</strong></div>` : "") + (selectedWelcomeOffer ? `<div class="checkout-summary-item"><span>🎁 ${esc(REWARDS_CONFIG.welcomeItem)} · First-order gift</span><strong>FREE</strong></div>` : "");
+    .join("") + (selectedReward?.kind === "free-item" ? `<div class="checkout-summary-item"><span>🎁 ${esc(selectedReward.item)} · Royal reward</span><strong>₹0 · FREE</strong></div>` : "") + (selectedWelcomeOffer ? `<div class="checkout-summary-item"><span>🎁 ${esc(REWARDS_CONFIG.welcomeItem)} · First-order gift</span><strong>₹0 · FREE</strong></div>` : "");
 
 
   checkoutOrderSummary.innerHTML = `
@@ -1543,13 +1546,13 @@ async function openCheckout() {
     }
     if (placeOrderNote) placeOrderNote.textContent = "Checking your Craving Points and first-order gift…";
     try {
-      await refreshAccountScreens(window.firebaseAuth.currentUser);
+      await refreshAccountScreens(currentCustomerUser());
     } finally {
       checkoutAccountCheckPending = false;
       updatePlaceOrderButton();
     }
     if (!loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded || customerAccountLoadFailed) {
-      accountWarning = "We couldn’t verify your customer account yet. You can enter your address, but we’ll need to verify your account before placing the order. If this continues, restore customer access in Admin and sign in again.";
+      accountWarning = `Your login is active, but account details couldn’t load (${customerAccountLoadDiagnostic || "account-read-failed"}). You can enter your address; the order will wait until account verification succeeds.`;
       if (placeOrderNote) placeOrderNote.textContent = accountWarning;
       if (cartOverlay?.classList.contains("active")) renderCart();
     }
@@ -1682,7 +1685,7 @@ async function continueToOrder() {
   }
   if (!validateCheckoutForm()) return;
 
-  const user = window.firebaseAuth?.currentUser;
+  const user = currentCustomerUser();
   const pickup = isPickupSelected();
   if (!user) {
     checkoutMessage.textContent = "Your login session has expired. Please log in again.";
@@ -1698,7 +1701,7 @@ async function continueToOrder() {
       checkoutSubmit.textContent = "PLACE ORDER";
     }
     if (!loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded || customerAccountLoadFailed) {
-      checkoutMessage.textContent = "We still can’t verify this customer account, so the order can’t be placed yet. Close checkout, restore customer access in Admin if it is blocked, sign in again, then tap RETRY in the cart.";
+      checkoutMessage.textContent = `Account details still couldn’t load (${customerAccountLoadDiagnostic || "account-read-failed"}). Your login remains active. Please retry the account check before placing this order.`;
       return;
     }
     renderCheckoutSummary();
@@ -1763,7 +1766,7 @@ async function continueToOrder() {
     closeCart();
     render();
     openOrderSuccess(order.orderId, pickup ? "pickup" : "delivery", order.addressSaved === true, checkoutAddressLabel?.value || "", order.orderNumber || "", order.isTestOrder === true);
-    refreshAccountScreens(window.firebaseAuth?.currentUser || null);
+    refreshAccountScreens(currentCustomerUser());
   } catch (error) {
     console.error("Order creation failed:", error);
     const code = error?.code || "";
@@ -1887,6 +1890,7 @@ let pendingGpsCoordinates = null;
   let currentLoyaltyAccount = { points: 0, completedOrders: 0, availableRewards: [] };
   let loyaltyAccountLoaded = false;
   let customerAccountLoadFailed = false;
+  let customerAccountLoadDiagnostic = "";
   let accountRefreshToken = 0;
   let checkoutAccountCheckPending = false;
   
@@ -2552,7 +2556,7 @@ ${esc(offer.freeItem)}
   const welcomeOfferNote = !isCustomerSignedIn()
     ? "Sign in to check eligibility. Add a regular menu item to your first online order and the burger will be free."
     : customerAccountLoadFailed
-      ? "We couldn’t verify your account. Retry the check, or sign in again after customer access has been restored."
+      ? `Your login is active, but account details couldn’t load. Tap RETRY; if it continues, share this check code: ${customerAccountLoadDiagnostic || "account-read-failed"}.`
     : !loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded
       ? "We’re checking your account so we can confirm this first-order gift."
       : !welcomeEligible
@@ -2777,12 +2781,12 @@ document.addEventListener("click", event => {
   }
 
   if (event.target.closest("[data-reload-orders]")) {
-    refreshAccountScreens(window.firebaseAuth?.currentUser || null);
+    refreshAccountScreens(currentCustomerUser());
     return;
   }
 
   if (event.target.closest("[data-reload-account]")) {
-    refreshAccountScreens(window.firebaseAuth?.currentUser || null);
+    refreshAccountScreens(currentCustomerUser());
     return;
   }
 
@@ -2925,7 +2929,7 @@ document.addEventListener("click", event => {
       if (event.target === deliveryLocationDialog) deliveryLocationDialog.close();
     });
     document.getElementById("homeAddAddressButton")?.addEventListener("click", () => {
-      if (!window.firebaseAuth?.currentUser) {
+      if (!isCustomerSignedIn()) {
         if (deliveryLocationMessage) deliveryLocationMessage.textContent = "Sign in with your mobile number to save addresses to your account.";
         openCustomerLogin();
         return;
@@ -2962,7 +2966,7 @@ document.addEventListener("click", event => {
         };
         useCurrentLocationButton.disabled = false;
         if (deliveryLocationMessage) deliveryLocationMessage.textContent = "GPS pin found. Add your building or flat and confirm the delivery area below. The pin is saved only when you save this address.";
-        if (!window.firebaseAuth?.currentUser) {
+        if (!isCustomerSignedIn()) {
           if (deliveryLocationMessage) deliveryLocationMessage.textContent += " Sign in is needed to save it to your account.";
           openCustomerLogin();
           return;
@@ -3038,7 +3042,7 @@ document.addEventListener("click", event => {
     refreshHomeDeliverySelector(`address:${chosen.id}`);
   });
   document.getElementById("addAddressButton")?.addEventListener("click", () => {
-    if (!window.firebaseAuth?.currentUser) {
+    if (!isCustomerSignedIn()) {
       openCustomerLogin();
       return;
     }

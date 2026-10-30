@@ -17,10 +17,11 @@
   <main class="admin-main">
     <section id="adminLogin" class="card login-card">
       <span class="eyebrow">OWNER ACCESS</span><h1>Sign in to Admin Desk</h1>
-      <p class="muted">Use an administrator mobile number. Admin permissions are managed securely by Firebase.</p>
-      <form id="adminPhoneForm"><label for="adminPhone">MOBILE NUMBER</label><div class="phone-row"><span>+91</span><input id="adminPhone" inputmode="numeric" autocomplete="tel-national" maxlength="10" placeholder="10-digit number" required><button class="button button-primary" id="adminSendOtp" type="submit">Send OTP</button></div></form>
-      <form id="adminOtpForm" hidden><label for="adminOtp">VERIFICATION CODE</label><div class="phone-row"><input id="adminOtp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" required><button class="button button-primary" id="adminVerifyOtp" type="submit">Verify</button></div><button id="adminChangeNumber" class="text-button" type="button">Use another number</button></form>
-      <p id="adminAuthMessage" class="message" role="status"></p><div id="adminRecaptcha"></div>
+      <p class="muted">Admin access uses your verified team email. Customer mobile OTP sign-in is separate.</p>
+      <form id="adminEmailForm"><label for="adminEmail">ADMIN EMAIL</label><input id="adminEmail" type="email" autocomplete="username" required><label for="adminPassword">PASSWORD</label><input id="adminPassword" type="password" autocomplete="current-password" required><button class="button button-primary full-button" id="adminEmailSignIn" type="submit">Sign in to Admin</button></form>
+      <button id="adminForgotPassword" class="text-button" type="button">Forgot password?</button>
+      <p id="adminAuthMessage" class="message" role="status"></p>
+      <p class="muted">Existing team phone account? <a href="/team-account-setup.html">Set up email sign-in</a></p>
     </section>
 
     <section id="adminApp" hidden>
@@ -67,9 +68,11 @@
       </section>
 
       <section class="admin-section" data-admin-section="access" hidden>
-        <div class="section-heading"><div><span class="eyebrow">TEAM PERMISSIONS</span><h2>Staff and admin access</h2><p class="muted">Grant access only to people you trust. A person must sign in with OTP once before access can be assigned.</p></div><button id="refreshAccess" class="button button-quiet" type="button">Refresh</button></div>
-        <form id="accessForm" class="card form-card"><label>Mobile number<input id="accessMobile" inputmode="tel" placeholder="10-digit number" required></label><label>Access level<select id="accessRole"><option value="staff">Staff · orders and walk-in desk</option><option value="admin">Admin · all business controls</option><option value="customer">Customer only · remove staff/admin access</option></select></label><button class="button button-primary" type="submit">Update access</button><p id="accessMessage" class="message" role="status"></p></form>
-        <div class="card"><div class="section-heading compact"><div><span class="eyebrow">CURRENT TEAM</span><h3>Authorized accounts</h3></div></div><div class="table-scroll"><table><thead><tr><th>Name</th><th>Mobile</th><th>Access</th><th>Last sign-in</th><th>Status</th></tr></thead><tbody id="accessRows"><tr><td colspan="5" class="empty-cell">Loading access list…</td></tr></tbody></table></div></div>
+        <div class="section-heading"><div><span class="eyebrow">TEAM PERMISSIONS</span><h2>Staff and admin access</h2><p class="muted">Team members sign in with verified email and password. Customers use mobile OTP. Create or migrate team accounts from Team Email Setup before granting access.</p></div><button id="refreshAccess" class="button button-quiet" type="button">Refresh</button></div>
+        <form id="accessForm" class="card form-card"><label>Team email<input id="accessEmail" type="email" autocomplete="email" placeholder="staff@example.com" required></label><label>Access level<select id="accessRole"><option value="staff">Staff · orders and walk-in desk</option><option value="customer">Remove team access</option></select></label><button class="button button-primary" type="submit">Update access</button><p id="accessMessage" class="message" role="status"></p></form>
+        <form id="adminEmailChangeForm" class="card form-card"><div><span class="eyebrow">ADMIN SIGN-IN</span><h3>Change administrator email</h3><p class="muted">We’ll send a verification link. The current Admin account keeps its access.</p></div><label>New admin email<input id="newAdminEmail" type="email" autocomplete="email" required></label><button class="button button-quiet" type="submit">Send verification link</button><p id="adminEmailChangeMessage" class="message" role="status"></p></form>
+        <form id="adminTransferForm" class="card form-card"><div><span class="eyebrow">SINGLE ADMIN OWNER</span><h3>Transfer Admin access</h3><p class="muted">Transfer the sole Admin role to a verified email account. The current Admin will be signed out after transfer.</p></div><label>New administrator email<input id="successorAdminEmail" type="email" autocomplete="email" required></label><button class="button button-danger" type="submit">Transfer sole Admin access</button><p id="adminTransferMessage" class="message" role="status"></p></form>
+        <div class="card"><div class="section-heading compact"><div><span class="eyebrow">CURRENT TEAM</span><h3>Authorized accounts</h3></div></div><div class="table-scroll"><table><thead><tr><th>Name</th><th>Email</th><th>Phone (migration only)</th><th>Access</th><th>Last sign-in</th><th>Status</th></tr></thead><tbody id="accessRows"><tr><td colspan="6" class="empty-cell">Loading access list…</td></tr></tbody></table></div></div>
       </section>
 
       <section class="admin-section" data-admin-section="menu" hidden>
@@ -112,6 +115,6 @@
     </section>
     <dialog id="adminGameTestDialog" class="admin-game-test-dialog" aria-label="Craving Run admin test"><div class="admin-game-test-heading"><strong>ADMIN GAME TEST</strong><button id="closeAdminGameTest" type="button" class="button button-quiet">Close test</button></div><iframe id="adminGameTestFrame" title="Craving Run level test"></iframe></dialog>
   </main>
-  <script type="module" src="admin.js?v=20261028-order-rewards-v1"></script>
+  <script type="module" src="admin.js?v=20261030-central-auth-v1"></script>
 </body>
 </html>

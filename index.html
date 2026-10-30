@@ -682,103 +682,15 @@
   </footer>
 
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-  import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app-check.js";
+  import { firebaseApp, useLocalFirebaseEmulators } from "./firebase-client.js?v=20261030-central-auth-v1";
 
   import {
-    getAuth,
-    RecaptchaVerifier,
-    signInWithPhoneNumber,
-    signInWithCustomToken,
-    onAuthStateChanged,
-    setPersistence,
-    connectAuthEmulator,
-    browserLocalPersistence
-  } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
-
-import {
-  getFirestore,
-  connectFirestoreEmulator,
-  collection,
-  doc,
-  setDoc,
-  addDoc,
-    serverTimestamp,
-    getDocs,
-    getDoc,
-    query,
-    where
-} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
-  import { getFunctions, connectFunctionsEmulator, httpsCallable } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-functions.js";
-  import { signOut } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
-
-	import {
   getMessaging,
   getToken,
   onMessage
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-messaging.js";
 
-  const emulatorHost = window.location.hostname;
-  const isLoopbackHost = ["localhost", "127.0.0.1"].includes(emulatorHost);
-  const isPrivateLanHost = /^10\./.test(emulatorHost)
-    || /^192\.168\./.test(emulatorHost)
-    || /^172\.(1[6-9]|2\d|3[01])\./.test(emulatorHost);
-  const useLocalFirebaseEmulators = isLoopbackHost
-    || (new URLSearchParams(window.location.search).get("emulator") === "1" && isPrivateLanHost);
-  window.useLocalFirebaseEmulators = useLocalFirebaseEmulators;
-  const firebaseConfig = {
-    apiKey: "AIzaSyDVYYv3TMRKWktXA33jOGjniz43hDfRVe4",
-    authDomain: "craving-heaven-e2e94.firebaseapp.com",
-    projectId: useLocalFirebaseEmulators ? "demo-craving-heaven-local" : "craving-heaven-e2e94",
-    storageBucket: "craving-heaven-e2e94.firebasestorage.app",
-    messagingSenderId: "20081214048",
-    appId: "1:20081214048:web:cae6c7b0874111ab653905",
-    measurementId: "G-GD2EPFLYPZ"
-  };
-
-  const firebaseApp = initializeApp(firebaseConfig);
-  // Use App Check on the live site. Keep local emulator testing independent of
-  // production attestation so local and LAN test sessions continue to work.
-  const firebaseAppCheck = useLocalFirebaseEmulators ? null : initializeAppCheck(firebaseApp, {
-    provider: new ReCaptchaEnterpriseProvider("6LdBasMtAAAAAJE5V6ZDZefojEfJx9vfDFowfIjU"),
-    isTokenAutoRefreshEnabled: true
-  });
-const firebaseAuth = getAuth(firebaseApp);
-if (useLocalFirebaseEmulators) connectAuthEmulator(firebaseAuth, `http://${emulatorHost}:9400`, { disableWarnings: true });
-const firebaseAuthPersistenceReady = setPersistence(firebaseAuth, browserLocalPersistence);
-const firebaseDB = getFirestore(firebaseApp);
-if (useLocalFirebaseEmulators) connectFirestoreEmulator(firebaseDB, emulatorHost, 9401);
-const firebaseFunctions = getFunctions(firebaseApp, "asia-south1");
-if (useLocalFirebaseEmulators) connectFunctionsEmulator(firebaseFunctions, emulatorHost, 9402);
 const firebaseMessaging = useLocalFirebaseEmulators ? null : getMessaging(firebaseApp);
-
-window.firebaseApp = firebaseApp;
-window.firebaseAuth = firebaseAuth;
-window.firebaseAuthPersistenceReady = firebaseAuthPersistenceReady;
-window.firebaseDB = firebaseDB;
-window.firebaseFunctions = firebaseFunctions;
-
-window.FirebaseAuthAPI = {
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
-  signInWithCustomToken,
-  onAuthStateChanged,
-  signOut
-};
-
-window.FirebaseFirestoreAPI = {
-  collection,
-  doc,
-  setDoc,
-  addDoc,
-  serverTimestamp,
-  getDocs,
-  getDoc,
-  query,
-  where
-};
-
-window.FirebaseFunctionsAPI = { httpsCallable };
 
 window.FirebaseMessagingAPI = {
   getMessaging,
@@ -792,7 +704,7 @@ window.firebaseMessaging = firebaseMessaging;
 
 <script src="rewards-config.js?v=20261021-first-order-gift" defer></script>
 <script src="menu.js?v=20261027-combo-webp" defer></script>
-<script src="script.js?v=20261029-checkout-account-retry-v9" defer></script>
+<script src="script.js?v=20261030-central-auth-v1" defer></script>
 <script src="craving-dash.js?v=20261026-craving-runner-v1" defer></script>
 </body>
 </html>

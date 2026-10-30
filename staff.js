@@ -1,42 +1,13 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app-check.js";
-import { getAuth, RecaptchaVerifier, signInWithPhoneNumber, onAuthStateChanged, setPersistence, browserLocalPersistence, connectAuthEmulator, signOut } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
-import { getFunctions, connectFunctionsEmulator, httpsCallable } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-functions.js";
-
-const hostname = location.hostname;
-const local = ["localhost", "127.0.0.1"].includes(hostname);
-const privateLan = /^10\./.test(hostname) || /^192\.168\./.test(hostname) || /^172\.(1[6-9]|2\d|3[01])\./.test(hostname);
-const useEmulator = local || (new URLSearchParams(location.search).get("emulator") === "1" && privateLan);
-const app = initializeApp({
-  apiKey: "AIzaSyDVYYv3TMRKWktXA33jOGjniz43hDfRVe4",
-  authDomain: "craving-heaven-e2e94.firebaseapp.com",
-  projectId: useEmulator ? "demo-craving-heaven-local" : "craving-heaven-e2e94",
-  storageBucket: "craving-heaven-e2e94.firebasestorage.app",
-  messagingSenderId: "20081214048",
-  appId: "1:20081214048:web:cae6c7b0874111ab653905"
-});
-const appCheck = useEmulator ? null : initializeAppCheck(app, {
-  provider: new ReCaptchaEnterpriseProvider("6LdBasMtAAAAAJE5V6ZDZefojEfJx9vfDFowfIjU"),
-  isTokenAutoRefreshEnabled: true
-});
-const auth = getAuth(app);
-if (useEmulator) connectAuthEmulator(auth, `http://${hostname}:9400`, { disableWarnings: true });
-const authPersistence = setPersistence(auth, browserLocalPersistence);
-const functions = getFunctions(app, "asia-south1");
-if (useEmulator) connectFunctionsEmulator(functions, hostname, 9402);
-
+import { firebaseAuth as auth, firebaseFunctions as functions, firebaseAuthPersistenceReady as authPersistence, FirebaseAuthAPI, FirebaseFunctionsAPI } from "./firebase-client.js?v=20261030-central-auth-v1";
+const { signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } = FirebaseAuthAPI;
+const { httpsCallable } = FirebaseFunctionsAPI;
 const $ = id => document.getElementById(id);
 const loginPanel = $("loginPanel");
 const deskPanel = $("deskPanel");
 const authMessage = $("authMessage");
 const orderSoundButton = $("orderSoundButton");
 const newOrderAlert = $("newOrderAlert");
-const phoneForm = $("phoneForm");
-const otpForm = $("otpForm");
-const phoneInput = $("phoneInput");
-const otpInput = $("otpInput");
-const sendOtpButton = $("sendOtpButton");
-const verifyOtpButton = $("verifyOtpButton");
+const emailForm = $("emailForm");
 const logoutButton = $("logoutButton");
 const ordersPanel = $("ordersPanel");
 const newOrderPanel = $("newOrderPanel");
@@ -45,8 +16,6 @@ const historyPanel = $("historyPanel");
 const availabilityPanel = $("availabilityPanel");
 const ordersList = $("ordersList");
 const orderMessage = $("orderMessage");
-let verifier = null;
-let confirmation = null;
 let orders = [];
 let historyOrders = [];
 let knownOnlineOrderIds = null;
@@ -75,65 +44,28 @@ const readableOrderNumber = order => {
 };
 const orderDate = value => value ? new Date(value).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "Time unavailable";
 
-function resetVerifier() {
-  if (verifier) verifier.clear();
-  verifier = null;
-  $("recaptcha-container").replaceChildren();
-}
-
-phoneForm.addEventListener("submit", async event => {
+emailForm.addEventListener("submit", async event => {
   event.preventDefault();
   authMessage.textContent = "";
-  const digits = phoneInput.value.replace(/\D/g, "");
-  if (!/^[6-9]\d{9}$/.test(digits)) { authMessage.textContent = "Enter a valid 10-digit Indian mobile number."; return; }
-  sendOtpButton.disabled = true;
-  sendOtpButton.textContent = "Sending…";
+  const button = $("emailSignInButton");
+  button.disabled = true;
+  button.textContent = "Signing in…";
   try {
     await authPersistence;
-    verifier ||= new RecaptchaVerifier(auth, "recaptcha-container", { size: "invisible" });
-    confirmation = await signInWithPhoneNumber(auth, `+91${digits}`, verifier);
-    phoneForm.hidden = true;
-    otpForm.hidden = false;
-    authMessage.textContent = `Code sent to +91 ${digits}.`;
-    if (local && useEmulator) {
-      $("localOtpHint").hidden = false;
-      const authEmulatorHost = hostname === "localhost" ? "localhost" : "127.0.0.1";
-      $("localOtpLink").href = `http://${authEmulatorHost}:9400/emulator/v1/projects/demo-craving-heaven-local/verificationCodes`;
-      $("localOtpLink").hidden = false;
-    }
-    otpInput.focus();
+    await signInWithEmailAndPassword(auth, $("emailInput").value.trim().toLowerCase(), $("passwordInput").value);
   } catch (error) {
-    resetVerifier();
-    authMessage.textContent = error.code === "auth/too-many-requests" ? "Too many attempts. Please wait and try again." : "Could not send the code. Check your number and try again.";
+    authMessage.textContent = error.code === "auth/invalid-credential" ? "Email or password is incorrect, or this email has not been given Staff access." : (error.message || "Could not sign in. Please try again.");
   } finally {
-    sendOtpButton.disabled = false;
-    sendOtpButton.textContent = "Send OTP";
+    button.disabled = false;
+    button.textContent = "Sign in to Staff Desk";
   }
 });
 
-otpForm.addEventListener("submit", async event => {
-  event.preventDefault();
-  if (!confirmation || !/^\d{6}$/.test(otpInput.value.trim())) { authMessage.textContent = "Enter the 6-digit code."; return; }
-  verifyOtpButton.disabled = true;
-  verifyOtpButton.textContent = "Verifying…";
-  authMessage.textContent = "Checking staff access…";
-  try {
-    await confirmation.confirm(otpInput.value.trim());
-  } catch (error) {
-    authMessage.textContent = error.code === "auth/invalid-verification-code" ? "That code is incorrect. Check it and try again." : "Sign-in failed. Please request a new code.";
-    verifyOtpButton.disabled = false;
-    verifyOtpButton.textContent = "Verify";
-  }
-});
-
-$("changeNumberButton").addEventListener("click", () => {
-  confirmation = null;
-  otpForm.hidden = true;
-  phoneForm.hidden = false;
-  authMessage.textContent = "";
-  $("localOtpHint").hidden = true;
-  $("localOtpLink").hidden = true;
-  resetVerifier();
+$("forgotPasswordButton").addEventListener("click", async () => {
+  const email = $("emailInput").value.trim().toLowerCase();
+  if (!email) { authMessage.textContent = "Enter your staff email first."; return; }
+  try { await sendPasswordResetEmail(auth, email); authMessage.textContent = "If this email is registered, password reset instructions have been sent."; }
+  catch (error) { authMessage.textContent = error.message || "Could not send reset instructions."; }
 });
 logoutButton.addEventListener("click", () => signOut(auth));
 
@@ -148,18 +80,19 @@ async function showDesk(user) {
     await authPersistence;
     let token = await user.getIdTokenResult();
     if (token.claims.staff !== true && token.claims.admin !== true) token = await user.getIdTokenResult(true);
-    if (token.claims.staff !== true) {
+    const emailTeamSignInReady = Boolean(user.email && user.emailVerified && user.providerData?.some(provider => provider.providerId === "password") && !user.phoneNumber);
+    if (token.claims.staff !== true || !emailTeamSignInReady) {
       await signOut(auth);
       loginPanel.hidden = false;
       deskPanel.hidden = true;
-      authMessage.textContent = "This account does not have staff access. Ask the administrator to enable it.";
+      authMessage.textContent = token.claims.staff === true ? "Complete Team Email Setup first. Staff access requires a verified email and password; phone OTP accounts belong to customers." : "This account does not have staff access. Ask the administrator to enable it.";
       return;
     }
     loginPanel.hidden = true;
     deskPanel.hidden = false;
     logoutButton.hidden = false;
     activeStaffUid = user.uid;
-    $("staffPhone").textContent = user.phoneNumber || "Staff account";
+    $("staffPhone").textContent = user.email || "Staff account";
     restoreWalkinDraft();
     await Promise.all([loadOrders(), loadOrderingStatus()]);
   } catch (error) {

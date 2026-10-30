@@ -13,10 +13,11 @@
   <header class="staff-header"><a class="brand" href="/"><img src="images/logo.png" alt=""><span>CRAVING HEAVEN<small>STAFF DESK</small></span></a><button id="logoutButton" class="quiet-button" hidden>Log out</button></header>
   <main class="staff-main">
     <section id="loginPanel" class="panel login-panel">
-      <p class="eyebrow">TEAM ACCESS</p><h1>Sign in to Staff Desk</h1><p class="muted">Use your staff mobile number. Staff access must be enabled by an administrator.</p>
-      <form id="phoneForm"><label for="phoneInput">MOBILE NUMBER</label><div class="phone-row"><span>+91</span><input id="phoneInput" inputmode="numeric" autocomplete="tel-national" maxlength="10" placeholder="10-digit number" required><button class="primary-button" type="submit" id="sendOtpButton">Send OTP</button></div></form>
-      <form id="otpForm" hidden><label for="otpInput">VERIFICATION CODE</label><div class="phone-row"><input id="otpInput" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" required><button class="primary-button" type="submit" id="verifyOtpButton">Verify</button></div><p id="localOtpHint" class="local-otp-hint" hidden>Local testing: SMS codes are shown by the Auth Emulator. Open the code list and use the “code” value for this phone number.</p><a id="localOtpLink" class="local-otp-link" target="_blank" rel="noopener" hidden>View local test OTP</a><button type="button" class="text-button" id="changeNumberButton">Use another number</button></form>
-      <p id="authMessage" class="message" role="status"></p><div id="recaptcha-container"></div>
+      <p class="eyebrow">TEAM ACCESS</p><h1>Sign in to Staff Desk</h1><p class="muted">Use your verified staff email. Customer mobile OTP accounts cannot open the Staff Desk.</p>
+      <form id="emailForm"><label for="emailInput">STAFF EMAIL</label><input id="emailInput" type="email" autocomplete="username" required><label for="passwordInput">PASSWORD</label><input id="passwordInput" type="password" autocomplete="current-password" required><button class="primary-button full-button" type="submit" id="emailSignInButton">Sign in to Staff Desk</button></form>
+      <button id="forgotPasswordButton" class="text-button" type="button">Forgot password?</button>
+      <p id="authMessage" class="message" role="status"></p>
+      <p class="muted">New staff or existing phone-based team account? <a href="/team-account-setup.html">Set up email sign-in</a></p>
     </section>
 
     <section id="deskPanel" hidden>
@@ -75,6 +76,6 @@
   <section id="invoice" class="invoice" aria-label="Order invoice"></section>
 
   <script src="menu.js?v=20261023-remove-cheese-slice"></script>
-  <script type="module" src="staff.js?v=20261027-louder-five-second-order-alert"></script>
+  <script type="module" src="staff.js?v=20261030-central-auth-v1"></script>
 </body>
 </html>
