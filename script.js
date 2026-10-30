@@ -6,8 +6,11 @@ let welcomeFlyerShownThisPage = false;
 let customerOnlineOrderHistoryLoaded = false;
 let customerAuthStateResolved = false;
 let customerSessionType = "signed-out";
+let customerSessionUid = "";
+let customerAuthResolutionId = 0;
 function isCustomerSignedIn() {
-  return customerSessionType === "customer" && Boolean(window.firebaseAuth?.currentUser?.uid);
+  const currentUid = window.firebaseAuth?.currentUser?.uid || "";
+  return customerSessionType === "customer" && Boolean(currentUid) && currentUid === customerSessionUid;
 }
 function currentCustomerUser() {
   return isCustomerSignedIn() ? window.firebaseAuth.currentUser : null;
@@ -237,6 +240,15 @@ const FCM_VAPID_KEY =
     resetRecaptcha();
   }
 
+  // Keep every customer surface (cart, checkout, rewards, profile and orders)
+  // bound to the same resolved Firebase Auth user.
+  function setCustomerSession(user, type) {
+    customerAuthResolutionId += 1;
+    customerSessionType = type;
+    customerSessionUid = type === "customer" ? (user?.uid || "") : "";
+    customerAuthStateResolved = true;
+  }
+
 
   function resetCustomerLoginMessages() {
     if (customerLoginMessage) {
@@ -390,13 +402,13 @@ const FCM_VAPID_KEY =
       if (!credential?.user) throw new Error("The verified customer session could not be loaded. Please try signing in again.");
       const token = await credential.user.getIdTokenResult(true);
       if (token.claims.admin === true || token.claims.staff === true) {
-        customerSessionType = "team";
+        setCustomerSession(credential.user, "team");
         otpLoginMessage.textContent = "This is a team account. Use the Staff or Admin Desk email sign-in.";
         updatePlaceOrderButton();
         if (cartOverlay?.classList.contains("active")) renderCart();
         return;
       }
-      customerSessionType = "customer";
+      setCustomerSession(credential.user, "customer");
 
       otpLoginMessage.textContent =
         "Mobile number verified successfully.";
@@ -575,6 +587,14 @@ const FCM_VAPID_KEY =
     return;
   }
 
+  if (!customerAuthStateResolved) {
+    placeOrderButton.classList.add("place-order-disabled");
+    placeOrderButton.disabled = true;
+    placeOrderButton.setAttribute("aria-disabled", "true");
+    placeOrderButton.textContent = "CHECKING SIGN-IN";
+    return;
+  }
+
   // ONLINE CHECKOUT ENABLED
   placeOrderButton.classList.remove(
     "place-order-disabled"
@@ -596,7 +616,7 @@ const FCM_VAPID_KEY =
 }
 
 
-function handlePlaceOrderClick() {
+async function handlePlaceOrderClick() {
 
   if (!cart.length) {
 
@@ -605,6 +625,17 @@ function handlePlaceOrderClick() {
     );
 
     return;
+  }
+
+  if (!customerAuthStateResolved) {
+    placeOrderButton.disabled = true;
+    placeOrderButton.textContent = "CHECKING SIGN-IN";
+    try { await window.firebaseAuthPersistenceReady; } catch (_) { /* handled as signed out below */ }
+    const startedAt = Date.now();
+    while (!customerAuthStateResolved && Date.now() - startedAt < 8000) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    updatePlaceOrderButton();
   }
 
   if (!isCustomerSignedIn()) {
@@ -632,17 +663,26 @@ function handlePlaceOrderClick() {
     window.FirebaseAuthAPI.onAuthStateChanged(
       window.firebaseAuth,
       async user => {
+        const resolutionId = ++customerAuthResolutionId;
         customerAuthStateResolved = false;
         customerSessionType = user ? "checking" : "signed-out";
+        customerSessionUid = "";
         if (user) {
           try {
-            const token = await user.getIdTokenResult(true);
+            // Auth has already restored the persisted session. Avoid forcing a
+            // network token refresh on every tab/page initialization; this
+            // prevents transient auth failures from splitting customer UI state.
+            const token = await user.getIdTokenResult();
+            if (resolutionId !== customerAuthResolutionId) return;
             customerSessionType = token.claims.admin === true || token.claims.staff === true ? "team" : "customer";
+            customerSessionUid = customerSessionType === "customer" ? user.uid : "";
           } catch (error) {
+            if (resolutionId !== customerAuthResolutionId) return;
             console.error("Could not classify the signed-in session:", error);
             customerSessionType = "unknown";
           }
         }
+        if (resolutionId !== customerAuthResolutionId) return;
         const nextUid = user?.uid || "";
         if (lastCustomerAuthUid && lastCustomerAuthUid !== nextUid) {
           currentLoyaltyAccount = { points: 0, completedOrders: 0, availableRewards: [] };
@@ -2553,7 +2593,9 @@ ${esc(offer.freeItem)}
 
   const welcomeOfferAlreadyUsed = currentLoyaltyAccount.welcomeCompleted === true || Boolean(currentLoyaltyAccount.welcomeReservationId) || customerHasOrderedOnline || hasLocalWelcomeOrderMarker();
   const showFirstOrderWelcomeCard = !isTestOrder && !welcomeOfferAlreadyUsed;
-  const welcomeOfferNote = !isCustomerSignedIn()
+  const welcomeOfferNote = !customerAuthStateResolved
+    ? "Checking your sign-in…"
+    : !isCustomerSignedIn()
     ? "Sign in to check eligibility. Add a regular menu item to your first online order and the burger will be free."
     : customerAccountLoadFailed
       ? `Your login is active, but account details couldn’t load. Tap RETRY; if it continues, share this check code: ${customerAccountLoadDiagnostic || "account-read-failed"}.`
@@ -2564,11 +2606,11 @@ ${esc(offer.freeItem)}
         : welcomeHasCompetingBenefit
           ? "Only one offer or reward can be used per order. Choose the free burger instead to add it."
           : `Your free ${REWARDS_CONFIG.welcomeItem} is included below at ₹0.`;
-  const firstOrderWelcomeCard = showFirstOrderWelcomeCard ? `<div class="cart-first-order-reward"><div class="cart-first-order-icon" aria-hidden="true">🎁</div><div class="cart-first-order-copy"><span>FIRST ONLINE ORDER GIFT</span><strong>${esc(REWARDS_CONFIG.welcomeItem)} · FREE</strong><p>${esc(welcomeOfferNote)}</p></div>${!isCustomerSignedIn() ? `<button type="button" data-account-login>SIGN IN</button>` : customerAccountLoadFailed ? `<button type="button" data-reload-account>RETRY</button>` : welcomeEligible && welcomeHasCompetingBenefit ? `<button type="button" data-select-welcome>USE GIFT</button>` : welcomeEligible && selectedWelcomeOffer ? `<span class="cart-first-order-added">ADDED</span>` : !loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded ? `<span class="cart-first-order-added">CHECKING</span>` : ""}</div>` : "";
+  const firstOrderWelcomeCard = showFirstOrderWelcomeCard ? `<div class="cart-first-order-reward"><div class="cart-first-order-icon" aria-hidden="true">🎁</div><div class="cart-first-order-copy"><span>FIRST ONLINE ORDER GIFT</span><strong>${esc(REWARDS_CONFIG.welcomeItem)} · FREE</strong><p>${esc(welcomeOfferNote)}</p></div>${!customerAuthStateResolved ? `<span class="cart-first-order-added">CHECKING</span>` : !isCustomerSignedIn() ? `<button type="button" data-account-login>SIGN IN</button>` : customerAccountLoadFailed ? `<button type="button" data-reload-account>RETRY</button>` : welcomeEligible && welcomeHasCompetingBenefit ? `<button type="button" data-select-welcome>USE GIFT</button>` : welcomeEligible && selectedWelcomeOffer ? `<span class="cart-first-order-added">ADDED</span>` : !loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded ? `<span class="cart-first-order-added">CHECKING</span>` : ""}</div>` : "";
 
   const welcomeCard = "";
   const pointsBalance = Math.max(0, Number(currentLoyaltyAccount.points || 0));
-  const cartPointsBalance = `<div class="cart-points-balance"><span>YOUR CRAVING POINTS</span><strong>${!isCustomerSignedIn() ? "Sign in to view" : loyaltyAccountLoaded ? `${pointsBalance.toLocaleString("en-IN")} pts` : "Temporarily unavailable"}</strong></div>`;
+  const cartPointsBalance = `<div class="cart-points-balance"><span>YOUR CRAVING POINTS</span><strong>${!customerAuthStateResolved ? "Checking sign-in…" : !isCustomerSignedIn() ? "Sign in to view" : loyaltyAccountLoaded ? `${pointsBalance.toLocaleString("en-IN")} pts` : "Temporarily unavailable"}</strong></div>`;
   const testOrderNotice = isTestOrder ? `<p class="test-order-notice">TEST MODE · No payment is due. This order won’t be prepared or sent to staff; offers, rewards and points can’t be used or earned.</p>` : "";
   const pointsAvailable = loyaltyAccountLoaded && !isTestOrder ? Math.floor(Math.min(REWARDS_CONFIG.maxRedeemPointsPerOrder, pointsBalance, offerEligibleSubtotal * 10) / 100) * 100 : 0;
   const pointsControls = isTestOrder ? "" : pointsAvailable > 0

@@ -3,6 +3,7 @@ const { getFirestore, FieldValue, Timestamp, FieldPath } = require("firebase-adm
 const { getAuth } = require("firebase-admin/auth");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { setGlobalOptions } = require("firebase-functions/v2");
 const { MENU_DATA, COMBO_MENU_DATA } = require("./menu-catalog");
 const REWARDS = require("./rewards-config");
 
@@ -13,6 +14,11 @@ if (activeProjectId === "demo-craving-heaven-local" && !process.env.FIREBASE_AUT
 }
 const db = getFirestore();
 const REGION = "asia-south1";
+// Keep the regional CPU footprint bounded without relying on a quota increase.
+// At the default 256 MiB memory size, gcf_gen1 uses 1/6 vCPU per instance.
+// This small-shop workload can queue brief bursts rather than scaling every
+// callable to a large number of full-CPU instances.
+setGlobalOptions({ region: REGION, cpu: "gcf_gen1", maxInstances: 2 });
 const ENFORCE_APP_CHECK = process.env.FUNCTIONS_EMULATOR !== "true";
 const DELIVERY_CHARGE = 30;
 const FREE_DELIVERY_THRESHOLD = 300;
@@ -1955,7 +1961,7 @@ exports.staffLookupCustomer = onCall({ region: REGION }, async request => {
   };
 });
 
-exports.staffUpdateOrderStatus = onCall({ region: REGION, cpu: "gcf_gen1", maxInstances: 10 }, async request => {
+exports.staffUpdateOrderStatus = onCall({ region: REGION, cpu: "gcf_gen1", maxInstances: 2 }, async request => {
   await requireStaff(request);
   const orderId = typeof request.data?.orderId === "string" ? request.data.orderId.trim() : "";
   const nextStatus = typeof request.data?.status === "string" ? request.data.status : "";
