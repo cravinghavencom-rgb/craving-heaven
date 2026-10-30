@@ -249,6 +249,15 @@ const FCM_VAPID_KEY =
     customerAuthStateResolved = true;
   }
 
+  async function waitForCustomerAuthResolution(timeoutMs = 8000) {
+    try { await window.firebaseAuthPersistenceReady; } catch (_) { /* Fall through to the timeout result. */ }
+    const startedAt = Date.now();
+    while (!customerAuthStateResolved && Date.now() - startedAt < timeoutMs) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    return customerAuthStateResolved;
+  }
+
 
   function resetCustomerLoginMessages() {
     if (customerLoginMessage) {
@@ -630,11 +639,7 @@ async function handlePlaceOrderClick() {
   if (!customerAuthStateResolved) {
     placeOrderButton.disabled = true;
     placeOrderButton.textContent = "CHECKING SIGN-IN";
-    try { await window.firebaseAuthPersistenceReady; } catch (_) { /* handled as signed out below */ }
-    const startedAt = Date.now();
-    while (!customerAuthStateResolved && Date.now() - startedAt < 8000) {
-      await new Promise(resolve => setTimeout(resolve, 50));
-    }
+    await waitForCustomerAuthResolution();
     updatePlaceOrderButton();
   }
 
@@ -2345,7 +2350,7 @@ function renderCart() {
   if (placeOrderNote) {
       placeOrderNote.textContent = isCustomerSignedIn()
       ? "Continue to checkout to add or choose your delivery details."
-      : "Log in with your mobile number to continue with your order.";
+      : !customerAuthStateResolved ? "Checking your sign-in…" : "Log in with your mobile number to continue with your order.";
   }
 
   if (selectedMilestoneRewardId && !selectedReward) {
@@ -2764,7 +2769,7 @@ function closeCart() {
   });
 
 
-document.addEventListener("click", event => {
+document.addEventListener("click", async event => {
 
   const editAddressButton = event.target.closest("[data-edit-address]");
   if (editAddressButton) {
@@ -2797,6 +2802,9 @@ document.addEventListener("click", event => {
   const screenButton = event.target.closest("[data-screen]");
   if (screenButton) {
     event.preventDefault();
+    if (screenButton.id === "headerPointsButton" && !customerAuthStateResolved) {
+      await waitForCustomerAuthResolution();
+    }
     if (screenButton.id === "headerPointsButton" && !isCustomerSignedIn()) {
       openCustomerLogin();
       return;
@@ -2811,6 +2819,8 @@ document.addEventListener("click", event => {
   }
 
   if (event.target.closest("[data-account-login]")) {
+    if (!customerAuthStateResolved) await waitForCustomerAuthResolution();
+    if (isCustomerSignedIn()) return;
     openCustomerLogin();
     return;
   }
