@@ -97,9 +97,12 @@ businessConfigPromise.then(data => {
 });
 const FREE_DELIVERY_THRESHOLD = 300;
 const DELIVERY_CHARGE = 30;
+const CUSTOMER_ACCOUNT_CACHE_TTL_MS = 120_000;
 const ONLINE_CHECKOUT_ENABLED = true;
 let orderAvailability = { isOpen: false, paused: false, staffEnabled: false, acceptingOnlineOrders: false, testModeEnabled: false, isTestCustomer: false };
 let orderAvailabilityReady = false;
+let orderAvailabilityLastCheckedAt = 0;
+let orderAvailabilityRequest = null;
 // =========================================================
 // FIREBASE PUSH NOTIFICATIONS
 // =========================================================
@@ -658,11 +661,22 @@ async function handlePlaceOrderClick() {
   // FIREBASE LOGIN STATE
   // ---------------------------------------------------------
 
-  function setupCustomerAuthListener() {
+  async function setupCustomerAuthListener() {
     if (!firebaseAuthReady()) {
       console.error("Firebase Authentication API is unavailable.");
       customerAuthStateResolved = true;
       return;
+    }
+
+    // Let Firebase finish restoring its browserLocalPersistence state before
+    // any customer screen decides to show a sign-in prompt. This keeps cart,
+    // points, rewards, and checkout on the same restored session after reload.
+    try {
+      await window.firebaseAuthPersistenceReady;
+    } catch (error) {
+      // Still attach the listener so this visit can use Firebase's in-memory
+      // session, while logging storage failures that can prevent persistence.
+      console.error("Firebase customer session persistence could not initialize:", error);
     }
 
     window.FirebaseAuthAPI.onAuthStateChanged(
@@ -694,6 +708,9 @@ async function handlePlaceOrderClick() {
           loyaltyAccountLoaded = false;
           customerOnlineOrderHistoryLoaded = false;
           customerAccountLoadFailed = false;
+          customerAccountLoadedUid = "";
+          customerAccountLoadedAt = 0;
+          customerAccountRetryAfter = 0;
           customerHasOrderedOnline = false;
           selectedMilestoneRewardId = null;
           selectedPointsToRedeem = 0;
@@ -802,7 +819,14 @@ async function handlePlaceOrderClick() {
         const expires = expiry && !Number.isNaN(expiry.getTime()) ? `${gameReward ? "Expires" : "Use by"} ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: gameReward ? "numeric" : undefined, minute: gameReward ? "2-digit" : undefined }).format(expiry)}` : "Ready to use";
         return `<article class="journey-card journey-card-ready"><span class="journey-card-status">✦ READY TO USE</span><strong>${esc(definition.title || reward.title)}</strong><p>${esc(definition.detail || reward.detail || "Use this reward on your next order")}</p><small>${esc(expires)}</small><button type="button" class="journey-use-button" data-use-reward="${esc(reward.ticketId || reward.id)}">USE IN CART</button></article>`;
       }),
-      ...upcoming.slice(0, Math.max(0, 2 - visibleReadyCount)).map(item => `<article class="journey-card journey-card-locked"><span class="journey-card-status">🔒 ORDER ${item.order}</span><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p></article>`)
+      ...upcoming.slice(0, Math.max(0, 2 - visibleReadyCount)).map((item, index) => {
+        if (index > 0) return `<article class="journey-card journey-card-preview"><span class="journey-card-status">THEN · ORDER ${item.order}</span><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p></article>`;
+        const targetOrder = Math.max(1, Number(item.order));
+        const progressOrders = Math.max(0, Math.min(targetOrder, previewOrder));
+        const remainingOrders = Math.max(1, targetOrder - progressOrders);
+        const progress = Math.round(progressOrders / targetOrder * 100);
+        return `<article class="journey-card journey-card-next"><div class="journey-next-top"><span class="journey-card-status">YOUR NEXT TREAT · ORDER ${targetOrder}</span><span class="journey-next-distance">${remainingOrders === 1 ? "1 order to go" : `${remainingOrders} orders to go`}</span></div><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p><div class="journey-progress-track" role="progressbar" aria-label="Progress to next reward" aria-valuemin="0" aria-valuemax="${targetOrder}" aria-valuenow="${progressOrders}"><span style="width:${progress}%"></span></div><small>Complete ${remainingOrders} more ${remainingOrders === 1 ? "order" : "orders"} to unlock. Progress updates after delivery or pickup.</small></article>`;
+      })
     ];
     root.innerHTML = cards.length ? cards.join("") : `<div class="rewards-login-hint">You’ve reached the end of this reward journey. Keep ordering to begin the next round.</div>`;
   }
@@ -1016,7 +1040,36 @@ async function handlePlaceOrderClick() {
     return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(date);
   }
 
-  async function refreshAccountScreens(user) {
+  async function refreshAccountScreens(user, { force = false } = {}) {
+    if (user && (customerSessionType !== "customer" || user.uid !== window.firebaseAuth?.currentUser?.uid)) user = null;
+    if (!user) {
+      customerAccountLoadedUid = "";
+      customerAccountLoadedAt = 0;
+      customerAccountRetryAfter = 0;
+      return loadAccountScreens(null);
+    }
+
+    const uid = user.uid;
+    const hasSnapshot = customerAccountLoadedUid === uid && loyaltyAccountLoaded && customerOnlineOrderHistoryLoaded;
+    const snapshotIsFresh = hasSnapshot && Date.now() - customerAccountLoadedAt < CUSTOMER_ACCOUNT_CACHE_TTL_MS;
+    if (!force && snapshotIsFresh) return;
+    if (!force && Date.now() < customerAccountRetryAfter) return;
+    if (accountLoadPromise && accountLoadPromiseUid === uid) return accountLoadPromise;
+
+    const request = loadAccountScreens(user);
+    accountLoadPromise = request;
+    accountLoadPromiseUid = uid;
+    try {
+      return await request;
+    } finally {
+      if (accountLoadPromise === request) {
+        accountLoadPromise = null;
+        accountLoadPromiseUid = "";
+      }
+    }
+  }
+
+  async function loadAccountScreens(user) {
     if (user && (customerSessionType !== "customer" || user.uid !== window.firebaseAuth?.currentUser?.uid)) user = null;
     const refreshId = ++accountRefreshToken;
     if (!ordersContent || !profileContent) return;
@@ -1044,6 +1097,9 @@ async function handlePlaceOrderClick() {
       customerAccountLoadDiagnostic = "";
       customerHasOrderedOnline = false;
       customerOnlineOrderHistoryLoaded = false;
+      customerAccountLoadedUid = "";
+      customerAccountLoadedAt = 0;
+      customerAccountRetryAfter = 0;
       renderRewardsJourney(currentLoyaltyAccount, false);
       if (cartOverlay?.classList.contains("active")) renderCart();
       maybeShowFirstOrderFlyer();
@@ -1052,22 +1108,34 @@ async function handlePlaceOrderClick() {
 
     if (addAddressButton) addAddressButton.textContent = "+ ADD ADDRESS";
     const phone = user.phoneNumber || "Mobile number verified";
-    loyaltyAccountLoaded = false;
-    customerAccountLoadFailed = false;
-    customerAccountLoadDiagnostic = "";
+    const hasCachedSnapshot = customerAccountLoadedUid === user.uid && loyaltyAccountLoaded && customerOnlineOrderHistoryLoaded;
+    if (!hasCachedSnapshot) {
+      loyaltyAccountLoaded = false;
+      customerAccountLoadFailed = false;
+      customerAccountLoadDiagnostic = "";
+    }
     const homePointsBalance = document.getElementById("homeLoyaltyPointsBalance");
     const homePointsSummary = document.getElementById("homeLoyaltySummary");
-    if (homePointsBalance) homePointsBalance.textContent = "Loading…";
-      const headerPointsBalance = document.getElementById("headerCravingPointsBalance");
+    const headerPointsBalance = document.getElementById("headerCravingPointsBalance");
+    if (!hasCachedSnapshot) {
+      if (homePointsBalance) homePointsBalance.textContent = "Loading…";
       if (headerPointsBalance) headerPointsBalance.textContent = "…";
-    if (homePointsSummary) homePointsSummary.textContent = "your Craving Points.";
-    profileContent.innerHTML = `<div class="profile-account-card"><div class="profile-avatar">${esc(phone.slice(-2))}</div><div><span>LOGGED IN AS</span><strong>${esc(phone)}</strong><p>Your account is ready.</p></div><button type="button" class="account-secondary-button" data-account-logout>LOG OUT</button></div>`;
-    if (savedAddresses) savedAddresses.innerHTML = `<div class="account-loading">Loading saved addresses…</div>`;
-    ordersContent.innerHTML = `<div class="account-loading">Loading your orders…</div>`;
+      if (homePointsSummary) homePointsSummary.textContent = "your Craving Points.";
+    }
+    if (!hasCachedSnapshot) profileContent.innerHTML = `<div class="profile-account-card"><div class="profile-avatar">${esc(phone.slice(-2))}</div><div><span>LOGGED IN AS</span><strong>${esc(phone)}</strong><p>Your account is ready.</p></div><button type="button" class="account-secondary-button" data-account-logout>LOG OUT</button></div>`;
+    if (!hasCachedSnapshot) {
+      if (savedAddresses) savedAddresses.innerHTML = `<div class="account-loading">Loading saved addresses…</div>`;
+      ordersContent.innerHTML = `<div class="account-loading">Loading your orders…</div>`;
+    }
     const callable = window.FirebaseFunctionsAPI?.httpsCallable;
     if (!window.firebaseFunctions || !callable) {
       customerAccountLoadFailed = true;
       customerAccountLoadDiagnostic = "account-service-unavailable";
+      customerAccountRetryAfter = Date.now() + 60_000;
+      if (hasCachedSnapshot) {
+        customerAccountLoadFailed = false;
+        return;
+      }
       renderRewardsJourney(currentLoyaltyAccount, isCustomerSignedIn());
       if (homePointsBalance) homePointsBalance.textContent = "—";
       if (headerPointsBalance) headerPointsBalance.textContent = "—";
@@ -1082,6 +1150,7 @@ async function handlePlaceOrderClick() {
       const account = response.data || {};
       customerAccountLoadFailed = false;
       customerAccountLoadDiagnostic = "";
+      customerAccountRetryAfter = 0;
       currentCustomerProfile = account.profile || { name: "", addresses: [] };
       if (!Array.isArray(currentCustomerProfile.addresses)) currentCustomerProfile.addresses = [];
       const name = currentCustomerProfile.name || "";
@@ -1125,6 +1194,8 @@ async function handlePlaceOrderClick() {
       const homePointsSummary = document.getElementById("homeLoyaltySummary");
       if (homePointsSummary) homePointsSummary.textContent = loyaltyAccountLoaded ? "Craving Points · combos earn half rate" : "Points could not load · try again";
       renderRewardsJourney(currentLoyaltyAccount, true);
+      customerAccountLoadedUid = user.uid;
+      customerAccountLoadedAt = Date.now();
       if (cartOverlay?.classList.contains("active")) renderCart();
       maybeShowFirstOrderFlyer();
       if (!orders.length) {
@@ -1132,16 +1203,31 @@ async function handlePlaceOrderClick() {
         return;
       }
       ordersContent.innerHTML = orders.map(order => {
-        const orderItems = Array.isArray(order.items) ? order.items.map(item => `${esc(item.name || "Item")} × ${Number(item.qty || 1)}`).join(" · ") : "Order details unavailable";
+        const items = Array.isArray(order.items) ? order.items : [];
+        const itemCount = items.reduce((sum, item) => sum + Math.max(1, Number(item.qty || 1)), 0);
+        const orderItems = items.length ? items.map(item => {
+          const quantity = Math.max(1, Number(item.qty || 1));
+          const hasLineTotal = Number.isFinite(Number(item.lineTotal));
+          const hasUnitPrice = Number.isFinite(Number(item.price));
+          const lineTotal = hasLineTotal ? Number(item.lineTotal) : hasUnitPrice ? Number(item.price) * quantity : null;
+          const isFree = item.isLoyaltyReward === true || item.isWelcomeReward === true || item.isFreeOffer === true;
+          return `<div class="order-history-item"><div class="order-history-item-copy"><span class="order-history-quantity">${quantity}×</span><strong>${esc(item.name || "Item")}</strong></div><span class="order-history-item-price">${isFree ? '<span class="order-item-free">FREE</span>' : lineTotal === null ? "" : money(lineTotal)}</span></div>`;
+        }).join("") : `<div class="order-history-item order-history-item-empty">Order details unavailable</div>`;
         const orderMode = order.orderType === "pickup" ? "Store pickup" : "Delivery";
         const orderPrefix = order.orderType === "pickup" ? "PK" : "DL";
         const orderNumber = order.orderNumber || `${orderPrefix}-${String(order.id).slice(-4).toUpperCase()}`;
-        return `<article class="order-history-card ${order.isTestOrder ? "test-order-history-card" : ""}"><div class="order-history-head"><div><span class="order-history-date">${order.isTestOrder ? "TEST ORDER · " : ""}${esc(orderHistoryDate(order.createdAt))} · ${orderMode}</span><h2>Order ${esc(orderNumber)}</h2></div><span class="order-status-pill">${esc(String(order.status || "Received"))}</span></div><p>${orderItems}</p><div class="order-history-total"><span>${order.isTestOrder ? "TEST TOTAL · NO PAYMENT DUE" : "ORDER TOTAL"}</span><strong>${money(order.total || order.subtotal || 0)}</strong></div></article>`;
+        const total = Number(order.total ?? order.subtotal ?? 0);
+        return `<article class="order-history-card ${order.isTestOrder ? "test-order-history-card" : ""}"><div class="order-history-head"><div><div class="order-history-meta"><span class="order-history-date">${order.isTestOrder ? "TEST ORDER · " : ""}${esc(orderHistoryDate(order.createdAt))}</span><span class="order-history-mode">${orderMode}</span></div><h2><span>Order</span> ${esc(orderNumber)}</h2></div><span class="order-status-pill">${esc(String(order.status || "Received"))}</span></div><section class="order-history-items" aria-label="Order items"><div class="order-history-items-label">${itemCount} ${itemCount === 1 ? "ITEM" : "ITEMS"}</div>${orderItems}</section><div class="order-history-total"><span>${order.isTestOrder ? "TEST TOTAL · NO PAYMENT DUE" : "TOTAL PAID"}</span><strong>${money(total)}</strong></div></article>`;
       }).join("");
     } catch (error) {
       console.error("Could not load customer orders:", error);
       customerAccountLoadFailed = true;
       customerAccountLoadDiagnostic = String(error?.code || "account-read-failed").replace(/^firestore\//, "");
+      customerAccountRetryAfter = Date.now() + 60_000;
+      if (hasCachedSnapshot) {
+        customerAccountLoadFailed = false;
+        return;
+      }
       renderRewardsJourney(currentLoyaltyAccount, isCustomerSignedIn());
       if (cartOverlay?.classList.contains("active")) renderCart();
       if (savedAddresses?.querySelector(".account-loading")) {
@@ -1582,7 +1668,7 @@ async function openCheckout() {
 
   // Keep checkout, cart, points, and the first-order gift in sync by waiting
   // for the active Firebase account data before building the checkout bill.
-  if (!loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded) {
+  if (!loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded || customerAccountLoadedUid !== currentCustomerUser()?.uid || Date.now() - customerAccountLoadedAt >= CUSTOMER_ACCOUNT_CACHE_TTL_MS) {
     if (checkoutAccountCheckPending) return;
     checkoutAccountCheckPending = true;
     if (placeOrderButton) {
@@ -1736,7 +1822,7 @@ async function continueToOrder() {
     checkoutMessage.textContent = "Your login session has expired. Please log in again.";
     return;
   }
-  if (!loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded || customerAccountLoadFailed) {
+  if (!loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded || customerAccountLoadFailed || customerAccountLoadedUid !== user.uid || Date.now() - customerAccountLoadedAt >= CUSTOMER_ACCOUNT_CACHE_TTL_MS) {
     checkoutSubmit.disabled = true;
     checkoutSubmit.textContent = "CHECKING ACCOUNT…";
     try {
@@ -1811,7 +1897,7 @@ async function continueToOrder() {
     closeCart();
     render();
     openOrderSuccess(order.orderId, pickup ? "pickup" : "delivery", order.addressSaved === true, checkoutAddressLabel?.value || "", order.orderNumber || "", order.isTestOrder === true);
-    refreshAccountScreens(currentCustomerUser());
+    refreshAccountScreens(currentCustomerUser(), { force: true });
   } catch (error) {
     console.error("Order creation failed:", error);
     const code = error?.code || "";
@@ -1936,6 +2022,11 @@ let pendingGpsCoordinates = null;
   let loyaltyAccountLoaded = false;
   let customerAccountLoadFailed = false;
   let customerAccountLoadDiagnostic = "";
+  let customerAccountLoadedUid = "";
+  let customerAccountLoadedAt = 0;
+  let customerAccountRetryAfter = 0;
+  let accountLoadPromise = null;
+  let accountLoadPromiseUid = "";
   let accountRefreshToken = 0;
   let checkoutAccountCheckPending = false;
   
@@ -2616,6 +2707,23 @@ ${esc(offer.freeItem)}
   const welcomeCard = "";
   const pointsBalance = Math.max(0, Number(currentLoyaltyAccount.points || 0));
   const cartPointsBalance = `<div class="cart-points-balance"><span>YOUR CRAVING POINTS</span><strong>${!customerAuthStateResolved ? "Checking sign-in…" : !isCustomerSignedIn() ? "Sign in to view" : loyaltyAccountLoaded ? `${pointsBalance.toLocaleString("en-IN")} pts` : "Temporarily unavailable"}</strong></div>`;
+  const completedRewardOrders = Math.max(0, Number(currentLoyaltyAccount.completedOrders || 0));
+  const rewardMilestones = (Array.isArray(REWARDS_CONFIG.journey) ? REWARDS_CONFIG.journey : [])
+    .filter(reward => reward?.id && Number.isFinite(Number(reward.order)))
+    .sort((left, right) => Number(left.order) - Number(right.order));
+  const completedCycleOrder = completedRewardOrders === 0 ? 0 : ((completedRewardOrders - 1) % 30) + 1;
+  const rewardCyclePosition = completedCycleOrder === 30 ? 0 : completedCycleOrder;
+  const nextRewardMilestone = rewardMilestones.find(reward => Number(reward.order) > rewardCyclePosition);
+  const previousRewardMilestone = [...rewardMilestones].reverse().find(reward => Number(reward.order) <= rewardCyclePosition);
+  const nextRewardOrder = nextRewardMilestone ? Number(nextRewardMilestone.order) : 0;
+  const previousRewardOrder = Number(previousRewardMilestone?.order || 0);
+  const ordersBetweenRewards = nextRewardOrder ? Math.max(1, nextRewardOrder - previousRewardOrder) : 0;
+  const completedSinceReward = Math.max(0, Math.min(ordersBetweenRewards, rewardCyclePosition - previousRewardOrder));
+  const ordersUntilReward = nextRewardOrder ? Math.max(1, nextRewardOrder - rewardCyclePosition) : 0;
+  const rewardProgressPercent = ordersBetweenRewards ? Math.round(completedSinceReward / ordersBetweenRewards * 100) : 0;
+  const cartRewardProgress = !isTestOrder && customerAuthStateResolved && isCustomerSignedIn() && loyaltyAccountLoaded && customerOnlineOrderHistoryLoaded && nextRewardMilestone
+    ? `<section class="cart-reward-progress" aria-label="Next Craving reward progress"><div class="cart-reward-progress-head"><span>YOUR NEXT CRAVING REWARD</span><strong>${completedRewardOrders} completed ${completedRewardOrders === 1 ? "order" : "orders"}</strong></div><b>${esc(nextRewardMilestone.title)}</b><div class="cart-reward-progress-track" role="progressbar" aria-label="Progress toward next reward" aria-valuemin="0" aria-valuemax="${ordersBetweenRewards}" aria-valuenow="${completedSinceReward}"><span style="width:${rewardProgressPercent}%"></span></div><small>${ordersUntilReward === 1 ? "1 more completed order" : `${ordersUntilReward} more completed orders`} to unlock · added after delivery or pickup</small></section>`
+    : "";
   const testOrderNotice = isTestOrder ? `<p class="test-order-notice">TEST MODE · No payment is due. This order won’t be prepared or sent to staff; offers, rewards and points can’t be used or earned.</p>` : "";
   const pointsAvailable = loyaltyAccountLoaded && !isTestOrder ? Math.floor(Math.min(REWARDS_CONFIG.maxRedeemPointsPerOrder, pointsBalance, offerEligibleSubtotal * 10) / 100) * 100 : 0;
   const pointsControls = isTestOrder ? "" : pointsAvailable > 0
@@ -2660,6 +2768,7 @@ ${esc(offer.freeItem)}
     ${welcomeCard}
     ${testOrderNotice}
     ${cartPointsBalance}
+    ${cartRewardProgress}
     ${pointsControls}
 
     ${deliveryProgress}
@@ -2771,6 +2880,15 @@ function closeCart() {
 
 document.addEventListener("click", async event => {
 
+  const homeCategoryButton = event.target.closest("[data-home-category]");
+  if (homeCategoryButton) {
+    const categoryId = homeCategoryButton.dataset.homeCategory;
+    if (!Object.prototype.hasOwnProperty.call(MENU_DATA, categoryId)) return;
+    setAppScreen("menu");
+    requestAnimationFrame(() => setActiveCategory(categoryId, true));
+    return;
+  }
+
   const editAddressButton = event.target.closest("[data-edit-address]");
   if (editAddressButton) {
     editAddress(editAddressButton.dataset.editAddress);
@@ -2833,12 +2951,12 @@ document.addEventListener("click", async event => {
   }
 
   if (event.target.closest("[data-reload-orders]")) {
-    refreshAccountScreens(currentCustomerUser());
+    refreshAccountScreens(currentCustomerUser(), { force: true });
     return;
   }
 
   if (event.target.closest("[data-reload-account]")) {
-    refreshAccountScreens(currentCustomerUser());
+    refreshAccountScreens(currentCustomerUser(), { force: true });
     return;
   }
 
@@ -3526,7 +3644,11 @@ function updateOpeningHours() {
   }
 }
 
-async function refreshOrderingAvailability() {
+async function refreshOrderingAvailability({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && now - orderAvailabilityLastCheckedAt < 60_000) return;
+  if (orderAvailabilityRequest) return orderAvailabilityRequest;
+  orderAvailabilityLastCheckedAt = now;
   const api = window.FirebaseFunctionsAPI?.httpsCallable;
   if (!api || !window.firebaseFunctions) {
     orderAvailabilityReady = false;
@@ -3534,31 +3656,38 @@ async function refreshOrderingAvailability() {
     updatePlaceOrderButton();
     return;
   }
-  try {
-    const response = await api(window.firebaseFunctions, "getOrderingStatus")({});
-    const data = response.data || {};
-    orderAvailability = {
-      isOpen: data.isOpen === true,
-      paused: data.paused === true,
-      staffEnabled: data.staffEnabled === true,
-      acceptingOnlineOrders: data.acceptingOnlineOrders === true,
-      adminMode: data.adminMode || "",
-      testModeEnabled: data.testModeEnabled === true,
-      isTestCustomer: data.isTestCustomer === true
-    };
-    orderAvailabilityReady = true;
-  } catch (error) {
-    console.warn("Could not refresh online ordering status:", error);
-    orderAvailabilityReady = false;
-  }
-  updateOpeningHours();
-  updatePlaceOrderButton();
+  orderAvailabilityRequest = (async () => {
+    try {
+      const response = await api(window.firebaseFunctions, "getOrderingStatus")({});
+      const data = response.data || {};
+      orderAvailability = {
+        isOpen: data.isOpen === true,
+        paused: data.paused === true,
+        staffEnabled: data.staffEnabled === true,
+        acceptingOnlineOrders: data.acceptingOnlineOrders === true,
+        adminMode: data.adminMode || "",
+        testModeEnabled: data.testModeEnabled === true,
+        isTestCustomer: data.isTestCustomer === true
+      };
+      orderAvailabilityReady = true;
+    } catch (error) {
+      console.warn("Could not refresh online ordering status:", error);
+      orderAvailabilityReady = false;
+    }
+    updateOpeningHours();
+    updatePlaceOrderButton();
+  })();
+  try { await orderAvailabilityRequest; }
+  finally { orderAvailabilityRequest = null; }
 }
 
 
 // Run immediately
 refreshOrderingAvailability();
-setInterval(refreshOrderingAvailability, 20000);
+setInterval(refreshOrderingAvailability, 60000);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") refreshOrderingAvailability();
+});
 
 
 });

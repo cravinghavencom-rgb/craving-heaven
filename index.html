@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Montserrat:wght@500;600;700;800;900&display=swap">
   <link rel="preload" as="image" href="images/burgers/classic-crunchy-burger.webp" type="image/webp" fetchpriority="high">
-  <link rel="stylesheet" href="style.css?v=20261028-customer-fixes-v3">
+  <link rel="stylesheet" href="style.css?v=20261031-home-access-v1">
   <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-GD2EPLFYZP">
 </script>
@@ -123,7 +123,14 @@
           <span class="home-hero-art-caption"><b>CRISPY.</b> JUICY. HEAVENLY.</span>
         </div>
       </section>
-      <div class="home-discovery-heading"><span>FIND YOUR FAVOURITE</span><h2>What are you craving today?</h2><p>Good food, great mood—start with a combo or explore the full menu.</p></div>
+      <div class="home-discovery-heading"><span>FIND YOUR FAVOURITE</span><h2>Choose your craving</h2><p>Jump straight to a favourite or explore the full menu.</p></div>
+      <nav class="home-quick-categories" aria-label="Shop by food category">
+        <button type="button" data-home-category="burgers"><span aria-hidden="true">🍔</span>Burgers</button>
+        <button type="button" data-home-category="shawarma"><span aria-hidden="true">🌯</span>Shawarma</button>
+        <button type="button" data-home-category="wings"><span aria-hidden="true">🍗</span>Wings</button>
+        <button type="button" data-home-category="french-fries"><span aria-hidden="true">🍟</span>Fries</button>
+        <button type="button" data-screen="menu" class="home-quick-all">All menu <span aria-hidden="true">→</span></button>
+      </nav>
       <div class="home-dashboard-cards" aria-label="Explore CRAVING HEAVEN">
         <div id="homeComboCard"></div>
         <article class="home-dashboard-card home-card-game">
@@ -178,28 +185,28 @@
     </section>
 
     <section id="screen-orders" class="app-screen account-screen" data-app-screen="orders" aria-labelledby="ordersTitle" hidden>
-      <div class="account-heading"><span class="section-kicker">YOUR CRAVING HEAVEN</span><h1 id="ordersTitle">Your Orders</h1><p>Track your recent orders and see what you enjoyed.</p></div>
+      <div class="account-heading account-heading-with-action"><div><span class="section-kicker">YOUR CRAVING HEAVEN</span><h1 id="ordersTitle">Your Orders</h1><p>Track your recent orders and see what you enjoyed.</p></div><button type="button" class="account-secondary-button" data-reload-orders>REFRESH</button></div>
       <div id="ordersContent" class="account-card"><div class="account-loading">Sign in to view your order history.</div></div>
     </section>
 
     <section id="screen-rewards" class="app-screen account-screen" data-app-screen="rewards" aria-labelledby="rewardsTitle" hidden>
-      <div class="account-heading"><span class="section-kicker">MEMBER BENEFITS</span><h1 id="rewardsTitle">Craving Points & Rewards</h1><p>Your Craving Points and member rewards.</p></div>
+      <div class="account-heading"><span class="section-kicker">MEMBER BENEFITS</span><h1 id="rewardsTitle">Craving Points & Rewards</h1><p>Earn points as you order and unlock tasty treats.</p></div>
       <section class="loyalty-card" aria-labelledby="loyaltyTitle">
         <div class="loyalty-card-top"><span class="loyalty-mark">✦</span><div><span class="loyalty-kicker">CRAVING HEAVEN</span><h2 id="loyaltyTitle">Craving Points</h2></div></div>
-        <p class="loyalty-copy">Use your Craving Points on eligible regular-menu items.</p>
+        <p class="loyalty-copy">Earn points as you order and use them for savings on eligible food.</p>
         <div class="loyalty-points"><strong id="loyaltyPointsBalance">0</strong><span>CRAVING POINTS BALANCE</span></div>
         <small id="gamePointsExpiryNotice" class="game-points-expiry"></small>
         <div class="loyalty-value-line"><span>Craving Points value · 100 = ₹10</span><strong id="loyaltyPointsValue">₹0</strong></div>
       </section>
-      <section class="rewards-rules" aria-label="Craving Points rules">
-        <article><span>₹10</span><p>Earn 1 Craving Point per ₹10 spent on regular menu items after delivery or pickup completion.</p></article>
-        <article><span>½ rate</span><p>Combos earn 1 Craving Point per ₹20. Points can’t be used on combo items; eligible regular items in a mixed order can still use points.</p></article>
-        <article><span>100 pts</span><p>100 Craving Points = ₹10 off. Use up to 1,000 (₹100) per order.</p></article>
-        <article><span>Never</span><p>Craving Points do not expire. Only one offer or reward can be used per order.</p></article>
+      <section class="rewards-rules" aria-label="How Craving Points work">
+        <h2>How it works</h2>
+        <div class="rewards-rule-row"><strong>Earn</strong><p>1 point per ₹10 on regular food; 1 per ₹20 on combos. Points arrive after delivery or pickup.</p></div>
+        <div class="rewards-rule-row"><strong>Redeem</strong><p>100 points = ₹10 off regular food. Use up to 1,000 points (₹100) per order. One offer or reward per order.</p></div>
+        <div class="rewards-rule-row"><strong>Keep</strong><p>Your Craving Points don’t expire.</p></div>
       </section>
       <section class="rewards-journey" aria-labelledby="rewardsJourneyTitle">
         <div class="rewards-journey-heading"><div><span class="section-kicker">YOUR ORDER JOURNEY</span><h2 id="rewardsJourneyTitle">Your next rewards</h2></div><span class="rewards-order-count" id="rewardOrderCount">0 completed orders</span></div>
-        <p class="rewards-journey-note">Rewards unlock after completed delivery or pickup orders. Free food rewards are valid for 7 days.</p>
+        <p class="rewards-journey-note">Every completed order brings your next treat closer. Free food rewards are valid for 7 days.</p>
         <div id="rewardsJourneyCards" class="rewards-journey-cards"><div class="rewards-login-hint">Sign in to see your next rewards.</div></div>
       </section>
     </section>
@@ -704,7 +711,7 @@ window.firebaseMessaging = firebaseMessaging;
 
 <script src="rewards-config.js?v=20261021-first-order-gift" defer></script>
 <script src="menu.js?v=20261027-combo-webp" defer></script>
-<script src="script.js?v=20261030-central-auth-v2" defer></script>
+<script src="script.js?v=20261031-customer-request-cache-v1" defer></script>
 <script src="craving-dash.js?v=20261026-craving-runner-v1" defer></script>
 </body>
 </html>
