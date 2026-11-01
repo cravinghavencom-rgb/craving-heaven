@@ -261,6 +261,39 @@ const FCM_VAPID_KEY =
     return customerAuthStateResolved;
   }
 
+  async function reconcileCustomerSessionFromAuth(user = window.firebaseAuth?.currentUser) {
+    if (!user || user.uid !== window.firebaseAuth?.currentUser?.uid) return null;
+    if (isCustomerSignedIn()) return user;
+    try {
+      const token = await user.getIdTokenResult();
+      if (user.uid !== window.firebaseAuth?.currentUser?.uid) return null;
+      const type = token.claims.admin === true || token.claims.staff === true ? "team" : "customer";
+      setCustomerSession(user, type);
+      if (lastCustomerAuthUid && lastCustomerAuthUid !== user.uid) {
+        currentLoyaltyAccount = { points: 0, completedOrders: 0, availableRewards: [] };
+        loyaltyAccountLoaded = false;
+        customerOnlineOrderHistoryLoaded = false;
+        customerAccountLoadedUid = "";
+        customerAccountLoadedAt = 0;
+        customerHasOrderedOnline = false;
+        selectedMilestoneRewardId = null;
+        selectedPointsToRedeem = 0;
+        selectedWelcomeOffer = false;
+        removeSelectedFreeOffer();
+      }
+      lastCustomerAuthUid = user.uid;
+      updatePlaceOrderButton();
+      if (type === "customer") refreshAccountScreens(user);
+      else refreshAccountScreens(null);
+      renderRewardsJourney(currentLoyaltyAccount, type === "customer");
+      if (cartOverlay?.classList.contains("active")) renderCart();
+      return type === "customer" ? user : null;
+    } catch (error) {
+      console.warn("Could not reconcile the customer session before opening cart:", error);
+      return null;
+    }
+  }
+
 
   function resetCustomerLoginMessages() {
     if (customerLoginMessage) {
@@ -2851,10 +2884,17 @@ ${esc(offer.freeItem)}
     render();
   }
 
-  function openCart() {
+  async function openCart() {
     cartOverlay.classList.add("active");
     cartOverlay.setAttribute("aria-hidden", "false");
     document.body.classList.add("cart-open");
+    renderCart();
+    if (!customerAuthStateResolved) await waitForCustomerAuthResolution();
+    const user = currentCustomerUser() || await reconcileCustomerSessionFromAuth();
+    if (user && (!loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded || customerAccountLoadedUid !== user.uid)) {
+      await refreshAccountScreens(user);
+    }
+    renderCart();
   }
 
 function closeCart() {
