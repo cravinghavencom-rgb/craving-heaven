@@ -24,6 +24,17 @@ function isCustomerSignedIn() {
   }
   return false;
 }
+function resolveCustomerRewardDefinition(reward) {
+  if (!reward || typeof reward !== "object") return null;
+  // Earned tickets keep the terms that were active when they were issued.
+  // Prefer that snapshot so an admin edit cannot make the rewards page,
+  // cart, and server describe the same ticket differently.
+  if (reward.definition && typeof reward.definition === "object") return reward.definition;
+  if (reward.id && REWARDS_CONFIG.rewardById?.[reward.id]) return REWARDS_CONFIG.rewardById[reward.id];
+  if (["craving-dash", "craving-runner"].includes(reward.source)
+      && ["free-item", "percent-discount"].includes(reward.kind)) return reward;
+  return reward;
+}
 function currentCustomerUser() {
   return isCustomerSignedIn() ? window.firebaseAuth.currentUser : null;
 }
@@ -854,7 +865,14 @@ async function handlePlaceOrderClick() {
       && account.welcomeCompleted !== true && !account.welcomeReservationId;
     const upcoming = REWARDS_CONFIG.journey.filter(item => item.id && item.order > previewOrder && !availableIds.has(item.id)
       && !(welcomeAvailableNow && item.id === welcomeReward?.id)).slice(0, 2);
-    const visibleReadyCount = Math.min(available.length, 1) + (welcomeAvailableNow ? 1 : 0);
+    // Don't advertise free delivery as ready when the current basket already
+    // gets automatic free delivery (or the customer chose pickup). Keep the
+    // earned ticket in the account; it can be used on a later eligible order.
+    const visibleAvailable = available.filter(reward => {
+      const definition = resolveCustomerRewardDefinition(reward);
+      return !(definition?.kind === "free-delivery" && (isPickupSelected() || getPaidSubtotal() >= FREE_DELIVERY_THRESHOLD));
+    });
+    const visibleReadyCount = Math.min(visibleAvailable.length, 1) + (welcomeAvailableNow ? 1 : 0);
     const comboSpendNote = reward => Number(reward?.minimum || 0) > 0
       ? (reward.includeCombosInMinimum === true || (reward.includeCombosInMinimum === undefined && reward.kind === "free-delivery")
         ? "Combo value counts toward this reward’s minimum spend."
@@ -862,8 +880,8 @@ async function handlePlaceOrderClick() {
       : "";
     const cards = [
       ...(welcomeAvailableNow ? [`<article class="journey-card journey-card-ready"><span class="journey-card-status">FIRST ONLINE ORDER GIFT</span><strong>${esc(REWARDS_CONFIG.welcomeItem)} · FREE</strong><p>Add any regular menu item to your first online order. The burger appears in your cart at ₹0; combos or extras alone do not qualify.</p><button type="button" class="journey-use-button" data-screen="menu">VIEW MENU</button></article>`] : []),
-      ...available.slice(0, 1).map(reward => {
-        const definition = REWARDS_CONFIG.rewardById[reward.id] || reward;
+      ...visibleAvailable.slice(0, 1).map(reward => {
+        const definition = resolveCustomerRewardDefinition(reward) || reward;
         const expiry = reward.expiresAt ? (reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt)) : null;
         const gameReward = ["craving-dash", "craving-runner"].includes(reward.source);
         const expires = expiry && !Number.isNaN(expiry.getTime()) ? `${gameReward ? "Expires" : "Use by"} ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: gameReward ? "numeric" : undefined, minute: gameReward ? "2-digit" : undefined }).format(expiry)}` : "Ready to use";
@@ -2403,7 +2421,7 @@ function getSelectedMilestoneReward() {
     const expiry = reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt);
     if (Number.isNaN(expiry.getTime()) || expiry.getTime() <= Date.now()) return null;
   }
-  return REWARDS_CONFIG.rewardById[reward.id] || (["craving-dash", "craving-runner"].includes(reward.source) && ["free-item", "percent-discount"].includes(reward.kind) ? reward : null);
+  return resolveCustomerRewardDefinition(reward);
 }
 
 function gameRewardDiscount(reward = getSelectedMilestoneReward(), eligibleSubtotal = getOfferEligibleSubtotal()) {
@@ -2458,7 +2476,7 @@ function getBuyGetPurchaseQty(reward) {
 function selectMilestoneReward(rewardId) {
   if (orderAvailability.isTestCustomer) return;
   const ticket = currentLoyaltyAccount.availableRewards?.find(item => (item.ticketId || item.id) === rewardId);
-  const definition = ticket ? (REWARDS_CONFIG.rewardById[ticket.id] || (["craving-dash", "craving-runner"].includes(ticket.source) && ["free-item", "percent-discount"].includes(ticket.kind) ? ticket : null)) : null;
+  const definition = resolveCustomerRewardDefinition(ticket);
   if (!definition || !ticket) return;
   const eligibleSubtotal = getOfferEligibleSubtotal();
   const rewardSpend = getRewardMinimumSpend(definition);
@@ -2742,7 +2760,7 @@ ${esc(offer.freeItem)}
     const expiry = reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt);
     return !Number.isNaN(expiry.getTime()) && expiry.getTime() > Date.now();
   }).map(reward => {
-    const definition = REWARDS_CONFIG.rewardById[reward.id] || (["craving-dash", "craving-runner"].includes(reward.source) && ["free-item", "percent-discount"].includes(reward.kind) ? reward : null);
+    const definition = resolveCustomerRewardDefinition(reward);
     if (!definition) return "";
     const rewardTicketId = reward.ticketId || reward.id;
     const chosen = selectedMilestoneRewardId === rewardTicketId;
@@ -2809,7 +2827,7 @@ ${esc(offer.freeItem)}
     return !Number.isNaN(expiry.getTime()) && expiry.getTime() > Date.now();
   });
   const nextRewardDefinition = nextAvailableReward
-    ? REWARDS_CONFIG.rewardById[nextAvailableReward.id] || nextAvailableReward
+    ? resolveCustomerRewardDefinition(nextAvailableReward)
     : null;
   const freeDeliveryRewardReady = !isTestOrder
     && !isPickupSelected()
@@ -3080,7 +3098,7 @@ document.addEventListener("click", async event => {
   if (useRewardButton) {
     const ticketId = useRewardButton.dataset.useReward;
     const ticket = currentLoyaltyAccount.availableRewards?.find(item => (item.ticketId || item.id) === ticketId);
-    const definition = ticket ? REWARDS_CONFIG.rewardById[ticket.id] : null;
+    const definition = resolveCustomerRewardDefinition(ticket);
     if (definition && ticket) {
       removeSelectedFreeOffer();
       selectedPointsToRedeem = 0;
