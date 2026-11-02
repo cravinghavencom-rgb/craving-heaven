@@ -855,6 +855,11 @@ async function handlePlaceOrderClick() {
     const upcoming = REWARDS_CONFIG.journey.filter(item => item.id && item.order > previewOrder && !availableIds.has(item.id)
       && !(welcomeAvailableNow && item.id === welcomeReward?.id)).slice(0, 2);
     const visibleReadyCount = Math.min(available.length, 1) + (welcomeAvailableNow ? 1 : 0);
+    const comboSpendNote = reward => Number(reward?.minimum || 0) > 0
+      ? (reward.includeCombosInMinimum === true || (reward.includeCombosInMinimum === undefined && reward.kind === "free-delivery")
+        ? "Combo value counts toward this reward’s minimum spend."
+        : "Combo value does not count toward this reward’s minimum spend.")
+      : "";
     const cards = [
       ...(welcomeAvailableNow ? [`<article class="journey-card journey-card-ready"><span class="journey-card-status">FIRST ONLINE ORDER GIFT</span><strong>${esc(REWARDS_CONFIG.welcomeItem)} · FREE</strong><p>Add any regular menu item to your first online order. The burger appears in your cart at ₹0; combos or extras alone do not qualify.</p><button type="button" class="journey-use-button" data-screen="menu">VIEW MENU</button></article>`] : []),
       ...available.slice(0, 1).map(reward => {
@@ -862,15 +867,15 @@ async function handlePlaceOrderClick() {
         const expiry = reward.expiresAt ? (reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt)) : null;
         const gameReward = ["craving-dash", "craving-runner"].includes(reward.source);
         const expires = expiry && !Number.isNaN(expiry.getTime()) ? `${gameReward ? "Expires" : "Use by"} ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: gameReward ? "numeric" : undefined, minute: gameReward ? "2-digit" : undefined }).format(expiry)}` : "Ready to use";
-        return `<article class="journey-card journey-card-ready"><span class="journey-card-status">✦ READY TO USE</span><strong>${esc(definition.title || reward.title)}</strong><p>${esc(definition.detail || reward.detail || "Use this reward on your next order")}</p><small>${esc(expires)}</small><button type="button" class="journey-use-button" data-use-reward="${esc(reward.ticketId || reward.id)}">USE IN CART</button></article>`;
+        return `<article class="journey-card journey-card-ready"><span class="journey-card-status">✦ READY TO USE</span><strong>${esc(definition.title || reward.title)}</strong><p>${esc(definition.detail || reward.detail || "Use this reward on your next order")}</p>${comboSpendNote(definition) ? `<small>${esc(comboSpendNote(definition))}</small>` : ""}<small>${esc(expires)}</small><button type="button" class="journey-use-button" data-use-reward="${esc(reward.ticketId || reward.id)}">USE IN CART</button></article>`;
       }),
       ...upcoming.slice(0, Math.max(0, 2 - visibleReadyCount)).map((item, index) => {
-        if (index > 0) return `<article class="journey-card journey-card-preview"><span class="journey-card-status">THEN · ORDER ${item.order}</span><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p></article>`;
+        if (index > 0) return `<article class="journey-card journey-card-preview"><span class="journey-card-status">THEN · ORDER ${item.order}</span><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p>${comboSpendNote(item) ? `<small>${esc(comboSpendNote(item))}</small>` : ""}</article>`;
         const targetOrder = Math.max(1, Number(item.order));
         const progressOrders = Math.max(0, Math.min(targetOrder, previewOrder));
         const remainingOrders = Math.max(1, targetOrder - progressOrders);
         const progress = Math.round(progressOrders / targetOrder * 100);
-        return `<article class="journey-card journey-card-next"><div class="journey-next-top"><span class="journey-card-status">YOUR NEXT TREAT · ORDER ${targetOrder}</span><span class="journey-next-distance">${remainingOrders === 1 ? "1 order to go" : `${remainingOrders} orders to go`}</span></div><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p><div class="journey-progress-track" role="progressbar" aria-label="Progress to next reward" aria-valuemin="0" aria-valuemax="${targetOrder}" aria-valuenow="${progressOrders}"><span style="width:${progress}%"></span></div><small>Complete ${remainingOrders} more ${remainingOrders === 1 ? "order" : "orders"} to unlock. Progress updates after delivery or pickup.</small></article>`;
+        return `<article class="journey-card journey-card-next"><div class="journey-next-top"><span class="journey-card-status">YOUR NEXT TREAT · ORDER ${targetOrder}</span><span class="journey-next-distance">${remainingOrders === 1 ? "1 order to go" : `${remainingOrders} orders to go`}</span></div><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p>${comboSpendNote(item) ? `<small>${esc(comboSpendNote(item))}</small>` : ""}<div class="journey-progress-track" role="progressbar" aria-label="Progress to next reward" aria-valuemin="0" aria-valuemax="${targetOrder}" aria-valuenow="${progressOrders}"><span style="width:${progress}%"></span></div><small>Complete ${remainingOrders} more ${remainingOrders === 1 ? "order" : "orders"} to unlock. Progress updates after delivery or pickup.</small></article>`;
       })
     ];
     root.innerHTML = cards.length ? cards.join("") : `<div class="rewards-login-hint">You’ve reached the end of this reward journey. Keep ordering to begin the next round.</div>`;
@@ -2344,6 +2349,17 @@ function getOfferEligibleSubtotal() {
   }, 0);
 }
 
+function getRewardMinimumSpend(reward) {
+  const regularSpend = getOfferEligibleSubtotal();
+  const includeCombos = reward?.includeCombosInMinimum === true
+    || (reward?.includeCombosInMinimum === undefined && reward?.kind === "free-delivery");
+  if (!includeCombos) return regularSpend;
+  return regularSpend + cart.reduce((sum, item) => {
+    if (item.isFreeOffer || REWARD_EXCLUDED_NAMES.has(item.name)) return sum;
+    return item.isCombo || COMBO_MENU_DATA.some(combo => combo.name === item.name) ? sum + Number(item.price || 0) * Number(item.qty || 0) : sum;
+  }, 0);
+}
+
 function getBurgerCount() {
   return cart.reduce((count, item) => {
     if (item.isFreeOffer || item.isCombo || COMBO_MENU_DATA.some(combo => combo.name === item.name)) return count;
@@ -2391,7 +2407,7 @@ function getSelectedMilestoneReward() {
 }
 
 function gameRewardDiscount(reward = getSelectedMilestoneReward(), eligibleSubtotal = getOfferEligibleSubtotal()) {
-  if (reward?.kind !== "percent-discount" || eligibleSubtotal < Number(reward.minimum || 0)) return 0;
+  if (reward?.kind !== "percent-discount" || getRewardMinimumSpend(reward) < Number(reward.minimum || 0)) return 0;
   const amount = Math.floor(eligibleSubtotal * Number(reward.percent || 0) / 100);
   const cap = Number(reward.maxDiscount || 0);
   return Math.max(0, Math.min(amount, cap > 0 ? cap : eligibleSubtotal));
@@ -2445,7 +2461,7 @@ function selectMilestoneReward(rewardId) {
   const definition = ticket ? (REWARDS_CONFIG.rewardById[ticket.id] || (["craving-dash", "craving-runner"].includes(ticket.source) && ["free-item", "percent-discount"].includes(ticket.kind) ? ticket : null)) : null;
   if (!definition || !ticket) return;
   const eligibleSubtotal = getOfferEligibleSubtotal();
-  const rewardSpend = definition.kind === "free-delivery" ? getPaidSubtotal() : eligibleSubtotal;
+  const rewardSpend = getRewardMinimumSpend(definition);
   if (rewardSpend < Number(definition.minimum || 0)) return;
   if (definition.kind === "buy-get" && getBuyGetPurchaseQty(definition) < Number(definition.buyQuantity || 0)) return;
   if (definition.kind === "percent-discount" && gameRewardDiscount(definition, eligibleSubtotal) <= 0) return;
@@ -2501,7 +2517,7 @@ function renderCart() {
     selectedReward = null;
   }
   if (selectedReward) {
-    const rewardSpend = selectedReward.kind === "free-delivery" ? subtotal : offerEligibleSubtotal;
+    const rewardSpend = getRewardMinimumSpend(selectedReward);
     const rewardIsNoLongerEligible = rewardSpend < Number(selectedReward.minimum || 0)
       || (selectedReward.kind === "free-delivery" && (subtotal >= FREE_DELIVERY_THRESHOLD || isPickupSelected()))
       || (selectedReward.kind === "percent-discount" && gameRewardDiscount(selectedReward, offerEligibleSubtotal) <= 0)
@@ -2730,12 +2746,13 @@ ${esc(offer.freeItem)}
     if (!definition) return "";
     const rewardTicketId = reward.ticketId || reward.id;
     const chosen = selectedMilestoneRewardId === rewardTicketId;
-    const rewardSpend = definition.kind === "free-delivery" ? subtotal : offerEligibleSubtotal;
+    const rewardSpend = getRewardMinimumSpend(definition);
     const remaining = Math.max(0, Number(definition.minimum || 0) - rewardSpend);
     const buyGetRemaining = definition.kind === "buy-get" ? Math.max(0, Number(definition.buyQuantity || 0) - getBuyGetPurchaseQty(definition)) : 0;
     const eligible = remaining === 0 && buyGetRemaining === 0 && !(definition.kind === "free-delivery" && (subtotal >= FREE_DELIVERY_THRESHOLD || isPickupSelected())) && !(definition.kind === "percent-discount" && gameRewardDiscount(definition, offerEligibleSubtotal) <= 0);
     const rewardDescription = definition.kind === "buy-get" ? `Buy ${Number(definition.buyQuantity)} × ${definition.buyItem}, get ${Number(definition.getQuantity)} × ${definition.getItem} free` : definition.kind === "free-item" ? `${definition.item} free${["craving-dash", "craving-runner"].includes(reward.source) ? " · expires 48 hours after earning" : ""}` : definition.kind === "percent-discount" ? `${Number(definition.percent)}% off eligible regular menu items${Number(definition.maxDiscount) ? ` · up to ${money(definition.maxDiscount)}` : ""}${["craving-dash", "craving-runner"].includes(reward.source) ? " · expires after 48 hours" : ""}` : definition.kind === "free-delivery" ? "Free delivery" : definition.kind === "discount" ? `${money(definition.amount)} off` : definition.kind === "bonus-points" ? `${definition.points} Craving Points on delivery` : `Double Craving Points, up to ${definition.maxBonusPoints} extra`;
-    const statusNote = definition.kind === "buy-get" && buyGetRemaining > 0 ? `Add ${buyGetRemaining} × ${definition.buyItem} to your cart to use this reward.` : definition.kind === "free-delivery" && isPickupSelected() ? "Free-delivery rewards can only be used for delivery." : remaining > 0 ? `Add ${money(remaining)} to your food subtotal to use this reward${definition.kind === "free-delivery" ? "; combos and regular items count" : " in regular menu items"}.` : definition.kind === "percent-discount" && gameRewardDiscount(definition, offerEligibleSubtotal) <= 0 ? "Add regular menu items to use this discount; combos, extras, and delivery are excluded." : definition.kind === "percent-discount" ? "Discount applies to regular menu items only. Combos, extras, and delivery are excluded." : definition.kind === "free-delivery" && subtotal >= FREE_DELIVERY_THRESHOLD ? "Your order already qualifies for free delivery. Save this reward for another order." : "";
+    const combosCount = definition.includeCombosInMinimum === true || (definition.includeCombosInMinimum === undefined && definition.kind === "free-delivery");
+    const statusNote = definition.kind === "buy-get" && buyGetRemaining > 0 ? `Add ${buyGetRemaining} × ${definition.buyItem} to your cart to use this reward.` : definition.kind === "free-delivery" && isPickupSelected() ? "Free-delivery rewards can only be used for delivery." : remaining > 0 ? `Add ${money(remaining)} more to your eligible subtotal${combosCount ? " (combos count)" : " (combos do not count)"} to use this reward.` : definition.kind === "percent-discount" && gameRewardDiscount(definition, offerEligibleSubtotal) <= 0 ? `Add regular menu items to use this discount${combosCount ? "; combo value counts toward the minimum" : "; combos do not count toward the minimum"}.` : definition.kind === "percent-discount" ? `Discount applies to regular menu items only. Combos, extras, and delivery are excluded from the discount.${Number(definition.minimum || 0) > 0 ? combosCount ? " Combo value counts toward its minimum." : " Combo value does not count toward its minimum." : ""}` : definition.kind === "free-delivery" && subtotal >= FREE_DELIVERY_THRESHOLD ? "Your order already qualifies for free delivery. Save this reward for another order." : Number(definition.minimum || 0) > 0 ? `Combo value ${combosCount ? "counts" : "does not count"} toward this reward’s minimum spend.` : "";
     const expiryLabel = reward.expiresAt ? ` · use by ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt))}` : "";
     return `<article class="cart-reward-choice ${chosen ? "is-selected" : ""}"><div><strong>${esc(definition.title)}</strong><small>${esc(rewardDescription)} · ${esc(definition.detail || "")}${esc(expiryLabel)}</small>${statusNote ? `<small class="reward-remaining">${esc(statusNote)}</small>` : ""}</div><button type="button" data-select-loyalty-reward="${esc(rewardTicketId)}" ${!eligible ? "disabled" : ""}>${chosen ? "SELECTED" : eligible ? "USE REWARD" : "LOCKED"}</button></article>`;
   }).filter(Boolean).join("");
@@ -2798,7 +2815,7 @@ ${esc(offer.freeItem)}
     && !isPickupSelected()
     && subtotal < FREE_DELIVERY_THRESHOLD
     && nextRewardDefinition?.kind === "free-delivery"
-    && subtotal >= Number(nextRewardDefinition.minimum || 0);
+    && getRewardMinimumSpend(nextRewardDefinition) >= Number(nextRewardDefinition.minimum || 0);
 
   const deliveryProgress = delivery === 0
     ? `<div class="free-progress free-progress-complete">${selectedReward?.kind === "free-delivery" ? `🎁 <strong>FREE DELIVERY REWARD APPLIED · SAVE ${money(DELIVERY_CHARGE)}</strong>` : "🎉 <strong>FREE DELIVERY!</strong>"}</div>`

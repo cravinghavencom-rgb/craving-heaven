@@ -605,6 +605,7 @@ function validateRewardJourney(journey, menu, combos = COMBO_MENU_DATA) {
     if (id) ids.add(id);
     const reward = { order, kind, title, detail };
     if (id) reward.id = id;
+    reward.includeCombosInMinimum = typeof entry.includeCombosInMinimum === "boolean" ? entry.includeCombosInMinimum : kind === "free-delivery";
     if (["free-delivery", "free-item", "discount", "percent-discount", "bonus-points"].includes(kind)) {
       reward.minimum = Number(entry.minimum || 0);
       if (!Number.isSafeInteger(reward.minimum) || reward.minimum < 0 || reward.minimum > 10000) throw new HttpsError("invalid-argument", `The minimum spend for ${title} is invalid.`);
@@ -665,6 +666,12 @@ function timestampMillis(value) {
   if (typeof value.toDate === "function") return value.toDate().getTime();
   const parsed = new Date(value).getTime();
   return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function rewardSpendSubtotal(reward, regularSubtotal, comboSubtotal) {
+  const includeCombos = reward?.includeCombosInMinimum === true
+    || (reward?.includeCombosInMinimum === undefined && reward?.kind === "free-delivery");
+  return Number(regularSubtotal || 0) + (includeCombos ? Number(comboSubtotal || 0) : 0);
 }
 
 function validateAndPriceItems(items, menuData = MENU_DATA, comboData = COMBO_MENU_DATA) {
@@ -1684,12 +1691,10 @@ exports.createOrder = onCall({ region: REGION }, async request => {
       if (claimedReward.expiresAt && timestampMillis(claimedReward.expiresAt) <= Date.now()) {
         throw new HttpsError("failed-precondition", "This reward has expired. Choose another available reward.");
       }
-      const rewardSpendSubtotal = loyaltyReward.kind === "free-delivery" ? subtotal : eligibleSubtotal;
-      if (rewardSpendSubtotal < Number(loyaltyReward.minimum || 0)) {
-        const remaining = Math.max(0, Number(loyaltyReward.minimum) - rewardSpendSubtotal);
-        throw new HttpsError("failed-precondition", loyaltyReward.kind === "free-delivery"
-          ? `Add ₹${remaining} more to your food subtotal to use this free-delivery reward. Combos count.`
-          : `Add ₹${remaining} more in regular menu items to use this reward. Combos do not count toward spend rewards.`);
+      const rewardSpend = rewardSpendSubtotal(loyaltyReward, eligibleSubtotal, comboPointSubtotal);
+      if (rewardSpend < Number(loyaltyReward.minimum || 0)) {
+        const remaining = Math.max(0, Number(loyaltyReward.minimum) - rewardSpend);
+        throw new HttpsError("failed-precondition", `Add ₹${remaining} more to your eligible food subtotal to use this reward${loyaltyReward.includeCombosInMinimum ? ". Combos count." : ". Combos do not count."}`);
       }
       if (loyaltyReward.kind === "free-delivery" && orderType === "pickup") {
         throw new HttpsError("failed-precondition", "Free-delivery rewards can only be used on delivery orders.");
@@ -1791,6 +1796,7 @@ exports.createOrder = onCall({ region: REGION }, async request => {
       items: pricedItems,
       subtotal,
       eligibleSubtotal,
+      comboPointSubtotal,
       discountAmount: totalDiscount,
       discountType: welcomeUsed ? "welcome-gift" : loyaltyReward?.kind || (freeOffer ? "daily-offer" : requestedPoints ? "points" : "none"),
       deliveryReward,
@@ -1978,6 +1984,7 @@ exports.staffLookupCustomer = onCall({ region: REGION }, async request => {
         buyQuantity: Number(definition.buyQuantity || 0),
         getItem: String(definition.getItem || ""),
         getQuantity: Number(definition.getQuantity || 0),
+        includeCombosInMinimum: definition.includeCombosInMinimum === true || (definition.includeCombosInMinimum === undefined && definition.kind === "free-delivery"),
         issuedAt: timestampMillis(reward.issuedAt)
       };
     }),
@@ -2192,8 +2199,9 @@ exports.createWalkInOrder = onCall({ region: REGION }, async request => {
       if (loyaltyReward.kind === "free-delivery") {
         throw new HttpsError("failed-precondition", "Free delivery rewards can be used on website delivery orders, not counter orders.");
       }
-      if (eligibleSubtotal < Number(loyaltyReward.minimum || 0)) {
-        throw new HttpsError("failed-precondition", `Add ${Math.max(0, Number(loyaltyReward.minimum) - eligibleSubtotal)} more in regular menu items to use this reward. Combos do not count toward spend rewards.`);
+      const rewardSpend = rewardSpendSubtotal(loyaltyReward, eligibleSubtotal, comboPointSubtotal);
+      if (rewardSpend < Number(loyaltyReward.minimum || 0)) {
+        throw new HttpsError("failed-precondition", `Add ${Math.max(0, Number(loyaltyReward.minimum) - rewardSpend)} more to your eligible food subtotal to use this reward${loyaltyReward.includeCombosInMinimum ? ". Combos count." : ". Combos do not count."}`);
       }
       if (loyaltyReward.kind === "discount") discountAmount = Number(loyaltyReward.amount || 0);
       if (loyaltyReward.kind === "percent-discount") {
@@ -2249,6 +2257,7 @@ exports.createWalkInOrder = onCall({ region: REGION }, async request => {
       items: pricedItems,
       subtotal,
       eligibleSubtotal,
+      comboPointSubtotal,
       discountAmount: totalDiscount,
       discountType: loyaltyReward?.kind || (requestedPoints ? "points" : "none"),
       deliveryCharge: 0,
@@ -2318,7 +2327,7 @@ exports.onOrderStatusChanged = onDocumentUpdated({ document: "orders/{orderId}",
         && candidateMilestone.item === rewardConfig.welcomeItem;
       const milestone = sameAsWelcomeGift
         ? null
-        : candidateMilestone?.kind === "bonus-points" && Number(order.eligibleSubtotal || 0) < Number(candidateMilestone.minimum || 0) ? null : candidateMilestone;
+        : candidateMilestone?.kind === "bonus-points" && rewardSpendSubtotal(candidateMilestone, order.eligibleSubtotal, order.comboPointSubtotal) < Number(candidateMilestone.minimum || 0) ? null : candidateMilestone;
       const availableRewards = Array.isArray(account.availableRewards) ? [...account.availableRewards] : [];
       const milestonePoints = milestone?.kind === "bonus-points" ? Number(milestone.points || 0) : 0;
       if (milestone && milestone.kind !== "bonus-points") {

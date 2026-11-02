@@ -829,6 +829,13 @@ function getWalkinItemQuantity(name) {
   return cart.reduce((sum, item) => !item.isFreeOffer && !item.isLoyaltyReward && item.name === name ? sum + Number(item.qty || 0) : sum, 0);
 }
 
+function getWalkinRewardSpend(reward) {
+  const regularSpend = getWalkinEligibleSubtotal();
+  const includeCombos = reward?.includeCombosInMinimum === true
+    || (reward?.includeCombosInMinimum === undefined && reward?.kind === "free-delivery");
+  return regularSpend + (includeCombos ? cart.reduce((sum, item) => item.group === "COMBOS" ? sum + Number(item.price || 0) * Number(item.qty || 0) : sum, 0) : 0);
+}
+
 function renderWalkinPointsEstimate() {
   const row = $("walkinPointsEstimateRow");
   if (editingWalkinOrderId) {
@@ -917,7 +924,7 @@ function renderWalkinBenefits() {
   for (const reward of rewards) {
     const webOnly = reward.kind === "free-delivery";
     const mustUseOlder = oldestReward && reward.ticketId !== oldestReward.ticketId;
-    const shortfall = Math.max(0, Number(reward.minimum || 0) - eligibleSubtotal);
+    const shortfall = Math.max(0, Number(reward.minimum || 0) - getWalkinRewardSpend(reward));
     const buyGetShortfall = reward.kind === "buy-get" ? Math.max(0, Number(reward.buyQuantity || 0) - getWalkinItemQuantity(reward.buyItem)) : 0;
     const percentValue = Math.min(Math.floor(eligibleSubtotal * Number(reward.percent || 0) / 100), Number(reward.maxDiscount) > 0 ? Number(reward.maxDiscount) : eligibleSubtotal);
     const noEligibleDiscount = reward.kind === "percent-discount" && percentValue <= 0;
@@ -925,10 +932,10 @@ function renderWalkinBenefits() {
     rewardOptions.push(`<option value="${escapeHtml(reward.ticketId)}" ${mustUseOlder || webOnly || shortfall || buyGetShortfall || noEligibleDiscount ? "disabled" : ""}>${escapeHtml(reward.title)}${note ? ` — ${escapeHtml(note.slice(3))}` : ""}</option>`);
   }
   $("walkinReward").innerHTML = rewardOptions.join("");
-  if (selectedRewardId && rewards.some(reward => reward.ticketId === selectedRewardId && reward.ticketId === oldestReward?.ticketId && reward.kind !== "free-delivery" && Number(reward.minimum || 0) <= eligibleSubtotal && (reward.kind !== "buy-get" || getWalkinItemQuantity(reward.buyItem) >= Number(reward.buyQuantity || 0)) && (reward.kind !== "percent-discount" || Math.min(Math.floor(eligibleSubtotal * Number(reward.percent || 0) / 100), Number(reward.maxDiscount) > 0 ? Number(reward.maxDiscount) : eligibleSubtotal) > 0))) {
+  if (selectedRewardId && rewards.some(reward => reward.ticketId === selectedRewardId && reward.ticketId === oldestReward?.ticketId && reward.kind !== "free-delivery" && Number(reward.minimum || 0) <= getWalkinRewardSpend(reward) && (reward.kind !== "buy-get" || getWalkinItemQuantity(reward.buyItem) >= Number(reward.buyQuantity || 0)) && (reward.kind !== "percent-discount" || Math.min(Math.floor(eligibleSubtotal * Number(reward.percent || 0) / 100), Number(reward.maxDiscount) > 0 ? Number(reward.maxDiscount) : eligibleSubtotal) > 0))) {
     $("walkinReward").value = selectedRewardId;
   } else $("walkinReward").value = "";
-  $("walkinReward").disabled = !oldestReward || oldestReward.kind === "free-delivery" || Number(oldestReward.minimum || 0) > eligibleSubtotal || (oldestReward.kind === "buy-get" && getWalkinItemQuantity(oldestReward.buyItem) < Number(oldestReward.buyQuantity || 0)) || (oldestReward.kind === "percent-discount" && Math.min(Math.floor(eligibleSubtotal * Number(oldestReward.percent || 0) / 100), Number(oldestReward.maxDiscount) > 0 ? Number(oldestReward.maxDiscount) : eligibleSubtotal) <= 0);
+  $("walkinReward").disabled = !oldestReward || oldestReward.kind === "free-delivery" || Number(oldestReward.minimum || 0) > getWalkinRewardSpend(oldestReward) || (oldestReward.kind === "buy-get" && getWalkinItemQuantity(oldestReward.buyItem) < Number(oldestReward.buyQuantity || 0)) || (oldestReward.kind === "percent-discount" && Math.min(Math.floor(eligibleSubtotal * Number(oldestReward.percent || 0) / 100), Number(oldestReward.maxDiscount) > 0 ? Number(oldestReward.maxDiscount) : eligibleSubtotal) <= 0);
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
   let benefitDiscount = 0;
