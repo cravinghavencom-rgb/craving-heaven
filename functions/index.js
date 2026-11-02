@@ -598,9 +598,15 @@ function validateRewardJourney(journey, menu, combos = COMBO_MENU_DATA) {
     const title = String(entry?.title || "").trim();
     const detail = String(entry?.detail || "").trim();
     const requiresId = !["progress", "welcome"].includes(kind);
-    if (!Number.isSafeInteger(order) || order < 1 || order > 30 || orders.has(order) || !validKinds.has(kind) || title.length < 2 || title.length > 100 || detail.length > 180 || (requiresId && !id) || (id && (!/^[a-zA-Z0-9_-]{2,64}$/.test(id) || ids.has(id)))) {
-      throw new HttpsError("invalid-argument", "A reward title, type, ID, or order number is invalid or duplicated.");
-    }
+    if (!Number.isSafeInteger(order) || order < 1 || order > 30) throw new HttpsError("invalid-argument", `Reward order number ${entry?.order ?? ""} must be from 1 to 30.`);
+    const orderLabel = `${order}${order === 1 ? "st" : order === 2 ? "nd" : order === 3 ? "rd" : "th"}`;
+    if (orders.has(order)) throw new HttpsError("invalid-argument", `The ${orderLabel} order appears more than once. Choose a different order number for each reward.`);
+    if (!validKinds.has(kind)) throw new HttpsError("invalid-argument", `Choose a valid reward type for the ${orderLabel} order.`);
+    if (title.length < 2 || title.length > 100) throw new HttpsError("invalid-argument", `Enter a reward name between 2 and 100 characters for the ${orderLabel} order.`);
+    if (detail.length > 180) throw new HttpsError("invalid-argument", `The customer message for the ${orderLabel} order must be 180 characters or less.`);
+    if (requiresId && !id) throw new HttpsError("invalid-argument", `Add a reward ID for the ${orderLabel} order.`);
+    if (id && !/^[a-zA-Z0-9_-]{2,64}$/.test(id)) throw new HttpsError("invalid-argument", `The reward ID for the ${orderLabel} order must use 2–64 letters, numbers, underscores, or hyphens.`);
+    if (id && ids.has(id)) throw new HttpsError("invalid-argument", `Reward ID “${id}” is used more than once. Give each reward a unique ID.`);
     orders.add(order);
     if (id) ids.add(id);
     const reward = { order, kind, title, detail };
@@ -760,25 +766,22 @@ exports.adminSaveRewardsConfig = onCall({ region: REGION, invoker: "public" }, a
   const adminUid = await requireAdmin(request);
   const businessConfig = await readBusinessConfig();
   const journey = validateRewardJourney(request.data?.journey, businessConfig.menu, businessConfig.combos);
-  const keepIds = new Set(journey.filter(item => item.id).map(item => item.id));
   const oldById = businessConfig.rewards.rewardById;
-  const newById = Object.fromEntries(journey.filter(item => item.id).map(item => [item.id, item]));
-  const rewardSignature = reward => reward ? JSON.stringify({
-    order: Number(reward.order), kind: String(reward.kind), title: String(reward.title || ""), detail: String(reward.detail || ""),
-    minimum: Number(reward.minimum || 0), item: String(reward.item || ""), amount: Number(reward.amount || 0),
-    points: Number(reward.points || 0), maxBonusPoints: Number(reward.maxBonusPoints || 0),
-    percent: Number(reward.percent || 0), maxDiscount: Number(reward.maxDiscount || 0), itemPrice: Number(reward.itemPrice || 0),
-    buyItem: String(reward.buyItem || ""), buyQuantity: Number(reward.buyQuantity || 0), getItem: String(reward.getItem || ""), getQuantity: Number(reward.getQuantity || 0)
-  }) : "null";
   const accounts = await db.collection("loyaltyAccounts").get();
+  const ticketUpdates = [];
   for (const accountDoc of accounts.docs) {
-    const activeTickets = (accountDoc.data().availableRewards || []).filter(ticket => !ticket.expiresAt || timestampMillis(ticket.expiresAt) > Date.now());
-    if (activeTickets.some(ticket => !keepIds.has(ticket.id))) {
-      throw new HttpsError("failed-precondition", "This reward lineup still has active customer rewards. Keep those reward IDs until the issued rewards expire or are used.");
-    }
-    if (activeTickets.some(ticket => rewardSignature(oldById[ticket.id]) !== rewardSignature(newById[ticket.id]))) {
-      throw new HttpsError("failed-precondition", "A customer has this reward available. Keep its settings unchanged until the reward is used or expires.");
-    }
+    let changed = false;
+    const tickets = (accountDoc.data().availableRewards || []).map(ticket => {
+      if (ticket.definition || !ticket.id || !oldById[ticket.id]) return ticket;
+      changed = true;
+      return { ...ticket, definition: oldById[ticket.id] };
+    });
+    if (changed) ticketUpdates.push({ ref: accountDoc.ref, tickets });
+  }
+  if (ticketUpdates.length) {
+    const writer = db.bulkWriter();
+    for (const update of ticketUpdates) writer.set(update.ref, { availableRewards: update.tickets, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    await writer.close();
   }
   await REWARDS_CONFIG_REF().set({ journey, updatedBy: adminUid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   return { saved: true, milestones: journey.length };
@@ -1563,7 +1566,7 @@ exports.adminAdjustCustomerBenefits = onCall({ region: REGION }, async request =
     if (reward) {
       issuedReward = {
         ticketId: `admin-${requestId}`, id: reward.id, order: reward.order,
-        title: reward.title, detail: reward.detail,
+        title: reward.title, detail: reward.detail, kind: reward.kind, definition: reward,
         expiresAt: ["free-item", "buy-get"].includes(reward.kind) ? new Date(Date.now() + rewardConfig.freeItemExpiryDays * 86400000) : null,
         issuedAt: new Date()
       };
@@ -1677,10 +1680,10 @@ exports.createOrder = onCall({ region: REGION }, async request => {
     if (loyaltyRewardTicketId) {
       claimedReward = availableRewards.find(reward => reward.ticketId === loyaltyRewardTicketId || (!reward.ticketId && reward.id === loyaltyRewardTicketId));
       const isGameVoucher = ["craving-dash", "craving-runner"].includes(claimedReward?.source) && ["free-item", "percent-discount"].includes(claimedReward.kind);
-      const isConfiguredPercentReward = claimedReward?.kind === "percent-discount" && rewardConfig.rewardById[claimedReward.id]?.kind === "percent-discount";
+      const isConfiguredPercentReward = claimedReward?.kind === "percent-discount" && (claimedReward.definition?.kind || rewardConfig.rewardById[claimedReward.id]?.kind) === "percent-discount";
       loyaltyReward = isGameVoucher
         ? { kind: claimedReward.kind, title: claimedReward.title, detail: claimedReward.detail, item: claimedReward.item, percent: Number(claimedReward.percent || 0), maxDiscount: Number(claimedReward.maxDiscount || 0), minimum: Number(claimedReward.minimum || 0) }
-        : claimedReward ? rewardConfig.rewardById[claimedReward.id] : null;
+        : claimedReward ? (claimedReward.definition || rewardConfig.rewardById[claimedReward.id]) : null;
       if (!loyaltyReward || freeOffer || requestedPoints) {
         throw new HttpsError("failed-precondition", "This reward is no longer available or cannot be combined with another offer.");
       }
@@ -1804,7 +1807,7 @@ exports.createOrder = onCall({ region: REGION }, async request => {
       pointsDiscount,
       pointsToAward,
       claimedRewardId: loyaltyRewardTicketId || null,
-      claimedReward: loyaltyRewardTicketId ? { ticketId: loyaltyRewardTicketId, id: claimedReward.id, kind: loyaltyReward.kind, title: loyaltyReward.title, expiresAt: claimedReward.expiresAt || null } : null,
+      claimedReward: loyaltyRewardTicketId ? { ticketId: loyaltyRewardTicketId, id: claimedReward.id, kind: loyaltyReward.kind, title: loyaltyReward.title, definition: loyaltyReward, expiresAt: claimedReward.expiresAt || null } : null,
       welcomeUsed,
       isTestOrder: testModeEnabled,
       deliveryCharge,
@@ -1963,7 +1966,7 @@ exports.staffLookupCustomer = onCall({ region: REGION }, async request => {
     points: availableCravingPoints(loyalty),
     completedOrders,
     availableRewards: activeRewards.map(reward => {
-      const definition = rewardConfig.rewardById[reward.id] || reward;
+      const definition = reward.definition || rewardConfig.rewardById[reward.id] || reward;
       const expiry = reward.expiresAt ? timestampMillis(reward.expiresAt) : 0;
       return {
         ticketId: String(reward.ticketId || reward.id || ""),
@@ -2097,7 +2100,7 @@ exports.staffAddItemsToWalkInOrder = onCall({ region: REGION }, async request =>
       ? Math.floor(Math.max(0, regularPointSubtotal - Number(order.discountAmount || 0)) / pointsConfig.pointRateRegularRupees)
         + Math.floor(comboPointSubtotal / pointsConfig.pointRateComboRupees)
       : 0;
-    const reward = order.claimedReward?.id ? pointsConfig.rewardById[order.claimedReward.id] : null;
+    const reward = order.claimedReward?.id ? (order.claimedReward.definition || pointsConfig.rewardById[order.claimedReward.id]) : null;
     const pointsToAward = (reward?.kind === "double-points"
       ? basePoints + Math.min(basePoints, Number(reward.maxBonusPoints || 0))
       : basePoints) + (reward?.kind === "bonus-points" ? Number(reward.points || 0) : 0);
@@ -2183,10 +2186,10 @@ exports.createWalkInOrder = onCall({ region: REGION }, async request => {
     if (loyaltyRewardTicketId) {
       claimedReward = availableRewards.find(reward => reward.ticketId === loyaltyRewardTicketId || (!reward.ticketId && reward.id === loyaltyRewardTicketId));
       const isGameVoucher = ["craving-dash", "craving-runner"].includes(claimedReward?.source) && ["free-item", "percent-discount"].includes(claimedReward.kind);
-      const isConfiguredPercentReward = claimedReward?.kind === "percent-discount" && rewardConfig.rewardById[claimedReward.id]?.kind === "percent-discount";
+      const isConfiguredPercentReward = claimedReward?.kind === "percent-discount" && (claimedReward.definition?.kind || rewardConfig.rewardById[claimedReward.id]?.kind) === "percent-discount";
       loyaltyReward = isGameVoucher
         ? { kind: claimedReward.kind, title: claimedReward.title, detail: claimedReward.detail, item: claimedReward.item, percent: Number(claimedReward.percent || 0), maxDiscount: Number(claimedReward.maxDiscount || 0), minimum: Number(claimedReward.minimum || 0) }
-        : claimedReward ? rewardConfig.rewardById[claimedReward.id] : null;
+        : claimedReward ? (claimedReward.definition || rewardConfig.rewardById[claimedReward.id]) : null;
       if (!loyaltyReward || requestedPoints) throw new HttpsError("failed-precondition", "This reward is no longer available or cannot be combined with points.");
       const activeRewards = availableRewards.filter(reward => !reward.expiresAt || timestampMillis(reward.expiresAt) > Date.now());
       const oldestReward = activeRewards.sort((a, b) => timestampMillis(a.issuedAt) - timestampMillis(b.issuedAt))[0];
@@ -2270,7 +2273,7 @@ exports.createWalkInOrder = onCall({ region: REGION }, async request => {
       pointsRedeemed: requestedPoints,
       pointsDiscount,
       claimedRewardId: loyaltyRewardTicketId || null,
-      claimedReward: loyaltyRewardTicketId ? { ticketId: loyaltyRewardTicketId, id: claimedReward.id, kind: loyaltyReward.kind, title: claimedReward.title, expiresAt: claimedReward.expiresAt || null } : null,
+      claimedReward: loyaltyRewardTicketId ? { ticketId: loyaltyRewardTicketId, id: claimedReward.id, kind: loyaltyReward.kind, title: loyaltyReward.title, definition: loyaltyReward, expiresAt: claimedReward.expiresAt || null } : null,
       pointsStatus: customerUid ? "pending-delivery" : "not-applicable",
       createdAt: FieldValue.serverTimestamp()
     };
@@ -2337,6 +2340,7 @@ exports.onOrderStatusChanged = onDocumentUpdated({ document: "orders/{orderId}",
           order: milestone.order,
           title: milestone.title,
           detail: milestone.detail,
+          definition: milestone,
           expiresAt: ["free-item", "buy-get"].includes(milestone.kind) ? new Date(Date.now() + rewardConfig.freeItemExpiryDays * 86400000) : null,
           issuedAt: new Date()
         });
@@ -2360,7 +2364,7 @@ exports.onOrderStatusChanged = onDocumentUpdated({ document: "orders/{orderId}",
     if (order.loyaltyReversed) return;
     const availableRewards = Array.isArray(account.availableRewards) ? [...account.availableRewards] : [];
     if (order.claimedRewardId && order.claimedReward && !availableRewards.some(item => item.ticketId === order.claimedRewardId)) {
-      const definition = rewardConfig.rewardById[order.claimedReward.id];
+      const definition = order.claimedReward.definition || rewardConfig.rewardById[order.claimedReward.id];
       const expired = order.claimedReward.expiresAt && timestampMillis(order.claimedReward.expiresAt) <= Date.now();
       if (definition && !expired) availableRewards.push({ ...order.claimedReward, order: definition.order, detail: definition.detail, expiresAt: order.claimedReward.expiresAt || null });
     }
