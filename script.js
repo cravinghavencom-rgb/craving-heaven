@@ -10,7 +10,19 @@ let customerSessionUid = "";
 let customerAuthResolutionId = 0;
 function isCustomerSignedIn() {
   const currentUid = window.firebaseAuth?.currentUser?.uid || "";
-  return customerSessionType === "customer" && Boolean(currentUid) && currentUid === customerSessionUid;
+  if (!currentUid || customerSessionType === "team") return false;
+  if (customerSessionType === "customer" && currentUid === customerSessionUid) return true;
+
+  // A successful getCustomerAccount response is server-verified proof that
+  // this Firebase UID is a customer. Keep that shared account session usable
+  // if the local claims refresh is temporarily unresolved or fails.
+  if (customerAccountLoadedUid === currentUid && loyaltyAccountLoaded && customerOnlineOrderHistoryLoaded) {
+    customerSessionType = "customer";
+    customerSessionUid = currentUid;
+    customerAuthStateResolved = true;
+    return true;
+  }
+  return false;
 }
 function currentCustomerUser() {
   return isCustomerSignedIn() ? window.firebaseAuth.currentUser : null;
@@ -1181,6 +1193,7 @@ async function handlePlaceOrderClick() {
       const response = await callable(window.firebaseFunctions, "getCustomerAccount")({});
       if (refreshId !== accountRefreshToken || window.firebaseAuth?.currentUser?.uid !== user.uid) return;
       const account = response.data || {};
+      setCustomerSession(user, "customer");
       customerAccountLoadFailed = false;
       customerAccountLoadDiagnostic = "";
       customerAccountRetryAfter = 0;
