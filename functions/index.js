@@ -756,7 +756,7 @@ exports.adminSaveMenuCatalog = onCall({ region: REGION }, async request => {
   return { saved: true, categories: Object.keys(menu).length, items: Object.values(menu).reduce((sum, section) => sum + section.items.length, 0), combos: combos.length };
 });
 
-exports.adminSaveRewardsConfig = onCall({ region: REGION }, async request => {
+exports.adminSaveRewardsConfig = onCall({ region: REGION, invoker: "public" }, async request => {
   const adminUid = await requireAdmin(request);
   const businessConfig = await readBusinessConfig();
   const journey = validateRewardJourney(request.data?.journey, businessConfig.menu, businessConfig.combos);
