@@ -358,7 +358,7 @@ function readRewardEditor() {
       if (!data.detail && data.buyItem && data.getItem) data.detail=`Buy ${data.buyQuantity} × ${data.buyItem} and get ${data.getQuantity} × ${data.getItem} free on one order.`;
     }
     if (kind === "discount") data.amount = Number(row.querySelector(".reward-amount").value);
-    if (kind === "double-points") data.maxBonusPoints = Number(row.querySelector(".reward-amount").value);
+    if (kind === "double-points") data.maxBonusPoints = Number(row.querySelector(".reward-double").value);
     if (kind === "percent-discount") { data.percent=Number(row.querySelector(".reward-percent").value); data.maxDiscount=Number(row.querySelector(".reward-cap").value); }
     if (kind === "bonus-points") data.points=Number(row.querySelector(".reward-points").value);
     return data;
