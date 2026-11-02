@@ -1642,7 +1642,7 @@ function renderCheckoutSummary() {
         </div>
       `;
     })
-    .join("") + (selectedReward?.kind === "free-item" ? `<div class="checkout-summary-item"><span>🎁 ${esc(selectedReward.item)} · Royal reward</span><strong>₹0 · FREE</strong></div>` : "") + (selectedWelcomeOffer ? `<div class="checkout-summary-item"><span>🎁 ${esc(REWARDS_CONFIG.welcomeItem)} · First-order gift</span><strong>₹0 · FREE</strong></div>` : "");
+    .join("") + (selectedReward?.kind === "free-item" ? `<div class="checkout-summary-item"><span>🎁 ${esc(selectedReward.item)} × 1 · Royal reward</span><strong>₹0 · FREE</strong></div>` : selectedReward?.kind === "buy-get" ? `<div class="checkout-summary-item"><span>🎁 ${esc(selectedReward.getItem)} × ${Number(selectedReward.getQuantity)} · ${esc(selectedReward.title)}</span><strong>₹0 · FREE</strong></div>` : "") + (selectedWelcomeOffer ? `<div class="checkout-summary-item"><span>🎁 ${esc(REWARDS_CONFIG.welcomeItem)} · First-order gift</span><strong>₹0 · FREE</strong></div>` : "");
 
 
   checkoutOrderSummary.innerHTML = `
@@ -2434,6 +2434,11 @@ function selectFreeOffer(offerId) {
   render();
 }
 
+function getBuyGetPurchaseQty(reward) {
+  if (reward?.kind !== "buy-get" || !reward.buyItem) return 0;
+  return cart.reduce((sum, item) => !item.isFreeOffer && !item.isLoyaltyReward && item.name === reward.buyItem ? sum + Number(item.qty || 0) : sum, 0);
+}
+
 function selectMilestoneReward(rewardId) {
   if (orderAvailability.isTestCustomer) return;
   const ticket = currentLoyaltyAccount.availableRewards?.find(item => (item.ticketId || item.id) === rewardId);
@@ -2442,6 +2447,7 @@ function selectMilestoneReward(rewardId) {
   const eligibleSubtotal = getOfferEligibleSubtotal();
   const rewardSpend = definition.kind === "free-delivery" ? getPaidSubtotal() : eligibleSubtotal;
   if (rewardSpend < Number(definition.minimum || 0)) return;
+  if (definition.kind === "buy-get" && getBuyGetPurchaseQty(definition) < Number(definition.buyQuantity || 0)) return;
   if (definition.kind === "percent-discount" && gameRewardDiscount(definition, eligibleSubtotal) <= 0) return;
   if (definition.kind === "free-delivery" && getPaidSubtotal() >= FREE_DELIVERY_THRESHOLD) return;
   removeSelectedFreeOffer();
@@ -2498,7 +2504,8 @@ function renderCart() {
     const rewardSpend = selectedReward.kind === "free-delivery" ? subtotal : offerEligibleSubtotal;
     const rewardIsNoLongerEligible = rewardSpend < Number(selectedReward.minimum || 0)
       || (selectedReward.kind === "free-delivery" && (subtotal >= FREE_DELIVERY_THRESHOLD || isPickupSelected()))
-      || (selectedReward.kind === "percent-discount" && gameRewardDiscount(selectedReward, offerEligibleSubtotal) <= 0);
+      || (selectedReward.kind === "percent-discount" && gameRewardDiscount(selectedReward, offerEligibleSubtotal) <= 0)
+      || (selectedReward.kind === "buy-get" && getBuyGetPurchaseQty(selectedReward) < Number(selectedReward.buyQuantity || 0));
     if (rewardIsNoLongerEligible) {
       selectedMilestoneRewardId = null;
       selectedReward = null;
@@ -2523,7 +2530,7 @@ function renderCart() {
   // includes the discount that checkout and the server use.
   const estimatedPoints = estimatePointsForCurrentOrder(selectedReward, offerEligibleSubtotal);
 
-  const totalQty = cart.reduce((sum, item) => sum + item.qty, 0) + (selectedReward?.kind === "free-item" || selectedWelcomeOffer ? 1 : 0);
+  const totalQty = cart.reduce((sum, item) => sum + item.qty, 0) + (selectedReward?.kind === "free-item" ? 1 : selectedReward?.kind === "buy-get" ? Number(selectedReward.getQuantity || 0) : 0) + (selectedWelcomeOffer ? 1 : 0);
 
   const delivery = selectedReward?.kind === "free-delivery" || subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_CHARGE;
   const promotionDiscount = (selectedReward?.kind === "discount" ? selectedReward.amount : 0) + gameRewardDiscount(selectedReward, offerEligibleSubtotal);
@@ -2602,7 +2609,7 @@ function renderCart() {
           >+</button>
         </div>
       </div>`;
-  }).join("") + (selectedReward?.kind === "free-item" ? `<div class="cart-item sunday-freebie"><div class="cart-item-info"><div class="cart-name">🎁 ${esc(selectedReward.item)}</div><div class="cart-meta"><span>₹0</span><strong style="color:#16804a">FREE · REWARD ADDED</strong></div></div><div class="cart-free-label">FREE</div></div>` : "") + (selectedWelcomeOffer ? `<div class="cart-item sunday-freebie"><div class="cart-item-info"><div class="cart-name">🎁 ${esc(REWARDS_CONFIG.welcomeItem)}</div><div class="cart-meta"><span>₹0</span><strong style="color:#16804a">FREE · FIRST-ORDER GIFT</strong></div></div><div class="cart-free-label">FREE</div></div>` : "");
+  }).join("") + (selectedReward?.kind === "free-item" ? `<div class="cart-item sunday-freebie"><div class="cart-item-info"><div class="cart-name">🎁 ${esc(selectedReward.item)}</div><div class="cart-meta"><span>₹0 × 1</span><strong style="color:#16804a">FREE · REWARD ADDED</strong></div></div><div class="cart-free-label">FREE</div></div>` : selectedReward?.kind === "buy-get" ? `<div class="cart-item sunday-freebie"><div class="cart-item-info"><div class="cart-name">🎁 ${esc(selectedReward.getItem)}</div><div class="cart-meta"><span>₹0 × ${Number(selectedReward.getQuantity)}</span><strong style="color:#16804a">FREE · BUY & GET REWARD</strong></div></div><div class="cart-free-label">FREE × ${Number(selectedReward.getQuantity)}</div></div>` : "") + (selectedWelcomeOffer ? `<div class="cart-item sunday-freebie"><div class="cart-item-info"><div class="cart-name">🎁 ${esc(REWARDS_CONFIG.welcomeItem)}</div><div class="cart-meta"><span>₹0</span><strong style="color:#16804a">FREE · FIRST-ORDER GIFT</strong></div></div><div class="cart-free-label">FREE</div></div>` : "");
 
   // ====================== FREE OFFER SELECTOR ======================
 
@@ -2725,9 +2732,10 @@ ${esc(offer.freeItem)}
     const chosen = selectedMilestoneRewardId === rewardTicketId;
     const rewardSpend = definition.kind === "free-delivery" ? subtotal : offerEligibleSubtotal;
     const remaining = Math.max(0, Number(definition.minimum || 0) - rewardSpend);
-    const eligible = remaining === 0 && !(definition.kind === "free-delivery" && (subtotal >= FREE_DELIVERY_THRESHOLD || isPickupSelected())) && !(definition.kind === "percent-discount" && gameRewardDiscount(definition, offerEligibleSubtotal) <= 0);
-    const rewardDescription = definition.kind === "free-item" ? `${definition.item} free${["craving-dash", "craving-runner"].includes(reward.source) ? " · expires 48 hours after earning" : ""}` : definition.kind === "percent-discount" ? `${Number(definition.percent)}% off eligible regular menu items${Number(definition.maxDiscount) ? ` · up to ${money(definition.maxDiscount)}` : ""}${["craving-dash", "craving-runner"].includes(reward.source) ? " · expires after 48 hours" : ""}` : definition.kind === "free-delivery" ? "Free delivery" : definition.kind === "discount" ? `${money(definition.amount)} off` : definition.kind === "bonus-points" ? `${definition.points} Craving Points on delivery` : `Double Craving Points, up to ${definition.maxBonusPoints} extra`;
-    const statusNote = definition.kind === "free-delivery" && isPickupSelected() ? "Free-delivery rewards can only be used for delivery." : remaining > 0 ? `Add ${money(remaining)} to your food subtotal to use this reward${definition.kind === "free-delivery" ? "; combos and regular items count" : " in regular menu items"}.` : definition.kind === "percent-discount" && gameRewardDiscount(definition, offerEligibleSubtotal) <= 0 ? "Add regular menu items to use this discount; combos, extras, and delivery are excluded." : definition.kind === "percent-discount" ? "Discount applies to regular menu items only. Combos, extras, and delivery are excluded." : definition.kind === "free-delivery" && subtotal >= FREE_DELIVERY_THRESHOLD ? "Your order already qualifies for free delivery. Save this reward for another order." : "";
+    const buyGetRemaining = definition.kind === "buy-get" ? Math.max(0, Number(definition.buyQuantity || 0) - getBuyGetPurchaseQty(definition)) : 0;
+    const eligible = remaining === 0 && buyGetRemaining === 0 && !(definition.kind === "free-delivery" && (subtotal >= FREE_DELIVERY_THRESHOLD || isPickupSelected())) && !(definition.kind === "percent-discount" && gameRewardDiscount(definition, offerEligibleSubtotal) <= 0);
+    const rewardDescription = definition.kind === "buy-get" ? `Buy ${Number(definition.buyQuantity)} × ${definition.buyItem}, get ${Number(definition.getQuantity)} × ${definition.getItem} free` : definition.kind === "free-item" ? `${definition.item} free${["craving-dash", "craving-runner"].includes(reward.source) ? " · expires 48 hours after earning" : ""}` : definition.kind === "percent-discount" ? `${Number(definition.percent)}% off eligible regular menu items${Number(definition.maxDiscount) ? ` · up to ${money(definition.maxDiscount)}` : ""}${["craving-dash", "craving-runner"].includes(reward.source) ? " · expires after 48 hours" : ""}` : definition.kind === "free-delivery" ? "Free delivery" : definition.kind === "discount" ? `${money(definition.amount)} off` : definition.kind === "bonus-points" ? `${definition.points} Craving Points on delivery` : `Double Craving Points, up to ${definition.maxBonusPoints} extra`;
+    const statusNote = definition.kind === "buy-get" && buyGetRemaining > 0 ? `Add ${buyGetRemaining} × ${definition.buyItem} to your cart to use this reward.` : definition.kind === "free-delivery" && isPickupSelected() ? "Free-delivery rewards can only be used for delivery." : remaining > 0 ? `Add ${money(remaining)} to your food subtotal to use this reward${definition.kind === "free-delivery" ? "; combos and regular items count" : " in regular menu items"}.` : definition.kind === "percent-discount" && gameRewardDiscount(definition, offerEligibleSubtotal) <= 0 ? "Add regular menu items to use this discount; combos, extras, and delivery are excluded." : definition.kind === "percent-discount" ? "Discount applies to regular menu items only. Combos, extras, and delivery are excluded." : definition.kind === "free-delivery" && subtotal >= FREE_DELIVERY_THRESHOLD ? "Your order already qualifies for free delivery. Save this reward for another order." : "";
     const expiryLabel = reward.expiresAt ? ` · use by ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt))}` : "";
     return `<article class="cart-reward-choice ${chosen ? "is-selected" : ""}"><div><strong>${esc(definition.title)}</strong><small>${esc(rewardDescription)} · ${esc(definition.detail || "")}${esc(expiryLabel)}</small>${statusNote ? `<small class="reward-remaining">${esc(statusNote)}</small>` : ""}</div><button type="button" data-select-loyalty-reward="${esc(rewardTicketId)}" ${!eligible ? "disabled" : ""}>${chosen ? "SELECTED" : eligible ? "USE REWARD" : "LOCKED"}</button></article>`;
   }).filter(Boolean).join("");

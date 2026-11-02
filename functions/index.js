@@ -585,12 +585,12 @@ function validateComboCatalog(combos, menu) {
   });
 }
 
-function validateRewardJourney(journey, menu) {
+function validateRewardJourney(journey, menu, combos = COMBO_MENU_DATA) {
   if (!Array.isArray(journey) || journey.length < 1 || journey.length > 30) throw new HttpsError("invalid-argument", "Reward journey must contain 1 to 30 order milestones.");
-  const prices = buildPriceByName(menu, COMBO_MENU_DATA);
+  const prices = buildPriceByName(menu, combos);
   const ids = new Set();
   const orders = new Set();
-  const validKinds = new Set(["welcome", "progress", "free-delivery", "free-item", "discount", "percent-discount", "bonus-points", "double-points"]);
+  const validKinds = new Set(["welcome", "progress", "free-delivery", "free-item", "buy-get", "discount", "percent-discount", "bonus-points", "double-points"]);
   return journey.map(entry => {
     const order = Number(entry?.order);
     const kind = String(entry?.kind || "");
@@ -613,6 +613,17 @@ function validateRewardJourney(journey, menu) {
       reward.item = String(entry.item || "").trim();
       reward.itemPrice = prices.get(reward.item);
       if (!reward.item || !Number.isSafeInteger(reward.itemPrice) || (menu.extras?.items || []).some(item => item.name === reward.item) || COMBO_MENU_DATA.some(combo => combo.name === reward.item)) throw new HttpsError("invalid-argument", `Choose a regular menu item for ${title}.`);
+    }
+    if (kind === "buy-get") {
+      reward.buyItem = String(entry.buyItem || "").trim();
+      reward.getItem = String(entry.getItem || "").trim();
+      reward.buyQuantity = Number(entry.buyQuantity);
+      reward.getQuantity = Number(entry.getQuantity);
+      if (!prices.has(reward.buyItem) || !prices.has(reward.getItem)
+        || !Number.isSafeInteger(reward.buyQuantity) || reward.buyQuantity < 1 || reward.buyQuantity > 50
+        || !Number.isSafeInteger(reward.getQuantity) || reward.getQuantity < 1 || reward.getQuantity > 50) {
+        throw new HttpsError("invalid-argument", `Choose valid menu items and quantities from 1 to 50 for ${title}.`);
+      }
     }
     if (kind === "discount") {
       reward.amount = Number(entry.amount || 0);
@@ -741,7 +752,7 @@ exports.adminSaveMenuCatalog = onCall({ region: REGION }, async request => {
 exports.adminSaveRewardsConfig = onCall({ region: REGION }, async request => {
   const adminUid = await requireAdmin(request);
   const businessConfig = await readBusinessConfig();
-  const journey = validateRewardJourney(request.data?.journey, businessConfig.menu);
+  const journey = validateRewardJourney(request.data?.journey, businessConfig.menu, businessConfig.combos);
   const keepIds = new Set(journey.filter(item => item.id).map(item => item.id));
   const oldById = businessConfig.rewards.rewardById;
   const newById = Object.fromEntries(journey.filter(item => item.id).map(item => [item.id, item]));
@@ -749,7 +760,8 @@ exports.adminSaveRewardsConfig = onCall({ region: REGION }, async request => {
     order: Number(reward.order), kind: String(reward.kind), title: String(reward.title || ""), detail: String(reward.detail || ""),
     minimum: Number(reward.minimum || 0), item: String(reward.item || ""), amount: Number(reward.amount || 0),
     points: Number(reward.points || 0), maxBonusPoints: Number(reward.maxBonusPoints || 0),
-    percent: Number(reward.percent || 0), maxDiscount: Number(reward.maxDiscount || 0)
+    percent: Number(reward.percent || 0), maxDiscount: Number(reward.maxDiscount || 0), itemPrice: Number(reward.itemPrice || 0),
+    buyItem: String(reward.buyItem || ""), buyQuantity: Number(reward.buyQuantity || 0), getItem: String(reward.getItem || ""), getQuantity: Number(reward.getQuantity || 0)
   }) : "null";
   const accounts = await db.collection("loyaltyAccounts").get();
   for (const accountDoc of accounts.docs) {
@@ -1545,7 +1557,7 @@ exports.adminAdjustCustomerBenefits = onCall({ region: REGION }, async request =
       issuedReward = {
         ticketId: `admin-${requestId}`, id: reward.id, order: reward.order,
         title: reward.title, detail: reward.detail,
-        expiresAt: reward.kind === "free-item" ? new Date(Date.now() + rewardConfig.freeItemExpiryDays * 86400000) : null,
+        expiresAt: ["free-item", "buy-get"].includes(reward.kind) ? new Date(Date.now() + rewardConfig.freeItemExpiryDays * 86400000) : null,
         issuedAt: new Date()
       };
       availableRewards.push(issuedReward);
@@ -1701,6 +1713,14 @@ exports.createOrder = onCall({ region: REGION }, async request => {
         if (isGameVoucher && !gameRewardItemNames(businessConfig.menu, businessConfig.combos).includes(loyaltyReward.item)) throw new HttpsError("failed-precondition", "This game reward item is no longer eligible in the menu.");
         const isComboReward = (businessConfig.combos || []).some(combo => combo.name === loyaltyReward.item);
         pricedItems.push({ name: loyaltyReward.item, price: 0, qty: 1, isCombo: isComboReward, isFreeOffer: false, isLoyaltyReward: true, loyaltyRewardId: loyaltyRewardTicketId, lineTotal: 0 });
+      }
+      if (loyaltyReward.kind === "buy-get") {
+        const boughtQuantity = pricedItems.filter(item => !item.isFreeOffer && !item.isLoyaltyReward && item.name === loyaltyReward.buyItem).reduce((sum, item) => sum + Number(item.qty || 0), 0);
+        if (boughtQuantity < Number(loyaltyReward.buyQuantity)) throw new HttpsError("failed-precondition", `Add ${Number(loyaltyReward.buyQuantity) - boughtQuantity} more ${loyaltyReward.buyItem} to use this Buy & Get reward.`);
+        const freeItemPrice = priceByName.get(loyaltyReward.getItem);
+        if (!Number.isSafeInteger(freeItemPrice) || freeItemPrice <= 0) throw new HttpsError("failed-precondition", "The free reward item is no longer available in the menu.");
+        const isComboReward = (businessConfig.combos || []).some(combo => combo.name === loyaltyReward.getItem);
+        pricedItems.push({ name: loyaltyReward.getItem, price: 0, qty: Number(loyaltyReward.getQuantity), isCombo: isComboReward, isFreeOffer: false, isLoyaltyReward: true, loyaltyRewardId: loyaltyRewardTicketId, lineTotal: 0 });
       }
     }
     if (applyFirstOrderReward) {
@@ -1954,6 +1974,10 @@ exports.staffLookupCustomer = onCall({ region: REGION }, async request => {
         itemPrice: Number(definition.itemPrice || 0),
         points: Number(definition.points || 0),
         maxBonusPoints: Number(definition.maxBonusPoints || 0),
+        buyItem: String(definition.buyItem || ""),
+        buyQuantity: Number(definition.buyQuantity || 0),
+        getItem: String(definition.getItem || ""),
+        getQuantity: Number(definition.getQuantity || 0),
         issuedAt: timestampMillis(reward.issuedAt)
       };
     }),
@@ -2187,6 +2211,14 @@ exports.createWalkInOrder = onCall({ region: REGION }, async request => {
         const isComboReward = (businessConfig.combos || []).some(combo => combo.name === loyaltyReward.item);
         pricedItems.push({ name: loyaltyReward.item, price: 0, qty: 1, isCombo: isComboReward, isFreeOffer: false, isLoyaltyReward: true, loyaltyRewardId: loyaltyRewardTicketId, lineTotal: 0 });
       }
+      if (loyaltyReward.kind === "buy-get") {
+        const boughtQuantity = pricedItems.filter(item => !item.isFreeOffer && !item.isLoyaltyReward && item.name === loyaltyReward.buyItem).reduce((sum, item) => sum + Number(item.qty || 0), 0);
+        if (boughtQuantity < Number(loyaltyReward.buyQuantity)) throw new HttpsError("failed-precondition", `Add ${Number(loyaltyReward.buyQuantity) - boughtQuantity} more ${loyaltyReward.buyItem} to use this Buy & Get reward.`);
+        const freeItemPrice = priceByName.get(loyaltyReward.getItem);
+        if (!Number.isSafeInteger(freeItemPrice) || freeItemPrice <= 0) throw new HttpsError("failed-precondition", "The free reward item is no longer available in the menu.");
+        const isComboReward = (businessConfig.combos || []).some(combo => combo.name === loyaltyReward.getItem);
+        pricedItems.push({ name: loyaltyReward.getItem, price: 0, qty: Number(loyaltyReward.getQuantity), isCombo: isComboReward, isFreeOffer: false, isLoyaltyReward: true, loyaltyRewardId: loyaltyRewardTicketId, lineTotal: 0 });
+      }
     }
     const pointsDiscount = requestedPoints / rewardConfig.pointsPerRedemptionRupees * 10;
     if (pointsDiscount > eligibleSubtotal) throw new HttpsError("failed-precondition", "Craving Points cannot reduce the eligible food subtotal below zero.");
@@ -2296,7 +2328,7 @@ exports.onOrderStatusChanged = onDocumentUpdated({ document: "orders/{orderId}",
           order: milestone.order,
           title: milestone.title,
           detail: milestone.detail,
-          expiresAt: milestone.kind === "free-item" ? new Date(Date.now() + rewardConfig.freeItemExpiryDays * 86400000) : null,
+          expiresAt: ["free-item", "buy-get"].includes(milestone.kind) ? new Date(Date.now() + rewardConfig.freeItemExpiryDays * 86400000) : null,
           issuedAt: new Date()
         });
       }

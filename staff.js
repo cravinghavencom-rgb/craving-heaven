@@ -825,6 +825,10 @@ function getWalkinEligibleSubtotal() {
   return cart.reduce((sum, item) => sum + (item.group === "COMBOS" || item.group === "EXTRAS & DIPS" ? 0 : item.price * item.qty), 0);
 }
 
+function getWalkinItemQuantity(name) {
+  return cart.reduce((sum, item) => !item.isFreeOffer && !item.isLoyaltyReward && item.name === name ? sum + Number(item.qty || 0) : sum, 0);
+}
+
 function renderWalkinPointsEstimate() {
   const row = $("walkinPointsEstimateRow");
   if (editingWalkinOrderId) {
@@ -914,16 +918,17 @@ function renderWalkinBenefits() {
     const webOnly = reward.kind === "free-delivery";
     const mustUseOlder = oldestReward && reward.ticketId !== oldestReward.ticketId;
     const shortfall = Math.max(0, Number(reward.minimum || 0) - eligibleSubtotal);
+    const buyGetShortfall = reward.kind === "buy-get" ? Math.max(0, Number(reward.buyQuantity || 0) - getWalkinItemQuantity(reward.buyItem)) : 0;
     const percentValue = Math.min(Math.floor(eligibleSubtotal * Number(reward.percent || 0) / 100), Number(reward.maxDiscount) > 0 ? Number(reward.maxDiscount) : eligibleSubtotal);
     const noEligibleDiscount = reward.kind === "percent-discount" && percentValue <= 0;
-    const note = mustUseOlder ? " · use the older reward first" : webOnly ? " · use for website delivery" : shortfall ? ` · add ${money(shortfall)} regular menu items` : noEligibleDiscount ? " · add regular menu items to use" : "";
-    rewardOptions.push(`<option value="${escapeHtml(reward.ticketId)}" ${mustUseOlder || webOnly || shortfall || noEligibleDiscount ? "disabled" : ""}>${escapeHtml(reward.title)}${note ? ` — ${escapeHtml(note.slice(3))}` : ""}</option>`);
+    const note = mustUseOlder ? " · use the older reward first" : webOnly ? " · use for website delivery" : shortfall ? ` · add ${money(shortfall)} regular menu items` : buyGetShortfall ? ` · add ${buyGetShortfall} × ${reward.buyItem}` : noEligibleDiscount ? " · add regular menu items to use" : "";
+    rewardOptions.push(`<option value="${escapeHtml(reward.ticketId)}" ${mustUseOlder || webOnly || shortfall || buyGetShortfall || noEligibleDiscount ? "disabled" : ""}>${escapeHtml(reward.title)}${note ? ` — ${escapeHtml(note.slice(3))}` : ""}</option>`);
   }
   $("walkinReward").innerHTML = rewardOptions.join("");
-  if (selectedRewardId && rewards.some(reward => reward.ticketId === selectedRewardId && reward.ticketId === oldestReward?.ticketId && reward.kind !== "free-delivery" && Number(reward.minimum || 0) <= eligibleSubtotal && (reward.kind !== "percent-discount" || Math.min(Math.floor(eligibleSubtotal * Number(reward.percent || 0) / 100), Number(reward.maxDiscount) > 0 ? Number(reward.maxDiscount) : eligibleSubtotal) > 0))) {
+  if (selectedRewardId && rewards.some(reward => reward.ticketId === selectedRewardId && reward.ticketId === oldestReward?.ticketId && reward.kind !== "free-delivery" && Number(reward.minimum || 0) <= eligibleSubtotal && (reward.kind !== "buy-get" || getWalkinItemQuantity(reward.buyItem) >= Number(reward.buyQuantity || 0)) && (reward.kind !== "percent-discount" || Math.min(Math.floor(eligibleSubtotal * Number(reward.percent || 0) / 100), Number(reward.maxDiscount) > 0 ? Number(reward.maxDiscount) : eligibleSubtotal) > 0))) {
     $("walkinReward").value = selectedRewardId;
   } else $("walkinReward").value = "";
-  $("walkinReward").disabled = !oldestReward || oldestReward.kind === "free-delivery" || Number(oldestReward.minimum || 0) > eligibleSubtotal || (oldestReward.kind === "percent-discount" && Math.min(Math.floor(eligibleSubtotal * Number(oldestReward.percent || 0) / 100), Number(oldestReward.maxDiscount) > 0 ? Number(oldestReward.maxDiscount) : eligibleSubtotal) <= 0);
+  $("walkinReward").disabled = !oldestReward || oldestReward.kind === "free-delivery" || Number(oldestReward.minimum || 0) > eligibleSubtotal || (oldestReward.kind === "buy-get" && getWalkinItemQuantity(oldestReward.buyItem) < Number(oldestReward.buyQuantity || 0)) || (oldestReward.kind === "percent-discount" && Math.min(Math.floor(eligibleSubtotal * Number(oldestReward.percent || 0) / 100), Number(oldestReward.maxDiscount) > 0 ? Number(oldestReward.maxDiscount) : eligibleSubtotal) <= 0);
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
   let benefitDiscount = 0;
@@ -948,6 +953,8 @@ function renderWalkinBenefits() {
       } else if (reward.kind === "free-item") {
         benefitDiscount = Number(reward.itemPrice || 0);
         hint = `${reward.item} will be added to the order for free.`;
+      } else if (reward.kind === "buy-get") {
+        hint = `${Number(reward.getQuantity || 0)} × ${reward.getItem} will be added free when the order includes ${Number(reward.buyQuantity || 0)} × ${reward.buyItem}.`;
       } else if (reward.kind === "bonus-points") hint = `${Number(reward.points || 0)} bonus Craving Points will be added after delivery.`;
       else if (reward.kind === "double-points") hint = "Double Craving Points will be calculated after delivery.";
     }
@@ -955,7 +962,7 @@ function renderWalkinBenefits() {
   $("walkinDiscountRow").hidden = !benefitLabel;
   if (benefitLabel) {
     $("walkinDiscountLabel").textContent = benefitLabel;
-    $("walkinDiscountAmount").textContent = benefitLabel.includes("points") ? `−${money(benefitDiscount)}` : (["free-item"].includes(rewards.find(item => item.ticketId === $("walkinReward").value)?.kind) ? "FREE" : `−${money(benefitDiscount)}`);
+    $("walkinDiscountAmount").textContent = benefitLabel.includes("points") ? `−${money(benefitDiscount)}` : (["free-item", "buy-get"].includes(rewards.find(item => item.ticketId === $("walkinReward").value)?.kind) ? "FREE" : `−${money(benefitDiscount)}`);
   }
   $("walkinBenefitHint").textContent = hint;
   $("walkinTotal").textContent = money(Math.max(0, subtotal - benefitDiscount));
