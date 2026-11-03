@@ -32,6 +32,7 @@
       "firestore.rules",
       "firestore-debug.log",
       "STAFF_DESK_SETUP.md",
+      "docs/**",
       "start-local-emulators.cmd",
       "**/.*",
       "**/node_modules/**"
