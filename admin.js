@@ -1,4 +1,4 @@
-import { firebaseAuth as auth, firebaseFunctions as functions, firebaseAuthPersistenceReady as authPersistence, FirebaseAuthAPI, FirebaseFunctionsAPI } from "./firebase-client.js?v=20261030-central-auth-v1";
+import { firebaseAuth as auth, firebaseFunctions as functions, firebaseAuthPersistenceReady as authPersistence, ensureFirebaseAppCheck, FirebaseAuthAPI, FirebaseFunctionsAPI } from "./firebase-client.js?v=20261105-pagespeed-opt-v2";
 const { signInWithEmailAndPassword, sendPasswordResetEmail, verifyBeforeUpdateEmail, onAuthStateChanged, signOut } = FirebaseAuthAPI;
 const { httpsCallable } = FirebaseFunctionsAPI;
 
@@ -22,6 +22,7 @@ const call = async (name, data = {}) => {
     throw error;
   }
   await user.getIdToken();
+  if (["adminSaveCravingDashConfig", "adminStartCravingDashTest", "adminSetCravingDashLive"].includes(name)) await ensureFirebaseAppCheck();
   const result = await httpsCallable(functions, name)(data);
   return result.data;
 };

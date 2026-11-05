@@ -1,6 +1,9 @@
 document.addEventListener("DOMContentLoaded", async () => {
 const REWARDS_CONFIG = window.CRAVING_REWARDS || { journey: [], rewardById: {} };
 const REWARD_EXCLUDED_NAMES = new Set((MENU_DATA.extras?.items || []).map(item => item.name));
+function optimizedComboImageUrl(image) {
+  return String(image || "").replace(/craving-mega-platter\.webp(?=([?#]|$))/, "craving-mega-platter-768.webp");
+}
 let menuInitialized = false;
 let welcomeFlyerShownThisPage = false;
 let customerOnlineOrderHistoryLoaded = false;
@@ -2192,7 +2195,7 @@ let pendingGpsCoordinates = null;
     sectionsRoot.innerHTML = Object.entries(MENU_DATA).map(([id, section]) => {
       const cards = section.items.map(item => {
         const inCart = item.options ? null : cartItem(item.name, Number(item.price));
-        const image = item.image ? `<img src="${esc(item.image)}" alt="${esc(item.name)}" loading="lazy" onload="this.closest('.food-image').classList.remove('image-loading')" onerror="this.closest('.food-image').classList.remove('image-loading');this.closest('.food-image').classList.add('image-missing')">` : "";
+        const image = item.image ? `<img src="${esc(item.image)}" alt="${esc(item.name)}" width="480" height="360" loading="lazy" onload="this.closest('.food-image').classList.remove('image-loading')" onerror="this.closest('.food-image').classList.remove('image-loading');this.closest('.food-image').classList.add('image-missing')">` : "";
         const description = String(item.description || "").trim();
         const showDescription = description && description.replace(/[.!?]+$/, "").toLocaleLowerCase() !== String(item.name).trim().toLocaleLowerCase();
 
@@ -2304,9 +2307,10 @@ let pendingGpsCoordinates = null;
     comboMenuRoot.innerHTML = COMBO_MENU_DATA.map(combo => {
       const comboPrice = Number(combo.price);
       const inCart = cartItem(combo.name, comboPrice);
+      const comboImage = optimizedComboImageUrl(combo.image);
       return `
       <article class="combo-menu-card">
-        <div class="combo-menu-image${combo.image ? "" : " image-missing"}" data-fallback="${esc(combo.name)}">${combo.image ? `<img src="${esc(combo.image)}" alt="${esc(combo.name)}" loading="lazy" onerror="this.closest('.combo-menu-image').classList.add('image-missing')">` : ""}<span>SAVE ${money(combo.value - combo.price)}</span></div>
+        <div class="combo-menu-image${comboImage ? "" : " image-missing"}" data-fallback="${esc(combo.name)}">${comboImage ? `<img src="${esc(comboImage)}" alt="${esc(combo.name)}" width="768" height="512" loading="lazy" onerror="this.closest('.combo-menu-image').classList.add('image-missing')">` : ""}<span>SAVE ${money(combo.value - combo.price)}</span></div>
         <div class="combo-menu-content">
           <h3>${esc(combo.name)}</h3>
           <ul>${combo.items.map(item => `<li>${esc(item)}</li>`).join("")}</ul>
@@ -2894,11 +2898,12 @@ ${esc(offer.freeItem)}
     const root = document.getElementById("homeComboCard");
     const combo = COMBO_MENU_DATA[0];
     if (!root || !combo) return;
+    const comboImage = optimizedComboImageUrl(combo.image).replace("craving-mega-platter-768.webp", "craving-mega-platter-676.webp");
     const price = Number(combo.price);
     const value = Number(combo.value);
     const inCart = cartItem(combo.name, price);
     root.innerHTML = `<article class="home-dashboard-card home-card-combos">
-      <div class="home-combo-photo${combo.image ? "" : " image-missing"}" data-fallback="${esc(combo.name)}">${combo.image ? `<img src="${esc(combo.image)}" alt="${esc(combo.name)}" loading="lazy" onerror="this.closest('.home-combo-photo').classList.add('image-missing')">` : ""}<span>FEATURED COMBO</span></div>
+      <div class="home-combo-photo${comboImage ? "" : " image-missing"}" data-fallback="${esc(combo.name)}">${comboImage ? `<img src="${esc(comboImage)}" alt="${esc(combo.name)}" width="676" height="450" loading="lazy" onerror="this.closest('.home-combo-photo').classList.add('image-missing')">` : ""}<span>FEATURED COMBO</span></div>
       <div class="home-combo-details">
         <span class="home-card-kicker">COMBOS</span>
         <h2>${esc(combo.name)}</h2>
@@ -3393,19 +3398,15 @@ async function saveFCMToken(token) {
     );
   }
 
-  const tokenRef =
-    window.FirebaseFirestoreAPI.doc(
-      window.firebaseDB,
-      "notificationTokens",
-      token
-    );
+  const firestore = await window.loadFirebaseFirestore();
+  const { firebaseDB, FirebaseFirestoreAPI } = firestore;
+  const tokenRef = FirebaseFirestoreAPI.doc(firebaseDB, "notificationTokens", token);
 
-  await window.FirebaseFirestoreAPI.setDoc(
+  await FirebaseFirestoreAPI.setDoc(
     tokenRef,
     {
       token: token,
-      createdAt:
-        window.FirebaseFirestoreAPI.serverTimestamp(),
+      createdAt: FirebaseFirestoreAPI.serverTimestamp(),
       userAgent:
         navigator.userAgent,
       platform:
@@ -3470,16 +3471,14 @@ function resetNotificationOfferButton() {
 // ACTIVATE NOTIFICATIONS
 // ---------------------------------------------------------
 async function enableCustomerOfferNotifications() {
-
-  if (
-    !window.firebaseMessaging ||
-    !window.FirebaseMessagingAPI
-  ) {
-    console.error(
-      "Firebase Messaging is not ready."
-    );
+  let messaging;
+  try {
+    messaging = await window.loadFirebaseMessaging?.();
+  } catch (error) {
+    console.error("Firebase Messaging could not be loaded:", error);
     return false;
   }
+  if (!messaging?.firebaseMessaging || !messaging?.FirebaseMessagingAPI) return false;
 
   if (!("Notification" in window)) {
     console.log(
@@ -3584,8 +3583,8 @@ async function enableCustomerOfferNotifications() {
 
 
       const token =
-        await window.FirebaseMessagingAPI.getToken(
-          window.firebaseMessaging,
+        await messaging.FirebaseMessagingAPI.getToken(
+          messaging.firebaseMessaging,
           {
             vapidKey: FCM_VAPID_KEY,
             serviceWorkerRegistration

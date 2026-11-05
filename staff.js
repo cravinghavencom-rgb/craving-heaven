@@ -1,4 +1,4 @@
-import { firebaseAuth as auth, firebaseFunctions as functions, firebaseAuthPersistenceReady as authPersistence, FirebaseAuthAPI, FirebaseFunctionsAPI } from "./firebase-client.js?v=20261030-central-auth-v1";
+import { firebaseAuth as auth, firebaseFunctions as functions, firebaseAuthPersistenceReady as authPersistence, FirebaseAuthAPI, FirebaseFunctionsAPI } from "./firebase-client.js?v=20261105-pagespeed-opt-v2";
 const { signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } = FirebaseAuthAPI;
 const { httpsCallable } = FirebaseFunctionsAPI;
 const $ = id => document.getElementById(id);

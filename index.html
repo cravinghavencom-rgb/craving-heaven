@@ -7,19 +7,11 @@
   <meta name="description" content="CRAVING HEAVEN — Chicken, burgers, wraps, wings, strips, popcorn, fries and combos.">
   <link rel="canonical" href="https://cravingheaven.com/">
   <title>CRAVING HEAVEN | Chicken & Burgers</title>
-  <link rel="icon" type="image/png" href="images/logo.png">
-  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
-  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js" crossorigin>
-  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-check.js" crossorigin>
-  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js" crossorigin>
-  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js" crossorigin>
-  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-functions.js" crossorigin>
-  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-messaging.js" crossorigin>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Montserrat:wght@500;600;700;800;900&display=swap">
+  <link rel="icon" type="image/png" href="images/logo-icon.png">
+  <link rel="preload" href="assets/fonts/dm-sans/latin-variable.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/montserrat/latin-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" as="image" href="images/burgers/classic-crunchy-burger.webp" type="image/webp" fetchpriority="high">
-  <link rel="stylesheet" href="style.css?v=20261031-home-access-v1">
+  <link rel="stylesheet" href="style.css?v=20261105-pagespeed-opt-v1">
   <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-GD2EPLFYZP">
 </script>
@@ -36,7 +28,7 @@
   <header class="site-header" id="top">
     <div class="header-inner">
       <a class="brand" href="#top" data-screen="home" aria-label="CRAVING HEAVEN home">
-        <img src="images/logo.png" alt="CRAVING HEAVEN logo">
+        <img src="images/logo-header-2x.webp" srcset="images/logo-header-1x.webp 1x, images/logo-header-2x.webp 2x" alt="CRAVING HEAVEN logo" width="182" height="122" decoding="async">
       </a>
       <button class="home-delivery-picker" id="homeDeliveryPicker" type="button" aria-haspopup="dialog" aria-controls="deliveryLocationDialog" aria-expanded="false">
         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.3"/></svg>
@@ -84,7 +76,7 @@
 
   <dialog class="first-visit-flyer" id="firstVisitFlyer" aria-labelledby="firstVisitFlyerTitle">
     <button class="first-visit-flyer-close" type="button" aria-label="Close welcome offer" data-close-first-visit>×</button>
-    <div class="first-visit-flyer-art"><img id="firstVisitFlyerImage" src="images/burgers/classic-crunchy-burger.webp" alt="Classic Crunchy Burger"><strong id="firstVisitFlyerEmblem" hidden>✦</strong><i aria-hidden="true">✦</i><b aria-hidden="true">✦</b><span id="firstVisitFlyerValue">₹80 VALUE</span></div>
+    <div class="first-visit-flyer-art"><img id="firstVisitFlyerImage" src="images/burgers/classic-crunchy-burger.webp" alt="Classic Crunchy Burger" width="259" height="242"><strong id="firstVisitFlyerEmblem" hidden>✦</strong><i aria-hidden="true">✦</i><b aria-hidden="true">✦</b><span id="firstVisitFlyerValue">₹80 VALUE</span></div>
     <span class="first-visit-flyer-kicker" id="firstVisitFlyerKicker">A FIRST-ORDER TREAT FROM CRAVING HEAVEN</span>
     <h2 id="firstVisitFlyerTitle">Your first order gets a free burger!</h2>
     <p id="firstVisitFlyerDescription">Add any regular menu item to your first online order and get a Classic Crunchy Burger free.</p>
@@ -669,7 +661,7 @@
   <footer class="site-footer">
     <div class="footer-inner">
       <div class="footer-brand">
-        <img src="images/logo.png" alt="CRAVING HEAVEN">
+        <img src="images/logo-footer.webp" alt="CRAVING HEAVEN" width="157" height="105" loading="lazy" decoding="async">
         <p>MADE WITH QUALITY, SERVED WITH LOVE!</p>
       </div>
 
@@ -690,29 +682,33 @@
   </footer>
 
 <script type="module">
-  import { firebaseApp, useLocalFirebaseEmulators } from "./firebase-client.js?v=20261030-central-auth-v1";
+  import { firebaseApp, useLocalFirebaseEmulators } from "./firebase-client.js?v=20261105-pagespeed-opt-v2";
 
-  import {
-  getMessaging,
-  getToken,
-  onMessage
-} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-messaging.js";
-
-const firebaseMessaging = useLocalFirebaseEmulators ? null : getMessaging(firebaseApp);
-
-window.FirebaseMessagingAPI = {
-  getMessaging,
-  getToken,
-  onMessage
-};
-
-window.firebaseMessaging = firebaseMessaging;
+  let firebaseMessagingPromise = null;
+  window.loadFirebaseMessaging = () => {
+    if (useLocalFirebaseEmulators) return Promise.resolve(null);
+    if (!firebaseMessagingPromise) {
+      firebaseMessagingPromise = import("https://www.gstatic.com/firebasejs/12.18.0/firebase-messaging.js")
+        .then(async module => {
+          if (!(await module.isSupported())) return null;
+          const firebaseMessaging = module.getMessaging(firebaseApp);
+          const FirebaseMessagingAPI = { getMessaging: module.getMessaging, getToken: module.getToken, onMessage: module.onMessage };
+          Object.assign(window, { firebaseMessaging, FirebaseMessagingAPI });
+          return { firebaseMessaging, FirebaseMessagingAPI };
+        })
+        .catch(error => {
+          firebaseMessagingPromise = null;
+          throw error;
+        });
+    }
+    return firebaseMessagingPromise;
+  };
 
 </script>
 
 <script src="rewards-config.js?v=20261021-first-order-gift" defer></script>
 <script src="menu.js?v=20261027-combo-webp" defer></script>
-<script src="script.js?v=20261102-rewards-live-eligibility-v1" defer></script>
-<script src="craving-dash.js?v=20261026-craving-runner-v1" defer></script>
+<script src="script.js?v=20261105-pagespeed-opt-v2" defer></script>
+<script src="craving-dash.js?v=20261105-pagespeed-opt-v2" defer></script>
 </body>
 </html>

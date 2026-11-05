@@ -1,3 +1,18 @@
+@font-face {
+  font-family: "DM Sans";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("assets/fonts/dm-sans/latin-variable.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 500 900;
+  font-display: swap;
+  src: url("assets/fonts/montserrat/latin-variable.woff2") format("woff2");
+}
+
 :root {
   --red: #c90000;
   --red-dark: #a80000;
@@ -2813,6 +2828,19 @@ body { background:#fbf7f1; color:var(--premium-ink); }
   .push-offer-box { width: calc(100% - 24px); margin: 0 auto 24px; }
 }
 @media (prefers-reduced-motion: reduce) { .home-hero-actions button,.home-dashboard-card { transition: none; } }
+
+/* Reserve the featured combo slot before customer data initializes to avoid a large page jump. */
+@media (max-width: 650px) {
+  #homeComboCard { min-height: 480px; }
+  #homeComboCard:empty::before {
+    display: block;
+    min-height: 480px;
+    border: 1px solid var(--premium-line);
+    border-radius: 18px;
+    background: linear-gradient(110deg, #fff 8%, #f7eee6 18%, #fff 33%);
+    content: "";
+  }
+}
 
 /* Delivery area in the header and a more compact, intentional mobile hero. */
 .header-inner { justify-content: flex-start; }

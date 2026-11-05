@@ -1,13 +1,11 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app-check.js";
 import {
-  getAuth, RecaptchaVerifier, signInWithPhoneNumber, signInWithEmailAndPassword,
+  initializeAuth, RecaptchaVerifier, signInWithPhoneNumber, signInWithEmailAndPassword,
   signInWithCustomToken, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider,
   sendEmailVerification, verifyBeforeUpdateEmail, sendPasswordResetEmail,
-  onAuthStateChanged, setPersistence, browserLocalPersistence,
+  onAuthStateChanged, browserLocalPersistence,
   signOut, connectAuthEmulator
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
-import { getFirestore, connectFirestoreEmulator, collection, doc, setDoc, addDoc, serverTimestamp, getDocs, getDoc, query, where } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 import { getFunctions, connectFunctionsEmulator, httpsCallable } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-functions.js";
 
 const hostname = location.hostname;
@@ -25,22 +23,54 @@ const config = {
 };
 
 export const firebaseApp = initializeApp(config);
-if (!localEmulators) {
-  initializeAppCheck(firebaseApp, {
-    provider: new ReCaptchaEnterpriseProvider("6LdBasMtAAAAAJE5V6ZDZefojEfJx9vfDFowfIjU"),
-    isTokenAutoRefreshEnabled: true
-  });
-}
-export const firebaseAuth = getAuth(firebaseApp);
-export const firebaseDB = getFirestore(firebaseApp);
+export const firebaseAuth = initializeAuth(firebaseApp, { persistence: browserLocalPersistence });
 export const firebaseFunctions = getFunctions(firebaseApp, "asia-south1");
-export const firebaseAuthPersistenceReady = setPersistence(firebaseAuth, browserLocalPersistence);
+export const firebaseAuthPersistenceReady = firebaseAuth.authStateReady();
 export const useLocalFirebaseEmulators = localEmulators;
 
 if (localEmulators) {
   connectAuthEmulator(firebaseAuth, `http://${hostname}:9400`, { disableWarnings: true });
-  connectFirestoreEmulator(firebaseDB, hostname, 9401);
   connectFunctionsEmulator(firebaseFunctions, hostname, 9402);
+}
+
+let firestoreModulePromise = null;
+let appCheckPromise = null;
+export function ensureFirebaseAppCheck() {
+  if (localEmulators) return Promise.resolve(null);
+  if (!appCheckPromise) {
+    appCheckPromise = import("https://www.gstatic.com/firebasejs/12.18.0/firebase-app-check.js")
+      .then(module => module.initializeAppCheck(firebaseApp, {
+        provider: new module.ReCaptchaEnterpriseProvider("6LdBasMtAAAAAJE5V6ZDZefojEfJx9vfDFowfIjU"),
+        isTokenAutoRefreshEnabled: true
+      }))
+      .catch(error => {
+        appCheckPromise = null;
+        throw error;
+      });
+  }
+  return appCheckPromise;
+}
+
+export function loadFirebaseFirestore() {
+  if (!firestoreModulePromise) {
+    firestoreModulePromise = import("https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js")
+      .then(module => {
+        const firebaseDB = module.getFirestore(firebaseApp);
+        if (localEmulators) module.connectFirestoreEmulator(firebaseDB, hostname, 9401);
+        const FirebaseFirestoreAPI = {
+          doc: module.doc,
+          setDoc: module.setDoc,
+          serverTimestamp: module.serverTimestamp
+        };
+        Object.assign(window, { firebaseDB, FirebaseFirestoreAPI });
+        return { firebaseDB, FirebaseFirestoreAPI };
+      })
+      .catch(error => {
+        firestoreModulePromise = null;
+        throw error;
+      });
+  }
+  return firestoreModulePromise;
 }
 
 export const FirebaseAuthAPI = {
@@ -49,10 +79,9 @@ export const FirebaseAuthAPI = {
   sendEmailVerification, verifyBeforeUpdateEmail, sendPasswordResetEmail,
   onAuthStateChanged, signOut
 };
-export const FirebaseFirestoreAPI = { collection, doc, setDoc, addDoc, serverTimestamp, getDocs, getDoc, query, where };
 export const FirebaseFunctionsAPI = { httpsCallable };
 
 Object.assign(window, {
-  firebaseApp, firebaseAuth, firebaseDB, firebaseFunctions, firebaseAuthPersistenceReady,
-  useLocalFirebaseEmulators, FirebaseAuthAPI, FirebaseFirestoreAPI, FirebaseFunctionsAPI
+  firebaseApp, firebaseAuth, firebaseFunctions, firebaseAuthPersistenceReady,
+  useLocalFirebaseEmulators, ensureFirebaseAppCheck, loadFirebaseFirestore, FirebaseAuthAPI, FirebaseFunctionsAPI
 });

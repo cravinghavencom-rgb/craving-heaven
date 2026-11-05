@@ -21,11 +21,12 @@ This is the project's canonical development and infrastructure guide. Update it 
 | Backend | Firebase Cloud Functions, second-generation callable functions and a Firestore document trigger |
 | Backend region | `asia-south1` (Mumbai) |
 | Runtime | Node.js 22; `firebase-admin` and `firebase-functions` dependencies are in `functions/package.json` |
-| Main database | Cloud Firestore, accessed by the Admin SDK in Functions and the Firebase Web SDK for limited customer reads/profile operations |
+| Main database | Cloud Firestore, accessed by the Admin SDK in Functions; the customer Firestore Web SDK loads only when saving push-notification tokens |
 | Customer sign-in | Firebase Authentication phone OTP; browser local persistence |
 | Team sign-in | Firebase Authentication email/password with server-checked `admin`/`staff` custom claims |
 | App integrity | Firebase App Check initialized in the browser with the reCAPTCHA Enterprise provider |
 | Search discovery | `robots.txt` points to `sitemap.xml`; sitemap lists the canonical customer homepage; admin/staff pages are disallowed for crawlers |
+| Front-end performance | Customer Firebase Auth uses local persistence without the unused popup/redirect resolver; Firestore and Messaging load on demand; branded variable fonts are self-hosted; static assets use a seven-day browser/CDN cache |
 | Analytics | Google tag (`gtag.js`) in `index.html`; measurement IDs in the HTML and Firebase config differ and should be checked |
 | Push | Firebase Cloud Messaging client setup, token registration, and a service worker; no server-side push sender was found in this repository |
 | Maps and payments | No Google Maps/Places/Geocoding SDK or online payment gateway is called by the current website code |
@@ -95,11 +96,12 @@ There is no root `package.json`/bundler build. Browser code imports Firebase Web
 | Firebase App Check + reCAPTCHA Enterprise | `firebase-client.js` | Web app attestation/token validation for Firebase services | App Check is no-cost as a Firebase product; Enterprise assessments above their included tier may be billable |
 | Firebase Cloud Messaging (FCM) | `index.html`, `script.js`, `firebase-messaging-sw.js` | Lets a customer opt in, registers an FCM token, and displays background payloads | Firebase lists FCM as no-cost. A sender/campaign service is not present in this repository. |
 | Google Analytics 4 tag | `index.html` | Sends browser analytics through `gtag.js` | Firebase lists Analytics as no-cost for standard product use |
-| Google Fonts | `index.html` | Loads DM Sans and Montserrat font files | No Google Maps Platform API is involved; Google Fonts is used as a hosted font resource |
+| DM Sans and Montserrat font files | `assets/fonts/`, `style.css`, `index.html` | Self-hosted variable fonts; preloaded by the homepage | No Google Fonts network request or Google Maps Platform API is involved |
 | Browser Geolocation API | `navigator.geolocation` in `script.js` | Requests GPS coordinates after the customer grants browser permission | This is a browser API, not a Google Geolocation API request; the site does not call the Google Geolocation endpoint |
 
 ### APIs not used by the current site code
 
+- **Google Fonts network service:** no hosted Google Fonts CSS/font requests remain; DM Sans and Montserrat are served from the site's own `assets/fonts/` directory.
 - **Google Maps JavaScript API, Places API, Geocoding API, Distance Matrix/Routes APIs:** no SDK/script/API calls were found. Address entry is manual; the GPS button saves device coordinates after permission. No reverse-geocoding service converts coordinates to a street address.
 - **Google Geolocation API:** not called. It is a separate billable Google web service; `navigator.geolocation` is the browser’s device-location API.
 - **Online payment API (Razorpay, Stripe, PayU, Google Pay/UPI API):** none found. Checkout currently records pay-on-delivery or pay-on-pickup options; it does not charge a card or process an online UPI payment.
@@ -172,7 +174,7 @@ Firestore trigger: `onOrderStatusChanged` reacts to order document updates and u
 
 - Hosting site `craving-heaven-e2e94`, with `public: "."` and root rewrite to `index.html`.
 - Security headers: HSTS, `nosniff`, same-origin framing, referrer policy, and a permissions policy that disables camera/microphone and sets geolocation policy.
-- `index.html`/root no-cache headers; cache-busting query strings are used for JS/CSS assets.
+- `index.html`/root no-cache headers; versioned JS/CSS, images, and fonts receive a seven-day public cache lifetime.
 - Ignore rules for Functions, rules/index files, hidden files, dependencies, and `docs/**`.
 - Functions source folder `functions`, Node.js 22 runtime, and a predeploy menu-catalog build step.
 - Local Auth/Firestore/Functions/Hosting emulators on ports 9400/9401/9402/9403.
@@ -214,6 +216,11 @@ These are published rates/allowances, not the project's actual bill. Costs depen
 **Cost control:** budget alerts notify but do not automatically stop usage. Review Google Cloud Billing → Reports by product and Firebase Console → Usage; set low budget alerts; restrict OTP SMS to India if the customer base is India-only; monitor sent vs verified SMS; limit log volume; periodically delete old Hosting versions/unused Artifact Registry images. Confirm actual monthly rates and taxes on the linked Billing account.
 
 ## 10. Known operational checks and unresolved items
+
+- **PageSpeed mobile baseline (5 November 2026, 12:47 PM):** Lighthouse score 50, FCP 1.5 s, LCP 5.0 s, TBT 310 ms, CLS 0.54; Accessibility 96, Best Practices 96, SEO 100. The report showed no field data.
+- **Optimization work (5 November 2026):** self-hosted the existing DM Sans/Montserrat fonts, optimized the combo/logo assets, deferred Firestore/Messaging and App Check until needed, reserved homepage combo space, and added a seven-day cache for static assets. App Check remains enabled for the protected Craving Dash functions and admin game actions. No customer order, account, or loyalty APIs are exempted by this change; only game functions enforce App Check in `functions/index.js`.
+- **Post-deploy mobile PSI variability:** repeated Lighthouse runs used Moto G Power emulation, slow 4G, Lighthouse 13.6.0 and reported no field data. After deferring App Check, one run scored **86** (FCP 0.9 s, LCP 3.7 s, TBT 40 ms, CLS 0.103; Accessibility/Best Practices/SEO 100). After image resizing, a run scored **69** (FCP 2.8 s, LCP 4.6 s, TBT 230 ms, CLS 0.078), followed by **74** (FCP 2.8 s, LCP 4.5 s, TBT 60 ms, CLS 0.078; Accessibility/Best Practices/SEO 100). These scores vary between runs; use repeated runs and real-user field data when available. Latest report (5 November 2026, 1:22 PM): https://pagespeed.web.dev/analysis/https-cravingheaven-com/0pjn16yfam?form_factor=mobile .
+- **Latest report's remaining Lighthouse opportunities:** render-blocking `style.css` (estimated 150 ms), about 16 KiB of image savings, unused JavaScript (~107 KiB), and minor CSS/JS minification opportunities. Keep the main stylesheet render-blocking unless a critical-CSS split is visually/regression tested; unstyled early paint could worsen layout shift and customer experience. Best Practices is now 100, with no homepage App Check/reCAPTCHA console error.
 
 1. **Firestore location:** not confirmed from this repository. Functions use Mumbai (`asia-south1`), but the Firestore database may be in another region. Verify before estimating regional pricing or latency.
 2. **GA4 IDs:** HTML gtag and Firebase config measurement IDs differ; verify intended stream.
