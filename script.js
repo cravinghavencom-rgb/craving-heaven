@@ -125,7 +125,7 @@ const FREE_DELIVERY_THRESHOLD = 300;
 const DELIVERY_CHARGE = 30;
 const CUSTOMER_ACCOUNT_CACHE_TTL_MS = 120_000;
 const ONLINE_CHECKOUT_ENABLED = true;
-let orderAvailability = { isOpen: false, paused: false, staffEnabled: false, acceptingOnlineOrders: false, testModeEnabled: false, isTestCustomer: false };
+let orderAvailability = { isOpen: false, paused: false, staffEnabled: false, acceptingOnlineOrders: false, testModeEnabled: false, isTestCustomer: false, hours: { openingTime: "16:30", closingTime: "23:45" } };
 let orderAvailabilityReady = false;
 let orderAvailabilityLastCheckedAt = 0;
 let orderAvailabilityRequest = null;
@@ -3704,20 +3704,55 @@ if (enableOfferNotifications) {
 function updateOpeningHours() {
   const statusEl = document.getElementById("openingHoursStatus");
   const dotEl = document.getElementById("openingHoursDot");
-
+  const bannerEl = document.getElementById("storeHoursBanner");
+  const hoursEl = document.getElementById("openingHoursTimes");
+  const nextEl = document.getElementById("openingHoursNext");
+  const hours = orderAvailability.hours || { openingTime: "16:30", closingTime: "23:45" };
+  const formatTime = value => {
+    const match = /^(\d{2}):(\d{2})$/.exec(String(value || ""));
+    if (!match) return "";
+    const hour = Number(match[1]);
+    const minute = match[2];
+    return `${hour % 12 || 12}:${minute} ${hour < 12 ? "AM" : "PM"}`;
+  };
+  const openingTime = formatTime(hours.openingTime) || "4:30 PM";
+  const closingTime = formatTime(hours.closingTime) || "11:45 PM";
+  const hoursText = `${openingTime} – ${closingTime}`;
+  const nowParts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+  const nowMinutes = Number(nowParts.find(part => part.type === "hour")?.value || 0) * 60 + Number(nowParts.find(part => part.type === "minute")?.value || 0);
+  const [openHour, openMinute] = (hours.openingTime || "16:30").split(":").map(Number);
+  const [closeHour, closeMinute] = (hours.closingTime || "23:45").split(":").map(Number);
+  const openMinutes = openHour * 60 + openMinute;
+  const closeMinutes = closeHour * 60 + closeMinute;
+  const closedBySchedule = orderAvailability.isOpen === false;
+  const nextOpening = orderAvailabilityReady && closedBySchedule
+    ? openMinutes < closeMinutes
+      ? nowMinutes < openMinutes ? `Opens today at ${openingTime}` : `Opens tomorrow at ${openingTime}`
+      : `Opens today at ${openingTime}`
+    : "";
   const cartStatusEl = document.getElementById("cartOpeningHoursStatus");
   const cartDotEl = document.getElementById("cartOpeningHoursDot");
+  const cartBannerEl = document.getElementById("cartStoreHoursBanner");
+  const cartHoursEl = document.getElementById("cartOpeningHoursTimes");
+  const cartNextEl = document.getElementById("cartOpeningHoursNext");
   const mainNotice = document.getElementById("onlineOrderNotice");
   const cartNotice = document.getElementById("cartOrderAvailabilityNotice");
   const isOpen = orderAvailability.acceptingOnlineOrders;
-  const label = isOpen ? "OPEN" : "CLOSED";
-  for (const [status, dot] of [[statusEl, dotEl], [cartStatusEl, cartDotEl]]) {
+  const label = isOpen ? "OPEN NOW" : "CLOSED";
+  for (const [status, dot, banner, schedule, next] of [[statusEl, dotEl, bannerEl, hoursEl, nextEl], [cartStatusEl, cartDotEl, cartBannerEl, cartHoursEl, cartNextEl]]) {
     if (!status || !dot) continue;
     status.textContent = label;
     status.classList.toggle("is-open", isOpen);
     status.classList.toggle("is-closed", !isOpen);
     dot.classList.toggle("is-open", isOpen);
     dot.classList.toggle("is-closed", !isOpen);
+    banner?.classList.toggle("is-open", isOpen);
+    banner?.classList.toggle("is-closed", !isOpen);
+    if (schedule) schedule.textContent = hoursText;
+    if (next) {
+      next.textContent = nextOpening;
+      next.hidden = !nextOpening;
+    }
   }
   const notice = orderAvailabilityReady
     ? orderAvailability.testModeEnabled
@@ -3727,10 +3762,12 @@ function updateOpeningHours() {
       : orderAvailability.paused
       ? "We’re preparing a rush of fresh orders right now. Please check back in a little while—we’d love to serve you soon!"
       : orderAvailability.adminMode === "closed"
-      ? "We’re closed for now, but we’ll be back soon with your favourites. Please check back a little later!"
+      ? "We’re closed for now. Please check the opening hours above before placing an order."
+      : !orderAvailability.isOpen
+      ? "We’re closed right now. Please check the opening hours above to see when we reopen."
       : !orderAvailability.staffEnabled
-      ? "We’re getting ready to serve you! Online ordering will open when our team is ready. Please check back soon—we’d love to make your favourites!"
-      : isOpen ? "" : "We’re closed for now, but we’ll be back soon with your favourites. Please check back a little later!"
+      ? "We’re getting ready to serve you! Please check back soon."
+      : isOpen ? "" : "Online ordering is temporarily unavailable. Please check back soon."
     : "Unable to confirm online order status. Please refresh and try again.";
   for (const element of [mainNotice, cartNotice]) {
     if (!element) continue;
@@ -3762,7 +3799,8 @@ async function refreshOrderingAvailability({ force = false } = {}) {
         acceptingOnlineOrders: data.acceptingOnlineOrders === true,
         adminMode: data.adminMode || "",
         testModeEnabled: data.testModeEnabled === true,
-        isTestCustomer: data.isTestCustomer === true
+        isTestCustomer: data.isTestCustomer === true,
+        hours: data.hours || { openingTime: "16:30", closingTime: "23:45" }
       };
       orderAvailabilityReady = true;
     } catch (error) {

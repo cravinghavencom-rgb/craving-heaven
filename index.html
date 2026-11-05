@@ -11,7 +11,7 @@
   <link rel="preload" href="assets/fonts/dm-sans/latin-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/montserrat/latin-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" as="image" href="images/burgers/classic-crunchy-burger.webp" type="image/webp" fetchpriority="high">
-  <link rel="stylesheet" href="style.css?v=20261105-pagespeed-opt-v1">
+  <link rel="stylesheet" href="style.css?v=20261105-store-hours-v1">
   <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-GD2EPLFYZP">
 </script>
@@ -68,9 +68,13 @@
 
   <nav class="category-nav" id="categoryNav" aria-label="Menu categories"></nav>
   
-<div class="opening-hours">
-  <span class="opening-hours-dot" id="openingHoursDot"></span>
-  <span class="opening-hours-label" id="openingHoursStatus" aria-live="polite">CLOSED</span>
+<div class="opening-hours is-closed" id="storeHoursBanner" aria-label="Store status and hours">
+  <div class="store-hours-status-row">
+    <span class="opening-hours-dot is-closed" id="openingHoursDot" aria-hidden="true"></span>
+    <span class="opening-hours-label is-closed" id="openingHoursStatus" aria-live="polite">CLOSED</span>
+    <span class="store-hours-next" id="openingHoursNext" hidden></span>
+  </div>
+  <div class="store-hours-time-row"><span aria-hidden="true">◷</span><span>STORE HOURS</span><strong id="openingHoursTimes">4:30 PM – 11:45 PM</strong></div>
 </div>
 <p id="onlineOrderNotice" class="order-availability-note" role="status" hidden></p>
 
@@ -241,9 +245,13 @@
         </div>
         <button class="cart-close" id="closeCart" type="button" aria-label="Close cart">×</button>
       </div>
-<div class="cart-opening-hours">
-  <span class="cart-hours-dot" id="cartOpeningHoursDot"></span>
-  <span class="cart-hours-status" id="cartOpeningHoursStatus" aria-live="polite">CLOSED</span>
+<div class="cart-opening-hours is-closed" id="cartStoreHoursBanner" aria-label="Store status and hours">
+  <div class="cart-hours-status-row">
+    <span class="cart-hours-dot is-closed" id="cartOpeningHoursDot" aria-hidden="true"></span>
+    <span class="cart-hours-status is-closed" id="cartOpeningHoursStatus" aria-live="polite">CLOSED</span>
+    <span class="cart-hours-next" id="cartOpeningHoursNext" hidden></span>
+  </div>
+  <div class="cart-hours-time-row"><span aria-hidden="true">◷</span><span>STORE HOURS</span><strong id="cartOpeningHoursTimes">4:30 PM – 11:45 PM</strong></div>
 </div>
 <p id="cartOrderAvailabilityNotice" class="order-availability-note cart-availability-note" role="status" hidden></p>
 
@@ -708,7 +716,7 @@
 
 <script src="rewards-config.js?v=20261021-first-order-gift" defer></script>
 <script src="menu.js?v=20261027-combo-webp" defer></script>
-<script src="script.js?v=20261105-pagespeed-opt-v2" defer></script>
+<script src="script.js?v=20261105-store-hours-v2" defer></script>
 <script src="craving-dash.js?v=20261105-pagespeed-opt-v2" defer></script>
 </body>
 </html>
