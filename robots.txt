@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin.html
+Disallow: /staff.html
+Disallow: /team-account-setup.html
+
+Sitemap: https://cravingheaven.com/sitemap.xml

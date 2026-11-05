@@ -1,6 +1,6 @@
 # Craving Heaven Website — Development and Infrastructure Guide
 
-**Prepared:** 3 November 2026  
+**Prepared:** 5 November 2026  
 **Repository:** `craving-heaven` (`main`)  
 **Firebase project configured by this checkout:** `craving-heaven-e2e94`  
 **Firebase Hosting site configured by this checkout:** `craving-heaven-e2e94`
@@ -25,6 +25,7 @@ This is the project's canonical development and infrastructure guide. Update it 
 | Customer sign-in | Firebase Authentication phone OTP; browser local persistence |
 | Team sign-in | Firebase Authentication email/password with server-checked `admin`/`staff` custom claims |
 | App integrity | Firebase App Check initialized in the browser with the reCAPTCHA Enterprise provider |
+| Search discovery | `robots.txt` points to `sitemap.xml`; sitemap lists the canonical customer homepage; admin/staff pages are disallowed for crawlers |
 | Analytics | Google tag (`gtag.js`) in `index.html`; measurement IDs in the HTML and Firebase config differ and should be checked |
 | Push | Firebase Cloud Messaging client setup, token registration, and a service worker; no server-side push sender was found in this repository |
 | Maps and payments | No Google Maps/Places/Geocoding SDK or online payment gateway is called by the current website code |
