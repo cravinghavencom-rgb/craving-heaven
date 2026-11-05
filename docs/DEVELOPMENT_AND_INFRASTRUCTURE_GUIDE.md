@@ -53,7 +53,7 @@ flowchart TD
 
 **Customer order flow:** the browser builds the cart and asks the `createOrder` callable to create the order. The server checks the authenticated customer, order availability/test mode, active catalog and reward rules, prices/quantities, delivery rules, points, and reward eligibility before writing. Website test orders are stored separately from live customer orders. The `onOrderStatusChanged` trigger updates loyalty records after relevant order status transitions.
 
-**Store hours display:** the customer home and cart show the live opening schedule returned by `getOrderingStatus`. Default hours are 16:30–23:45 Asia/Kolkata (4:30 PM–11:45 PM); saved Admin hours take precedence. When the schedule is closed, the page also shows the next scheduled opening time.
+**Store hours display:** the customer home and cart show the live opening schedule returned by `getOrderingStatus`. Default hours are 16:30–23:45 Asia/Kolkata (4:30 PM–11:45 PM); saved Admin hours take precedence. When the schedule is closed, the page also shows the next scheduled opening time without a duplicate closed-hours banner.
 
 **Admin flow:** `admin.html` signs in with email/password. Callable Functions verify the Firebase Auth token and custom admin claim before reading or saving business configuration, managing access, customers, test mode, rewards, or reporting.
 

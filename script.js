@@ -3764,7 +3764,7 @@ function updateOpeningHours() {
       : orderAvailability.adminMode === "closed"
       ? "We’re closed for now. Please check the opening hours above before placing an order."
       : !orderAvailability.isOpen
-      ? "We’re closed right now. Please check the opening hours above to see when we reopen."
+      ? ""
       : !orderAvailability.staffEnabled
       ? "We’re getting ready to serve you! Please check back soon."
       : isOpen ? "" : "Online ordering is temporarily unavailable. Please check back soon."
