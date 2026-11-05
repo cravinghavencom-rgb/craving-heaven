@@ -3169,3 +3169,86 @@ body { padding-bottom: calc(148px + env(safe-area-inset-bottom)); }
   .account-heading-with-action { align-items: flex-start; }
   .account-heading-with-action .account-secondary-button { padding: 9px 11px; font-size: 9px; }
 }
+
+/* Final shared layout pass: align customer sections and balance page spacing. */
+main { width: 100%; min-width: 0; }
+.app-screen[hidden] { display: none !important; }
+.app-screen:not([hidden]) { animation: customer-screen-enter .22s ease-out both; }
+@keyframes customer-screen-enter { from { opacity: .72; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.site-header { z-index: 1000; }
+.header-inner { width: min(1240px, 100%); gap: clamp(10px, 2vw, 22px); }
+.home-delivery-picker,.home-delivery-copy { min-width: 0; }
+.home-delivery-copy strong,.home-delivery-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.header-points-button { flex: 0 0 auto; }
+.opening-hours { margin-top: 14px; margin-bottom: 18px; }
+.home-hero,.home-discovery-heading,.home-quick-categories,.home-dashboard-cards { width: min(1180px, calc(100% - 40px)); }
+.home-hero { margin-top: 24px; }
+.home-discovery-heading { margin-bottom: 0; }
+.home-dashboard-cards { align-items: stretch; }
+.home-dashboard-card,.home-combo-details,.menu-card,.menu-card .card-content { min-width: 0; }
+.home-combo-actions { align-items: center; }
+.push-offer-box { align-items: center; }
+.menu-discovery { width: min(1180px, calc(100% - 40px)); }
+.menu-section { width: min(1180px, calc(100% - 40px)); margin-inline: auto; padding-inline: 0; }
+.menu-section .section-heading { align-items: center; }
+.menu-grid { align-items: stretch; }
+.menu-card { height: 100%; }
+.menu-card .product-bottom { align-items: center; }
+.combo-menu-section { width: min(1240px, 100%); margin-inline: auto; padding-inline: clamp(18px, 3vw, 42px); }
+.combo-menu-grid { width: 100%; }
+.app-screen.account-screen:not([data-app-screen="offers"]) { width: min(960px, 100%); padding: clamp(28px, 4vw, 48px) clamp(20px, 3vw, 34px) 64px; }
+.account-heading { display: block; }
+.account-heading > div { min-width: 0; }
+.account-heading h1 { max-width: 22ch; line-height: 1.05; overflow-wrap: anywhere; }
+.account-heading p { max-width: 60ch; line-height: 1.6; }
+.account-heading-with-action { display: flex; align-items: end; justify-content: space-between; gap: 18px; }
+.account-card,.profile-content,.address-book,.loyalty-card,.rewards-rules,.rewards-journey,.craving-dash-content { min-width: 0; }
+.account-card,.profile-account-card,.order-history-card,.saved-address-card,.loyalty-card,.rewards-rules,.rewards-journey,.journey-card { box-shadow: 0 8px 24px rgba(58,34,24,.055); }
+.order-history-card { padding: clamp(16px, 2.4vw, 22px); }
+.order-history-head,.order-history-item { min-width: 0; }
+.order-history-total { gap: 12px; }
+.rewards-rules { margin-top: 16px; }
+.rewards-journey { margin-top: 20px; }
+.rewards-journey-heading { align-items: center; }
+.rewards-journey-heading > div,.journey-card { min-width: 0; }
+.rewards-journey-heading h2 { line-height: 1.2; }
+.profile-content { display: grid; gap: 14px; }
+.address-book { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--premium-line); }
+.address-book-heading { align-items: end; }
+.saved-address-card p { overflow-wrap: anywhere; }
+.craving-dash-content { width: 100%; }
+.customer-bottom-nav { left: 50%; width: min(820px, 100%); transform: translateX(-50%); }
+.floating-cart { z-index: 2201; }
+.site-footer { padding-inline: max(20px, calc((100% - 1180px) / 2)); }
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible { outline: 3px solid rgba(181,18,27,.34); outline-offset: 2px; }
+@media (max-width: 650px) {
+  .header-inner { width: 100%; gap: 8px; }
+  .home-delivery-picker { flex: 1 1 auto; }
+  .home-delivery-copy strong { max-width: 35vw; }
+  .home-delivery-copy small { max-width: 36vw; }
+  .opening-hours { margin-top: 10px; margin-bottom: 14px; }
+  .home-hero,.home-discovery-heading,.home-quick-categories,.home-dashboard-cards { width: calc(100% - 28px); }
+  .home-hero { margin-top: 12px; }
+  .home-dashboard-cards { margin-top: 14px; }
+  .menu-discovery,.menu-section { width: calc(100% - 28px); }
+  .menu-section { padding: 23px 0 2px; }
+  .combo-menu-section { width: 100%; padding: 22px 14px 32px; }
+  .app-screen.account-screen:not([data-app-screen="offers"]) { padding: 28px 16px calc(90px + env(safe-area-inset-bottom)); }
+  .account-heading { display: block; }
+  .account-heading h1 { max-width: 100%; }
+  .account-heading-with-action { align-items: center; }
+  .account-heading-with-action .account-secondary-button { flex: 0 0 auto; }
+  .rewards-journey-heading { align-items: flex-start; }
+  .address-book-heading { align-items: flex-start; flex-wrap: wrap; }
+  .address-book-heading .account-secondary-button { width: 100%; }
+  .customer-bottom-nav { width: 100%; }
+  .site-footer { padding-inline: 18px; }
+}
+@media (max-width: 390px) {
+  .home-delivery-copy strong { max-width: 31vw; }
+  .home-delivery-copy small { max-width: 32vw; }
+  .account-heading-with-action { align-items: flex-start; }
+  .account-heading-with-action .account-secondary-button { padding: 8px 9px; font-size: 8px; }
+  .order-history-head { align-items: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) { .app-screen:not([hidden]) { animation: none; } }
