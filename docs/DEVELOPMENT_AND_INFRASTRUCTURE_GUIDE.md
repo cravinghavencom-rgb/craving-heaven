@@ -1,6 +1,6 @@
 # Craving Heaven Website — Development and Infrastructure Guide
 
-**Prepared:** 5 November 2026  
+**Prepared:** 6 November 2026
 **Repository:** `craving-heaven` (`main`)  
 **Firebase project configured by this checkout:** `craving-heaven-e2e94`  
 **Firebase Hosting site configured by this checkout:** `craving-heaven-e2e94`
@@ -96,7 +96,7 @@ There is no root `package.json`/bundler build. Browser code imports Firebase Web
 | Cloud Functions for Firebase (2nd gen) | `functions/index.js`, `firebase.json` | Secure callable business logic and the order-status trigger | Invocation, CPU, memory, network, build, and container storage usage may be billed |
 | Cloud Run (under Functions v2) | Functions v2 runtime in `asia-south1` | Google Cloud execution layer for deployed second-generation Functions | Billed based on execution/resources; regional CPU quota is a capacity limit, not itself a fee |
 | Firebase App Check + reCAPTCHA Enterprise | `firebase-client.js` | Web app attestation/token validation for Firebase services | App Check is no-cost as a Firebase product; Enterprise assessments above their included tier may be billable |
-| Firebase Cloud Messaging (FCM) | `index.html`, `script.js`, `firebase-messaging-sw.js` | Lets a customer opt in, registers an FCM token, and displays background payloads | Firebase lists FCM as no-cost. A sender/campaign service is not present in this repository. |
+| Firebase Cloud Messaging (FCM) | `index.html`, `script.js`, `firebase-messaging-sw.js`, `functions/index.js` | Customers can opt in to browser notifications; Admin Desk can send an immediate offer/reward message to all registered browser tokens; the service worker displays background notifications | Firebase lists FCM as no-cost. Function invocation, Firestore token reads, and network usage can still have separate costs. |
 | Google Analytics 4 tag | `index.html` | Sends browser analytics through `gtag.js` | Firebase lists Analytics as no-cost for standard product use |
 | DM Sans and Montserrat font files | `assets/fonts/`, `style.css`, `index.html` | Self-hosted variable fonts; preloaded by the homepage | No Google Fonts network request or Google Maps Platform API is involved |
 | Browser Geolocation API | `navigator.geolocation` in `script.js` | Requests GPS coordinates after the customer grants browser permission | This is a browser API, not a Google Geolocation API request; the site does not call the Google Geolocation endpoint |
@@ -113,7 +113,7 @@ There is no root `package.json`/bundler build. Browser code imports Firebase Web
 ### Integration checks identified
 
 1. The Google tag in `index.html` uses measurement ID `G-GD2EPLFYZP`, while the `measurementId` in `firebase-client.js` and `firebase-messaging-sw.js` is `G-GD2EPFLYPZ`. These values differ. Confirm the intended GA4 property/stream and update the incorrect ID if they are meant to be the same. The actual billing/analytics property cannot be confirmed from source alone.
-2. FCM tokens are registered and the service worker handles incoming background payloads, but the repo contains no `admin.messaging().send...`/FCM sender code. Token registration alone does not send offers or order notifications.
+2. Push notifications require customer consent. The website shows an optional prompt, saves an FCM token in `notificationTokens/{token}`, and the Admin Desk has a manual send action backed by `adminSendOfferNotification`. It broadcasts immediately to all subscribed browser tokens; there is no schedule, customer segmentation, or automatic reward-triggered campaign. Only select an offer that is currently available and accurate before sending.
 3. This code confirms Functions are in `asia-south1`; it does **not** prove Firestore is in that location. Firestore database location could not be retrieved during this documentation pass. Check Firebase Console → Firestore Database → data/location before making data-residency or regional-price assumptions.
 
 ## 5. Authentication and security model
@@ -161,7 +161,7 @@ Current exported callable Functions in `functions/index.js` include:
 |---|---|
 | Public/customer account and storefront | `getOrderingStatus`, `getPublicBusinessConfig`, `getCustomerAccount`, `saveCustomerProfile`, `createOrder` |
 | Online order control / test mode | `adminGetOrderTestMode`, `adminUpdateOrderTestMode`, `staffSetOnlineOrderingEnabled`, `staffSetOnlineOrderingPaused` |
-| Admin settings and catalogs | `adminUpdateRestaurantSettings`, `adminGetBusinessConfig`, `adminSaveMenuCatalog`, `adminSaveRewardsConfig`, `adminSaveCravingDashConfig`, `adminSetCravingDashLive` |
+| Admin settings and catalogs | `adminUpdateRestaurantSettings`, `adminGetBusinessConfig`, `adminSaveMenuCatalog`, `adminSaveRewardsConfig`, `adminSaveCravingDashConfig`, `adminSetCravingDashLive`, `adminSendOfferNotification` |
 | Admin access and customers | `adminListAccessUsers`, `adminSetUserRole`, `adminTransferSoleAdmin`, `finishTeamEmailSetup`, `adminListCustomers`, `adminGetCustomerDetails`, `adminSetCustomerBlocked`, `adminRestoreTeamCustomerAccess`, `adminDeleteCustomerAccount`, `adminAdjustCustomerBenefits`, `adminGetSalesAnalytics` |
 | Staff operations | `staffListOrders`, `staffGetTodaySales`, `staffLookupCustomer`, `staffUpdateOrderStatus`, `staffMarkOrderPaid`, `staffAddItemsToWalkInOrder`, `createWalkInOrder` |
 | Craving Dash game | `getCravingDashState`, `startCravingDashStage`, `adminStartCravingDashTest`, `recordCravingDashAction`, `submitCravingDashStage` |

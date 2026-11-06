@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow">
   <title>Admin Desk | CRAVING HEAVEN</title>
   <link rel="icon" type="image/png" href="images/logo.png">
-  <link rel="stylesheet" href="admin.css?v=20261102-reward-combo-count-v1">
+  <link rel="stylesheet" href="admin.css?v=20261106-push-offers-v1">
 </head>
 <body>
   <header class="admin-header">
@@ -27,7 +27,7 @@
     <section id="adminApp" hidden>
       <div class="page-heading"><div><span class="eyebrow">BUSINESS OVERVIEW</span><h1>Admin Desk</h1><p class="muted">Signed in as <strong id="adminSignedInAs"></strong></p></div><span class="secure-badge">🔒 Admin-only workspace</span></div>
       <nav class="admin-tabs" role="tablist" aria-label="Admin sections">
-        <button class="admin-tab active" data-admin-tab="dashboard">Overview</button><button class="admin-tab" data-admin-tab="customers">Customers</button><button class="admin-tab" data-admin-tab="access">Access</button><button class="admin-tab" data-admin-tab="menu">Menu</button><button class="admin-tab" data-admin-tab="rewards">Rewards</button><button class="admin-tab" data-admin-tab="game">Game Rewards</button><button class="admin-tab" data-admin-tab="benefits">Customer benefits</button><button class="admin-tab" data-admin-tab="messages">WhatsApp</button>
+        <button class="admin-tab active" data-admin-tab="dashboard">Overview</button><button class="admin-tab" data-admin-tab="customers">Customers</button><button class="admin-tab" data-admin-tab="access">Access</button><button class="admin-tab" data-admin-tab="menu">Menu</button><button class="admin-tab" data-admin-tab="rewards">Rewards</button><button class="admin-tab" data-admin-tab="game">Game Rewards</button><button class="admin-tab" data-admin-tab="benefits">Customer benefits</button><button class="admin-tab" data-admin-tab="messages">WhatsApp</button><button class="admin-tab" data-admin-tab="notifications">Push offers</button>
       </nav>
 
       <section class="admin-section" data-admin-section="dashboard">
@@ -112,9 +112,22 @@
         <div class="section-heading"><div><span class="eyebrow">CUSTOMER COMMUNICATION</span><h2>WhatsApp messages</h2><p class="muted">Choose customers from your recent order list, then prepare a personal message.</p></div></div>
         <div class="message-layout"><div class="card"><div class="section-heading compact"><div><span class="eyebrow">RECENT CUSTOMERS</span><h3>Choose recipients</h3></div><button id="selectAllCustomers" class="text-button" type="button">Select visible</button></div><div id="messageRecipients" class="recipient-list"><p class="empty-cell">Load the customer list first.</p></div></div><div class="card form-card"><label>Message<textarea id="campaignMessage" maxlength="1000" placeholder="Hi {name}, we have something tasty for you…"></textarea><small>Use {name} to personalize the message.</small></label><button id="startCampaign" class="button button-primary" type="button">Prepare WhatsApp messages</button><div id="campaignQueue" class="campaign-queue" aria-live="polite"></div><p class="footnote">This opens one pre-filled WhatsApp chat at a time. You review and tap Send in WhatsApp; the website does not send messages automatically.</p></div></div>
       </section>
+
+      <section class="admin-section" data-admin-section="notifications" hidden>
+        <div class="section-heading"><div><span class="eyebrow">CUSTOMER COMMUNICATION</span><h2>Offer notifications</h2><p class="muted">Send an offer or reward update to customers who enabled browser notifications on this website.</p></div></div>
+        <form id="pushCampaignForm" class="card form-card push-campaign-form">
+          <p class="push-campaign-recipients"><strong>Who will receive this?</strong><span>All subscribed browsers and devices. Customers choose whether to opt in on the website.</span></p>
+          <label>Notification title<input id="pushCampaignTitle" maxlength="80" required placeholder="A tasty offer is here!"></label>
+          <label>Message<textarea id="pushCampaignBody" maxlength="180" rows="3" required placeholder="Tell customers what’s new or which reward is ready."></textarea><small>Keep it short so it fits on a phone notification.</small></label>
+          <label>Open this website page after tapping<select id="pushCampaignPath"><option value="/">Home page</option><option value="/#screen-menu">Menu</option><option value="/#screen-rewards">Craving Points & Rewards</option><option value="/#screen-offers">Combos</option></select></label>
+          <button class="button button-primary" id="sendPushCampaign" type="submit">Review and send notification</button>
+          <p id="pushCampaignMessage" class="message" role="status"></p>
+          <p class="footnote">Nothing is sent until you submit this form and confirm. The website does not schedule or automatically send future campaigns.</p>
+        </form>
+      </section>
     </section>
     <dialog id="adminGameTestDialog" class="admin-game-test-dialog" aria-label="Craving Run admin test"><div class="admin-game-test-heading"><strong>ADMIN GAME TEST</strong><button id="closeAdminGameTest" type="button" class="button button-quiet">Close test</button></div><iframe id="adminGameTestFrame" title="Craving Run level test"></iframe></dialog>
   </main>
-  <script type="module" src="admin.js?v=20261105-pagespeed-opt-v2"></script>
+  <script type="module" src="admin.js?v=20261106-push-offers-v1"></script>
 </body>
 </html>

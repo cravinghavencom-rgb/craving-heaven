@@ -22,7 +22,7 @@ const call = async (name, data = {}) => {
     throw error;
   }
   await user.getIdToken();
-  if (["adminSaveCravingDashConfig", "adminStartCravingDashTest", "adminSetCravingDashLive"].includes(name)) await ensureFirebaseAppCheck();
+  if (["adminSaveCravingDashConfig", "adminStartCravingDashTest", "adminSetCravingDashLive", "adminSendOfferNotification"].includes(name)) await ensureFirebaseAppCheck();
   const result = await httpsCallable(functions, name)(data);
   return result.data;
 };
@@ -79,6 +79,25 @@ onAuthStateChanged(auth, requireSignedInAdmin);
 async function loadInitial() {
   await Promise.allSettled([loadAnalytics(), loadCustomers(), loadAccess(), loadBusinessConfig(), loadOrdering(), loadOrderTestMode()]);
 }
+
+$("pushCampaignForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = $("sendPushCampaign");
+  const title = $("pushCampaignTitle").value.trim();
+  const body = $("pushCampaignBody").value.trim();
+  const path = $("pushCampaignPath").value;
+  if (!window.confirm(`Send this notification to every customer who enabled browser notifications?\n\n${title}\n${body}\n\nThis sends now and cannot be recalled.`)) return;
+  button.disabled = true;
+  message($("pushCampaignMessage"), "Sending notification…");
+  try {
+    const result = await call("adminSendOfferNotification", { title, body, path });
+    message($("pushCampaignMessage"), `Sent to ${result.sent} of ${result.eligible} subscribed browsers.${result.failed ? ` ${result.failed} could not be reached.` : ""}${result.removed ? ` Removed ${result.removed} expired subscriptions.` : ""}`, "success");
+  } catch (error) {
+    message($("pushCampaignMessage"), friendlyError(error), "error");
+  } finally {
+    button.disabled = false;
+  }
+});
 async function loadAnalytics() {
   message($("analyticsMessage"), "Loading sales…");
   try {

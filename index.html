@@ -11,7 +11,7 @@
   <link rel="preload" href="assets/fonts/dm-sans/latin-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/montserrat/latin-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" as="image" href="images/burgers/classic-crunchy-burger.webp" type="image/webp" fetchpriority="high">
-  <link rel="stylesheet" href="style.css?v=20261105-customer-layout-v1">
+  <link rel="stylesheet" href="style.css?v=20261106-notification-opt-in-v1">
   <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-GD2EPLFYZP">
 </script>
@@ -71,7 +71,7 @@
 <div class="opening-hours is-closed" id="storeHoursBanner" aria-label="Store status and hours">
   <div class="store-hours-status-row">
     <span class="opening-hours-dot is-closed" id="openingHoursDot" aria-hidden="true"></span>
-    <span class="opening-hours-label is-closed" id="openingHoursStatus" aria-live="polite">CLOSED</span>
+    <span class="opening-hours-label is-closed" id="openingHoursStatus" aria-live="polite">CHECKING</span>
     <span class="store-hours-next" id="openingHoursNext" hidden></span>
   </div>
   <div class="store-hours-time-row"><span aria-hidden="true">◷</span><span>STORE HOURS</span><strong id="openingHoursTimes">4:30 PM – 11:45 PM</strong></div>
@@ -101,16 +101,12 @@
     <section id="screen-home" class="app-screen is-active" data-app-screen="home" aria-label="Home, offers and combos">
       <section class="home-hero" aria-labelledby="homeHeroTitle">
         <div class="home-hero-copy">
-          <span class="home-hero-eyebrow"><i aria-hidden="true"></i> YOUR NEIGHBOURHOOD FOOD SPOT</span>
-          <h1 id="homeHeroTitle">Big cravings.<br><em>Heavenly bites.</em></h1>
-          <p>Crunchy burgers, saucy wings and loaded favourites—pick your craving and make it a good one.</p>
+          <span class="home-hero-eyebrow"><i aria-hidden="true"></i> START YOUR CRAVING HEAVEN ORDER</span>
+          <h1 id="homeHeroTitle">What are you craving?</h1>
+          <p>Browse the menu or choose a value-packed combo.</p>
           <div class="home-hero-actions">
-            <button type="button" class="home-hero-order" data-screen="menu">ORDER NOW <span aria-hidden="true">→</span></button>
-            <button type="button" class="home-hero-combos" data-screen="offers">EXPLORE COMBOS</button>
-          </div>
-          <div class="home-hero-highlights" aria-label="Craving Heaven highlights">
-            <span><b aria-hidden="true">✦</b> Made with quality</span>
-            <span><b aria-hidden="true">↗</b> Great value combos</span>
+            <button type="button" class="home-hero-order" data-screen="menu">BROWSE MENU <span aria-hidden="true">→</span></button>
+            <button type="button" class="home-hero-combos" data-screen="offers">SEE COMBOS <span aria-hidden="true">→</span></button>
           </div>
         </div>
         <div class="home-hero-art" aria-label="Classic Crunchy Chicken Burger">
@@ -120,16 +116,23 @@
           <span class="home-hero-art-caption"><b>CRISPY.</b> JUICY. HEAVENLY.</span>
         </div>
       </section>
-      <div class="home-discovery-heading"><span>FIND YOUR FAVOURITE</span><h2>Choose your craving</h2><p>Jump straight to a favourite or explore the full menu.</p></div>
+      <section class="home-order-section" aria-labelledby="homeMenuHeading">
+      <div class="home-discovery-heading"><span>01 · THE FULL MENU</span><h2 id="homeMenuHeading">Start with the menu</h2><p>Choose a food category or browse every item.</p></div>
       <nav class="home-quick-categories" aria-label="Shop by food category">
         <button type="button" data-home-category="burgers"><span aria-hidden="true">🍔</span>Burgers</button>
         <button type="button" data-home-category="shawarma"><span aria-hidden="true">🌯</span>Shawarma</button>
         <button type="button" data-home-category="wings"><span aria-hidden="true">🍗</span>Wings</button>
         <button type="button" data-home-category="french-fries"><span aria-hidden="true">🍟</span>Fries</button>
-        <button type="button" data-screen="menu" class="home-quick-all">All menu <span aria-hidden="true">→</span></button>
+        <button type="button" data-screen="menu" class="home-quick-all">Full menu <span aria-hidden="true">→</span></button>
       </nav>
-      <div class="home-dashboard-cards" aria-label="Explore CRAVING HEAVEN">
+      </section>
+      <section class="home-combo-section" aria-labelledby="homeComboHeading">
+        <div class="home-secondary-heading"><span>02 · VALUE COMBOS</span><h2 id="homeComboHeading">Combo favourites</h2><p>Great-value meals and sharing boxes.</p></div>
         <div id="homeComboCard"></div>
+      </section>
+      <section class="home-extras-section" aria-label="More from Craving Heaven">
+        <div class="home-secondary-heading"><span>MORE FROM CRAVING HEAVEN</span><h2>Rewards and fun</h2></div>
+      <div class="home-dashboard-cards" aria-label="Explore CRAVING HEAVEN">
         <article class="home-dashboard-card home-card-game">
           <span class="home-card-icon" aria-hidden="true">🍔</span>
           <strong>PLAY & WIN REAL REWARDS</strong>
@@ -142,13 +145,8 @@
           <small><b id="homeLoyaltyPointsBalance">Sign in</b> <span id="homeLoyaltySummary">to see your points.</span></small>
           <button type="button" class="home-card-action" data-screen="rewards">VIEW REWARDS <b aria-hidden="true">→</b></button>
         </article>
-        <article class="home-dashboard-card home-card-menu">
-          <span class="home-card-icon" aria-hidden="true">☰</span>
-          <strong>VIEW COMPLETE MENU</strong>
-          <small>Browse all food and add your favourites to cart</small>
-          <button type="button" class="home-card-action" data-screen="menu">EXPLORE MENU <b aria-hidden="true">→</b></button>
-        </article>
       </div>
+      </section>
       <div class="push-offer-box" id="pushOfferBox" data-app-screen="home">
         <div class="push-offer-icon">🔔</div>
         <div class="push-offer-content">
@@ -158,6 +156,18 @@
         <button id="enableOfferNotifications">🔔 GET OFFERS</button>
       </div>
     </section>
+
+    <dialog class="offer-notification-dialog" id="offerNotificationDialog" aria-labelledby="offerNotificationTitle">
+      <button class="offer-notification-close" id="dismissOfferNotifications" type="button" aria-label="Close notification offer">×</button>
+      <div class="offer-notification-icon" aria-hidden="true">🔔</div>
+      <span class="section-kicker">A LITTLE MORE HEAVEN IN YOUR INBOX</span>
+      <h2 id="offerNotificationTitle">Be first to hear about tasty offers</h2>
+      <p>Get a browser notification when new offers arrive and when a reward is ready to use.</p>
+      <button class="account-primary-button" id="allowOfferNotifications" type="button">NOTIFY ME ABOUT OFFERS</button>
+      <button class="account-secondary-button" id="laterOfferNotifications" type="button">MAYBE LATER</button>
+      <p class="offer-notification-status" id="offerNotificationStatus" role="status" aria-live="polite"></p>
+      <small>You can change notification permission any time in your browser settings.</small>
+    </dialog>
 
     <section id="screen-game" class="app-screen account-screen craving-dash-screen" data-app-screen="game" aria-labelledby="cravingDashTitle" hidden>
       <div class="account-heading"><span class="section-kicker">PLAY & WIN · CRAVING HEAVEN</span><h1 id="cravingDashTitle">Craving Run</h1><p>Run through the kitchen, collect burgers, fries, wraps and chicken, and jump or switch lanes to dodge obstacles. Every level brings another chance to win.</p></div>
@@ -716,7 +726,7 @@
 
 <script src="rewards-config.js?v=20261021-first-order-gift" defer></script>
 <script src="menu.js?v=20261027-combo-webp" defer></script>
-<script src="script.js?v=20261105-store-hours-v3" defer></script>
+<script src="script.js?v=20261106-notification-opt-in-v1" defer></script>
 <script src="craving-dash.js?v=20261105-pagespeed-opt-v2" defer></script>
 </body>
 </html>

@@ -1,6 +1,7 @@
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp, FieldPath } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
+const { getMessaging } = require("firebase-admin/messaging");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { setGlobalOptions } = require("firebase-functions/v2");
@@ -760,6 +761,49 @@ exports.adminSaveMenuCatalog = onCall({ region: REGION }, async request => {
   const combos = validateComboCatalog(request.data?.combos === undefined ? current.combos : request.data.combos, menu);
   await MENU_CONFIG_REF().set({ menu, combos, updatedBy: adminUid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   return { saved: true, categories: Object.keys(menu).length, items: Object.values(menu).reduce((sum, section) => sum + section.items.length, 0), combos: combos.length };
+});
+
+exports.adminSendOfferNotification = onCall({ region: REGION, enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
+  const adminUid = await requireAdmin(request);
+  const title = String(request.data?.title || "").trim();
+  const body = String(request.data?.body || "").trim();
+  const requestedPath = String(request.data?.path || "/").trim();
+  if (!title || title.length > 80) throw new HttpsError("invalid-argument", "Title must be between 1 and 80 characters.");
+  if (!body || body.length > 180) throw new HttpsError("invalid-argument", "Message must be between 1 and 180 characters.");
+  if (!/^\/(?!\/)[A-Za-z0-9/_?=#&.%+-]*$/.test(requestedPath)) throw new HttpsError("invalid-argument", "Choose a valid page on this website.");
+  const url = new URL(requestedPath, "https://cravingheaven.com/").toString();
+  let cursor = null, eligible = 0, sent = 0, failed = 0, removed = 0;
+  const collection = db.collection("notificationTokens");
+  while (true) {
+    let query = collection.orderBy(FieldPath.documentId()).limit(500);
+    if (cursor) query = query.startAfter(cursor);
+    const snapshot = await query.get();
+    if (snapshot.empty) break;
+    cursor = snapshot.docs[snapshot.docs.length - 1];
+    const recipients = snapshot.docs.map(doc => ({ ref: doc.ref, token: String(doc.get("token") || doc.id) })).filter(row => row.token);
+    eligible += recipients.length;
+    if (!recipients.length) continue;
+    const response = await getMessaging().sendEachForMulticast({
+      tokens: recipients.map(row => row.token),
+      notification: { title, body },
+      data: { url }
+    });
+    sent += response.successCount;
+    failed += response.failureCount;
+    const stale = [];
+    response.responses.forEach((result, index) => {
+      const code = result.error?.code || "";
+      if (code === "messaging/registration-token-not-registered" || code === "messaging/invalid-registration-token") stale.push(recipients[index].ref.delete());
+    });
+    if (stale.length) {
+      await Promise.all(stale);
+      removed += stale.length;
+    }
+    if (snapshot.size < 500) break;
+  }
+  if (!eligible) throw new HttpsError("failed-precondition", "No customers have enabled browser notifications yet.");
+  console.info("Offer notification sent by admin", { adminUid, eligible, sent, failed, removed });
+  return { eligible, sent, failed, removed };
 });
 
 exports.adminSaveRewardsConfig = onCall({ region: REGION, invoker: "public" }, async request => {

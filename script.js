@@ -820,6 +820,9 @@ async function handlePlaceOrderClick() {
     if (screenName === "orders" || screenName === "profile" || screenName === "rewards") refreshAccountScreens(currentCustomerUser());
   }
 
+  const notificationDeepLinkScreen = /^#screen-(home|menu|offers|game|rewards|orders|profile)$/.exec(location.hash)?.[1];
+  if (notificationDeepLinkScreen) setAppScreen(notificationDeepLinkScreen);
+
   function accountSignInCard(message) {
     return `<div class="account-empty"><div class="account-empty-icon">♙</div><h2>Sign in to continue</h2><p>${esc(message)}</p><button type="button" class="account-primary-button" data-account-login>LOGIN WITH MOBILE</button></div>`;
   }
@@ -1879,10 +1882,13 @@ function validateCheckoutForm() {
 async function continueToOrder() {
   checkoutMessage.textContent = "";
   if (!orderAvailabilityReady || !orderAvailability.acceptingOnlineOrders) {
-    checkoutMessage.textContent = !orderAvailability.staffEnabled
+    const scheduleClosed = orderAvailability.adminMode === "closed" || (!orderAvailability.isOpen && orderAvailability.adminMode !== "online");
+    checkoutMessage.textContent = !orderAvailabilityReady
+      ? "We’re checking the store’s order status. Please try again in a moment."
+      : orderAvailability.paused && !scheduleClosed
+      ? "We’re busy right now and temporarily pausing new online orders. Please check back shortly."
+      : !orderAvailability.staffEnabled && !scheduleClosed
       ? "We’re getting ready to serve you! Online ordering will open when our team is ready. Please check back soon—we’d love to make your favourites!"
-      : orderAvailability.paused
-      ? "We’re preparing a rush of fresh orders right now. Please check back in a little while—we’d love to serve you soon!"
       : "We’re closed for now, but we’ll be back soon with your favourites. Please check back a little later!";
     return;
   }
@@ -3372,6 +3378,13 @@ const pushOfferBox =
 
 const enableOfferNotifications =
   document.getElementById("enableOfferNotifications");
+const offerNotificationDialog = document.getElementById("offerNotificationDialog");
+const allowOfferNotifications = document.getElementById("allowOfferNotifications");
+const laterOfferNotifications = document.getElementById("laterOfferNotifications");
+const dismissOfferNotifications = document.getElementById("dismissOfferNotifications");
+const offerNotificationStatus = document.getElementById("offerNotificationStatus");
+const NOTIFICATION_PROMPT_SNOOZE_KEY = "cravingHeavenNotificationPromptSnoozeUntil_v1";
+let foregroundOfferHandlerRegistered = false;
 
 
 // ---------------------------------------------------------
@@ -3449,6 +3462,13 @@ function showNotificationBlockedState() {
     offerText.textContent =
       "Notifications are blocked. Enable them in your browser settings to receive our offers.";
   }
+  if (offerNotificationStatus) {
+    offerNotificationStatus.textContent = "Notifications are blocked in your browser. Open the site settings near the address bar, allow notifications, then return here.";
+  }
+  if (allowOfferNotifications) {
+    allowOfferNotifications.textContent = "HOW TO ALLOW NOTIFICATIONS";
+    allowOfferNotifications.disabled = true;
+  }
 }
 
 
@@ -3479,6 +3499,20 @@ async function enableCustomerOfferNotifications() {
     return false;
   }
   if (!messaging?.firebaseMessaging || !messaging?.FirebaseMessagingAPI) return false;
+
+  if (!foregroundOfferHandlerRegistered && messaging.FirebaseMessagingAPI.onMessage) {
+    foregroundOfferHandlerRegistered = true;
+    messaging.FirebaseMessagingAPI.onMessage(messaging.firebaseMessaging, async payload => {
+      const registration = await navigator.serviceWorker.getRegistration("/");
+      if (!registration) return;
+      await registration.showNotification(payload.notification?.title || "CRAVING HEAVEN offer", {
+        body: payload.notification?.body || "A new offer is available.",
+        icon: "/images/logo.png",
+        badge: "/images/logo.png",
+        data: { url: payload.data?.url || "https://cravingheaven.com/" }
+      });
+    });
+  }
 
   if (!("Notification" in window)) {
     console.log(
@@ -3615,6 +3649,8 @@ async function enableCustomerOfferNotifications() {
 
 
       hidePushOfferBox();
+      if (offerNotificationDialog?.open) offerNotificationDialog.close();
+      if (offerNotificationStatus) offerNotificationStatus.textContent = "You’re all set. We’ll let you know when offers are announced.";
 
       return true;
 
@@ -3635,6 +3671,34 @@ async function enableCustomerOfferNotifications() {
   return false;
 }
 
+function closeOfferNotificationDialog(snoozeDays = 30) {
+  if (offerNotificationDialog?.open) offerNotificationDialog.close();
+  try { localStorage.setItem(NOTIFICATION_PROMPT_SNOOZE_KEY, String(Date.now() + snoozeDays * 24 * 60 * 60 * 1000)); } catch (_) { /* Prompt still closes when storage is unavailable. */ }
+}
+
+function showOfferNotificationDialog() {
+  if (!offerNotificationDialog || !("Notification" in window) || Notification.permission !== "default") return;
+  let snoozedUntil = 0;
+  try { snoozedUntil = Number(localStorage.getItem(NOTIFICATION_PROMPT_SNOOZE_KEY) || 0); } catch (_) { /* Show once if storage is unavailable. */ }
+  if (snoozedUntil > Date.now()) return;
+  offerNotificationDialog.showModal();
+}
+
+allowOfferNotifications?.addEventListener("click", async () => {
+  if (offerNotificationStatus) offerNotificationStatus.textContent = "Requesting permission…";
+  if (allowOfferNotifications) allowOfferNotifications.disabled = true;
+  const enabled = await enableCustomerOfferNotifications();
+  if (!enabled && offerNotificationStatus && Notification.permission !== "denied") {
+    offerNotificationStatus.textContent = "We couldn’t turn notifications on just now. Please try again.";
+  }
+  if (allowOfferNotifications && Notification.permission !== "denied") allowOfferNotifications.disabled = false;
+});
+laterOfferNotifications?.addEventListener("click", () => closeOfferNotificationDialog());
+dismissOfferNotifications?.addEventListener("click", () => closeOfferNotificationDialog());
+offerNotificationDialog?.addEventListener("cancel", () => {
+  try { localStorage.setItem(NOTIFICATION_PROMPT_SNOOZE_KEY, String(Date.now() + 30 * 24 * 60 * 60 * 1000)); } catch (_) { /* Ignore storage restrictions. */ }
+});
+
 // ---------------------------------------------------------
 // AUTOMATICALLY SHOW NOTIFICATION OFFER BOX
 // ---------------------------------------------------------
@@ -3653,9 +3717,18 @@ setTimeout(() => {
     return;
   }
 
+  if (!window.Notification || !("serviceWorker" in navigator)) return;
+
   // Show the offer box for customers who
   // have not enabled notifications yet.
   pushOfferBox.style.display = "flex";
+  let promptDelay = 900;
+  const welcomeFlyer = document.getElementById("firstVisitFlyer");
+  if (welcomeFlyer?.open) {
+    welcomeFlyer.addEventListener("close", () => window.setTimeout(showOfferNotificationDialog, 500), { once: true });
+    return;
+  }
+  window.setTimeout(showOfferNotificationDialog, promptDelay);
 
 }, 1200);
 
@@ -3677,14 +3750,6 @@ if (enableOfferNotifications) {
       ) {
 
         showNotificationBlockedState();
-
-        alert(
-          "Notifications are blocked for CRAVING HEAVEN.\n\n" +
-          "Click the 🔒 icon near the website address → " +
-          "Site settings → Notifications → Allow.\n\n" +
-          "Then reload the website."
-        );
-
         return;
       }
 
@@ -3738,16 +3803,19 @@ function updateOpeningHours() {
   const mainNotice = document.getElementById("onlineOrderNotice");
   const cartNotice = document.getElementById("cartOrderAvailabilityNotice");
   const isOpen = orderAvailability.acceptingOnlineOrders;
-  const label = isOpen ? "OPEN NOW" : "CLOSED";
+  const scheduleClosed = orderAvailabilityReady && (orderAvailability.adminMode === "closed" || (!orderAvailability.isOpen && orderAvailability.adminMode !== "online"));
+  const isBusy = orderAvailabilityReady && !isOpen && orderAvailability.paused && !scheduleClosed;
+  const isPreparing = orderAvailabilityReady && !isOpen && !isBusy && !scheduleClosed && !orderAvailability.staffEnabled;
+  const label = !orderAvailabilityReady ? "CHECKING" : isOpen ? "OPEN NOW" : isBusy ? "BUSY RIGHT NOW" : isPreparing ? "PREPARING" : "CLOSED";
+  const statusClass = !orderAvailabilityReady ? "is-checking" : isOpen ? "is-open" : isBusy ? "is-busy" : isPreparing ? "is-preparing" : "is-closed";
   for (const [status, dot, banner, schedule, next] of [[statusEl, dotEl, bannerEl, hoursEl, nextEl], [cartStatusEl, cartDotEl, cartBannerEl, cartHoursEl, cartNextEl]]) {
     if (!status || !dot) continue;
     status.textContent = label;
-    status.classList.toggle("is-open", isOpen);
-    status.classList.toggle("is-closed", !isOpen);
-    dot.classList.toggle("is-open", isOpen);
-    dot.classList.toggle("is-closed", !isOpen);
-    banner?.classList.toggle("is-open", isOpen);
-    banner?.classList.toggle("is-closed", !isOpen);
+    for (const stateClass of ["is-open", "is-closed", "is-busy", "is-preparing", "is-checking"]) {
+      status.classList.toggle(stateClass, stateClass === statusClass);
+      dot.classList.toggle(stateClass, stateClass === statusClass);
+      banner?.classList.toggle(stateClass, stateClass === statusClass);
+    }
     if (schedule) schedule.textContent = hoursText;
     if (next) {
       next.textContent = nextOpening;
@@ -3759,12 +3827,12 @@ function updateOpeningHours() {
       ? orderAvailability.isTestCustomer
         ? "TEST MODE: orders from your number are saved separately and will not be prepared or sent to staff."
         : "Online ordering is temporarily unavailable. Please check back soon."
-      : orderAvailability.paused
-      ? "We’re preparing a rush of fresh orders right now. Please check back in a little while—we’d love to serve you soon!"
       : orderAvailability.adminMode === "closed"
       ? "We’re closed for now. Please check the opening hours above before placing an order."
       : !orderAvailability.isOpen
       ? ""
+      : orderAvailability.paused
+      ? "We’re busy right now and temporarily pausing new online orders. Please check back shortly."
       : !orderAvailability.staffEnabled
       ? "We’re getting ready to serve you! Please check back soon."
       : isOpen ? "" : "Online ordering is temporarily unavailable. Please check back soon."
