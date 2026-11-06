@@ -836,6 +836,43 @@ async function handlePlaceOrderClick() {
     return Math.max(0, Number(account?.points || 0)) + gamePointLots(account).reduce((sum, lot) => sum + Math.max(0, Number(lot.points || 0)), 0);
   }
 
+  function rewardJourneyProgress(completedOrders, milestones) {
+    const completed = Math.max(0, Math.floor(Number(completedOrders) || 0));
+    const cycleOrder = completed === 0 ? 0 : ((completed - 1) % 30) + 1;
+    const position = cycleOrder === 30 ? 0 : cycleOrder;
+    const sorted = milestones.slice().sort((left, right) => Number(left.order) - Number(right.order));
+    const next = sorted.find(item => Number(item.order) > position) || null;
+    const previous = [...sorted].reverse().find(item => Number(item.order) <= position) || null;
+    const previousOrder = Number(previous?.order || 0);
+    const targetOrder = Number(next?.order || 0);
+    const interval = targetOrder ? Math.max(1, targetOrder - previousOrder) : 0;
+    return {
+      completed,
+      cycleOrder,
+      position,
+      next,
+      previousOrder,
+      interval,
+      completedSincePrevious: Math.max(0, Math.min(interval, position - previousOrder)),
+      ordersRemaining: next ? Math.max(1, targetOrder - position) : 0
+    };
+  }
+
+  function upcomingRewardMilestones(milestones, progress, availableIds, welcomeReward, welcomeAvailableNow, limit = 5) {
+    const sorted = milestones.slice().sort((left, right) => Number(left.order) - Number(right.order));
+    const upcoming = [];
+    for (let cycleOffset = 0; cycleOffset < 3 && upcoming.length < limit; cycleOffset += 1) {
+      for (const item of sorted) {
+        if (cycleOffset === 0 && Number(item.order) <= progress.position) continue;
+        if (cycleOffset === 0 && availableIds.has(item.id)) continue;
+        if (cycleOffset === 0 && welcomeAvailableNow && item.id === welcomeReward?.id) continue;
+        upcoming.push({ ...item, cycleOffset });
+        if (upcoming.length >= limit) break;
+      }
+    }
+    return upcoming;
+  }
+
   function renderRewardsJourney(account = currentLoyaltyAccount, signedIn = isCustomerSignedIn()) {
     const root = document.getElementById("rewardsJourneyCards");
     const count = document.getElementById("rewardOrderCount");
@@ -855,22 +892,21 @@ async function handlePlaceOrderClick() {
       root.innerHTML = `<div class="rewards-login-hint">Loading your Craving Points and rewards…</div>`;
       return;
     }
-    const completed = Math.max(0, Number(account.completedOrders || 0));
+    const milestones = (Array.isArray(REWARDS_CONFIG.journey) ? REWARDS_CONFIG.journey : [])
+      .filter(item => item?.id && Number.isFinite(Number(item.order)));
+    const progress = rewardJourneyProgress(account.completedOrders, milestones);
+    const completed = progress.completed;
     count.textContent = `${completed} completed ${completed === 1 ? "order" : "orders"}`;
     const available = (Array.isArray(account.availableRewards) ? account.availableRewards : []).filter(item => {
       if (!item.expiresAt) return true;
       const expiry = item.expiresAt?.toDate ? item.expiresAt.toDate() : new Date(item.expiresAt);
       return !Number.isNaN(expiry.getTime()) && expiry.getTime() > Date.now();
     });
-    const cycleOrder = completed === 0 ? 0 : ((completed - 1) % 30) + 1;
-    // Every 30 completed orders begins a fresh reward cycle at order 1.
-    const previewOrder = cycleOrder === 30 ? 0 : cycleOrder;
     const availableIds = new Set(available.map(item => item.id));
     const welcomeReward = REWARDS_CONFIG.journey.find(item => Number(item.order) === 1 && item.kind === "free-item" && item.item === REWARDS_CONFIG.welcomeItem);
     const welcomeAvailableNow = completed === 0 && loyaltyAccountLoaded && customerOnlineOrderHistoryLoaded && !customerHasOrderedOnline
       && account.welcomeCompleted !== true && !account.welcomeReservationId;
-    const upcoming = REWARDS_CONFIG.journey.filter(item => item.id && item.order > previewOrder && !availableIds.has(item.id)
-      && !(welcomeAvailableNow && item.id === welcomeReward?.id)).slice(0, 2);
+    const upcoming = upcomingRewardMilestones(milestones, progress, availableIds, welcomeReward, welcomeAvailableNow, 5);
     // Don't advertise free delivery as ready when the current basket already
     // gets automatic free delivery (or the customer chose pickup). Keep the
     // earned ticket in the account; it can be used on a later eligible order.
@@ -878,13 +914,12 @@ async function handlePlaceOrderClick() {
       const definition = resolveCustomerRewardDefinition(reward);
       return !(definition?.kind === "free-delivery" && (isPickupSelected() || getPaidSubtotal() >= FREE_DELIVERY_THRESHOLD));
     });
-    const visibleReadyCount = Math.min(visibleAvailable.length, 1) + (welcomeAvailableNow ? 1 : 0);
     const comboSpendNote = reward => Number(reward?.minimum || 0) > 0
       ? (reward.includeCombosInMinimum === true || (reward.includeCombosInMinimum === undefined && reward.kind === "free-delivery")
         ? "Combo value counts toward this reward’s minimum spend."
         : "Combo value does not count toward this reward’s minimum spend.")
       : "";
-    const cards = [
+    const readyCards = [
       ...(welcomeAvailableNow ? [`<article class="journey-card journey-card-ready"><span class="journey-card-status">FIRST ONLINE ORDER GIFT</span><strong>${esc(REWARDS_CONFIG.welcomeItem)} · FREE</strong><p>Add any regular menu item to your first online order. The burger appears in your cart at ₹0; combos or extras alone do not qualify.</p><button type="button" class="journey-use-button" data-screen="menu">VIEW MENU</button></article>`] : []),
       ...visibleAvailable.slice(0, 1).map(reward => {
         const definition = resolveCustomerRewardDefinition(reward) || reward;
@@ -892,17 +927,26 @@ async function handlePlaceOrderClick() {
         const gameReward = ["craving-dash", "craving-runner"].includes(reward.source);
         const expires = expiry && !Number.isNaN(expiry.getTime()) ? `${gameReward ? "Expires" : "Use by"} ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: gameReward ? "numeric" : undefined, minute: gameReward ? "2-digit" : undefined }).format(expiry)}` : "Ready to use";
         return `<article class="journey-card journey-card-ready"><span class="journey-card-status">✦ READY TO USE</span><strong>${esc(definition.title || reward.title)}</strong><p>${esc(definition.detail || reward.detail || "Use this reward on your next order")}</p>${comboSpendNote(definition) ? `<small>${esc(comboSpendNote(definition))}</small>` : ""}<small>${esc(expires)}</small><button type="button" class="journey-use-button" data-use-reward="${esc(reward.ticketId || reward.id)}">USE IN CART</button></article>`;
-      }),
-      ...upcoming.slice(0, Math.max(0, 2 - visibleReadyCount)).map((item, index) => {
-        if (index > 0) return `<article class="journey-card journey-card-preview"><span class="journey-card-status">THEN · ORDER ${item.order}</span><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p>${comboSpendNote(item) ? `<small>${esc(comboSpendNote(item))}</small>` : ""}</article>`;
-        const targetOrder = Math.max(1, Number(item.order));
-        const progressOrders = Math.max(0, Math.min(targetOrder, previewOrder));
-        const remainingOrders = Math.max(1, targetOrder - progressOrders);
-        const progress = Math.round(progressOrders / targetOrder * 100);
-        return `<article class="journey-card journey-card-next"><div class="journey-next-top"><span class="journey-card-status">YOUR NEXT TREAT · ORDER ${targetOrder}</span><span class="journey-next-distance">${remainingOrders === 1 ? "1 order to go" : `${remainingOrders} orders to go`}</span></div><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p>${comboSpendNote(item) ? `<small>${esc(comboSpendNote(item))}</small>` : ""}<div class="journey-progress-track" role="progressbar" aria-label="Progress to next reward" aria-valuemin="0" aria-valuemax="${targetOrder}" aria-valuenow="${progressOrders}"><span style="width:${progress}%"></span></div><small>Complete ${remainingOrders} more ${remainingOrders === 1 ? "order" : "orders"} to unlock. Progress updates after delivery or pickup.</small></article>`;
       })
     ];
-    root.innerHTML = cards.length ? cards.join("") : `<div class="rewards-login-hint">You’ve reached the end of this reward journey. Keep ordering to begin the next round.</div>`;
+    const upcomingCards = upcoming.map((item, index) => {
+      const targetOrder = Math.max(1, Number(item.order));
+      const cycleLabel = item.cycleOffset ? `NEXT ROUND · ORDER ${targetOrder}` : `ORDER ${targetOrder}`;
+      const remainingOrders = item.cycleOffset === 0
+        ? Math.max(1, targetOrder - progress.position)
+        : Math.max(0, 30 - progress.position) + targetOrder;
+      const orderText = `${remainingOrders} ${remainingOrders === 1 ? "order" : "orders"}`;
+      if (index === 0) {
+        const span = item.cycleOffset === 0 ? Math.max(1, targetOrder - progress.previousOrder) : Math.max(1, targetOrder);
+        const done = item.cycleOffset === 0 ? progress.completedSincePrevious : 0;
+        const percent = Math.round(done / span * 100);
+        return `<article class="journey-card journey-card-next journey-card-locked"><div class="journey-next-top"><span class="journey-card-status"><span class="journey-lock-icon" aria-hidden="true">🔒</span> UP NEXT · ${cycleLabel}</span><span class="journey-next-distance">${orderText} to unlock</span></div><strong>${esc(item.title)}</strong><p>${esc(item.detail || "Complete more orders to unlock this reward.")}</p>${comboSpendNote(item) ? `<small>${esc(comboSpendNote(item))}</small>` : ""}<div class="journey-progress-track" role="progressbar" aria-label="Progress to ${esc(item.title)}" aria-valuemin="0" aria-valuemax="${span}" aria-valuenow="${done}"><span style="width:${percent}%"></span></div><small>Unlocks when the required order is completed and delivered or picked up.</small></article>`;
+      }
+      return `<article class="journey-card journey-card-locked journey-card-future"><div class="journey-future-top"><span class="journey-lock-icon" aria-hidden="true">🔒</span><span class="journey-card-status">${cycleLabel}</span></div><strong>${esc(item.title)}</strong><p>${esc(item.detail || "A reward for a future completed order.")}</p><small>Locked · ${orderText} away</small></article>`;
+    });
+    root.innerHTML = `${readyCards.join("")}${upcomingCards.length
+      ? `<div class="journey-upcoming-heading"><div><strong>${upcomingCards.length} upcoming rewards</strong><small>Each one unlocks after its order is completed.</small></div><span>🔒 LOCKED</span></div><div class="journey-upcoming-grid">${upcomingCards.join("")}</div>`
+      : `<div class="rewards-login-hint">Your next reward lineup is being updated.</div>`}`;
   }
 
   function setAddressFormVisible(visible) {
@@ -2806,19 +2850,15 @@ ${esc(offer.freeItem)}
   const welcomeCard = "";
   const pointsBalance = Math.max(0, Number(currentLoyaltyAccount.points || 0));
   const cartPointsBalance = `<div class="cart-points-balance"><span>YOUR CRAVING POINTS</span><strong>${!customerAuthStateResolved ? "Checking sign-in…" : !isCustomerSignedIn() ? "Sign in to view" : loyaltyAccountLoaded ? `${pointsBalance.toLocaleString("en-IN")} pts` : "Temporarily unavailable"}</strong></div>`;
-  const completedRewardOrders = Math.max(0, Number(currentLoyaltyAccount.completedOrders || 0));
   const rewardMilestones = (Array.isArray(REWARDS_CONFIG.journey) ? REWARDS_CONFIG.journey : [])
     .filter(reward => reward?.id && Number.isFinite(Number(reward.order)))
     .sort((left, right) => Number(left.order) - Number(right.order));
-  const completedCycleOrder = completedRewardOrders === 0 ? 0 : ((completedRewardOrders - 1) % 30) + 1;
-  const rewardCyclePosition = completedCycleOrder === 30 ? 0 : completedCycleOrder;
-  const nextRewardMilestone = rewardMilestones.find(reward => Number(reward.order) > rewardCyclePosition);
-  const previousRewardMilestone = [...rewardMilestones].reverse().find(reward => Number(reward.order) <= rewardCyclePosition);
-  const nextRewardOrder = nextRewardMilestone ? Number(nextRewardMilestone.order) : 0;
-  const previousRewardOrder = Number(previousRewardMilestone?.order || 0);
-  const ordersBetweenRewards = nextRewardOrder ? Math.max(1, nextRewardOrder - previousRewardOrder) : 0;
-  const completedSinceReward = Math.max(0, Math.min(ordersBetweenRewards, rewardCyclePosition - previousRewardOrder));
-  const ordersUntilReward = nextRewardOrder ? Math.max(1, nextRewardOrder - rewardCyclePosition) : 0;
+  const cartJourneyProgress = rewardJourneyProgress(currentLoyaltyAccount.completedOrders, rewardMilestones);
+  const completedRewardOrders = cartJourneyProgress.completed;
+  const nextRewardMilestone = cartJourneyProgress.next;
+  const ordersBetweenRewards = cartJourneyProgress.interval;
+  const completedSinceReward = cartJourneyProgress.completedSincePrevious;
+  const ordersUntilReward = cartJourneyProgress.ordersRemaining;
   const rewardProgressPercent = ordersBetweenRewards ? Math.round(completedSinceReward / ordersBetweenRewards * 100) : 0;
   const cartRewardProgress = !isTestOrder && customerAuthStateResolved && isCustomerSignedIn() && loyaltyAccountLoaded && customerOnlineOrderHistoryLoaded && nextRewardMilestone
     ? `<section class="cart-reward-progress" aria-label="Next Craving reward progress"><div class="cart-reward-progress-head"><span>YOUR NEXT CRAVING REWARD</span><strong>${completedRewardOrders} completed ${completedRewardOrders === 1 ? "order" : "orders"}</strong></div><b>${esc(nextRewardMilestone.title)}</b><div class="cart-reward-progress-track" role="progressbar" aria-label="Progress toward next reward" aria-valuemin="0" aria-valuemax="${ordersBetweenRewards}" aria-valuenow="${completedSinceReward}"><span style="width:${rewardProgressPercent}%"></span></div><small>${ordersUntilReward === 1 ? "1 more completed order" : `${ordersUntilReward} more completed orders`} to unlock · added after delivery or pickup</small></section>`

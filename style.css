@@ -3136,6 +3136,20 @@ body { padding-bottom: calc(148px + env(safe-area-inset-bottom)); }
 .journey-card-ready { border-color: #e8c995; background: linear-gradient(140deg,#fff6e5,#fff); }
 .journey-card-ready .journey-card-status { color: #88632c; }
 .journey-card-ready > strong { font-size: 15px; }
+.journey-upcoming-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:8px 0 2px; padding:13px 14px; border:1px solid #eee4d9; border-radius:14px; background:#fff; }
+.journey-upcoming-heading > div { display:grid; gap:3px; }
+.journey-upcoming-heading strong { color:var(--premium-ink); font:800 13px "Montserrat",sans-serif; }
+.journey-upcoming-heading small { color:var(--premium-muted); font-size:10px; line-height:1.4; }
+.journey-upcoming-heading > span { flex:0 0 auto; color:#8a652e; font-size:9px; font-weight:900; letter-spacing:.07em; }
+.journey-upcoming-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+.journey-card-locked { min-width:0; border-color:#e9dfd5; background:linear-gradient(145deg,#fff,#faf7f3); }
+.journey-card-next.journey-card-locked { grid-column:1/-1; border-color:#e5c995; background:linear-gradient(135deg,#fff4dd 0%,#fffdfa 74%); }
+.journey-card-locked .journey-card-status { color:#80643b; }
+.journey-lock-icon { display:inline-grid; width:22px; height:22px; place-items:center; margin-right:4px; border-radius:7px; background:#f4ead6; font-size:12px; vertical-align:middle; }
+.journey-future-top { display:flex; align-items:center; gap:7px; }
+.journey-card-future > strong { font-size:12px; line-height:1.35; }
+.journey-card-future > p { margin:0; font-size:10px; }
+.journey-card-future > small { color:#80643b; font-size:9px; font-weight:800; }
 @media (max-width: 650px) {
   .rewards-rules { padding: 13px 14px; }
   .rewards-rule-row { grid-template-columns: 58px minmax(0,1fr); }
@@ -3144,6 +3158,8 @@ body { padding-bottom: calc(148px + env(safe-area-inset-bottom)); }
   .rewards-journey-heading h2 { font-size: 18px; }
   .rewards-order-count { padding: 6px 8px; font-size: 9px; }
   .journey-next-top { align-items: flex-start; }
+  .journey-upcoming-grid { grid-template-columns:1fr; }
+  .journey-card-future { padding:12px 14px; }
 }
 
 /* Home quick access: take customers directly to a popular menu category. */

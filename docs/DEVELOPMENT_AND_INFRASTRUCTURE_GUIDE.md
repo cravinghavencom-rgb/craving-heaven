@@ -65,7 +65,7 @@ flowchart TD
 |---|---|
 | `index.html` | Customer home, menu, cart, checkout, account, order history, and rewards page markup; also loads Google tag and FCM client setup |
 | `style.css` | Shared customer presentation and responsive layouts |
-| `script.js` | Customer interactions, Firebase account flow, cart, checkout, address selection, order/reward display, and notification opt-in |
+| `script.js` | Customer interactions, Firebase account flow, cart, checkout, address selection, order/reward display, and notification opt-in; cart and rewards screen share the same completed-order milestone calculation |
 | `menu.js` | Initial menu and combo catalog data exposed to the customer page and staff tools |
 | `rewards-config.js` | Local fallback/default reward configuration; live configuration is also fetched from Functions |
 | `craving-dash.js` | Customer game and reward interactions through callable Functions |
@@ -167,6 +167,8 @@ Current exported callable Functions in `functions/index.js` include:
 | Craving Dash game | `getCravingDashState`, `startCravingDashStage`, `adminStartCravingDashTest`, `recordCravingDashAction`, `submitCravingDashStage` |
 
 Firestore trigger: `onOrderStatusChanged` reacts to order document updates and updates customer loyalty/points/rewards according to the status and configured rules.
+
+The customer rewards screen reads the completed-order total from the same authenticated loyalty account used by the cart. It displays up to five future reward milestones as locked cards, including progress toward the next reward; milestone definitions come from the live business configuration when available.
 
 `localDemoCustomerSession` exists only under the local emulator guard; it is not intended to be exported to production.
 
