@@ -1,6 +1,6 @@
 # Craving Heaven Website — Development and Infrastructure Guide
 
-**Prepared:** 6 November 2026
+**Prepared:** 6 November 2026 — notifications deployed
 **Repository:** `craving-heaven` (`main`)  
 **Firebase project configured by this checkout:** `craving-heaven-e2e94`  
 **Firebase Hosting site configured by this checkout:** `craving-heaven-e2e94`
@@ -191,6 +191,18 @@ firebase deploy --only firestore:rules,firestore:indexes --project craving-heave
 ```
 
 Only deploy functions/rules/indexes when the relevant code or configuration changed. A Hosting-only UI change does not require a Functions deployment. Always confirm the selected project before deployment; `firebase.json` and `.firebaserc` are configured for `craving-heaven-e2e94`.
+
+### Restore point for the 6 November 2026 release
+
+- Git source checkpoint: tag `restore-20261106-1241` (commit `b97d83f`).
+- Previous public Hosting content is copied to the `restore-261106-1241` preview channel, retained through 6 December 2026.
+- Restore the previous public website during that period with:
+
+```powershell
+firebase hosting:clone craving-heaven-e2e94:restore-261106-1241 craving-heaven-e2e94:live
+```
+
+This restores Hosting content only. It does not roll back Cloud Functions; the Git tag preserves the deployed source checkpoint for function recovery.
 
 Local emulator start command is `start-local-emulators.cmd`. Avoid using real customer accounts or live order data for development. The local demo OTP-free session is guarded to the emulator project.
 
