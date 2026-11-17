@@ -20,7 +20,8 @@ let orders = [];
 let historyOrders = [];
 let knownOnlineOrderIds = null;
 let ordersLoading = false;
-let orderSoundEnabled = false;
+const ORDER_SOUND_PREFERENCE_KEY = "chStaffOrderSoundEnabled";
+let orderSoundEnabled = readOrderSoundPreference();
 let orderAudioContext = null;
 let orderChimeNodes = [];
 let orderAlertTimeout = null;
@@ -299,7 +300,7 @@ $("historySearch").addEventListener("input", renderHistoryOrders);
 updateHistoryDateControls();
 
 function playOrderChime() {
-  if (!orderSoundEnabled || !orderAudioContext) return;
+  if (!orderSoundEnabled || !orderAudioContext || orderAudioContext.state !== "running") return;
   stopOrderChime();
   const notes = [
     { frequency: 784, offset: 0 },
@@ -339,6 +340,63 @@ function stopOrderChime() {
   orderChimeNodes = [];
 }
 
+function readOrderSoundPreference() {
+  try {
+    const savedPreference = localStorage.getItem(ORDER_SOUND_PREFERENCE_KEY);
+    return savedPreference === null || savedPreference === "true";
+  } catch {
+    return true;
+  }
+}
+
+function saveOrderSoundPreference(enabled) {
+  try { localStorage.setItem(ORDER_SOUND_PREFERENCE_KEY, String(enabled)); } catch {}
+}
+
+function updateOrderSoundButton() {
+  if (!orderSoundButton) return;
+  orderSoundButton.setAttribute("aria-pressed", String(orderSoundEnabled));
+  if (!orderSoundEnabled) {
+    orderSoundButton.textContent = "🔕 Order sound off";
+    orderSoundButton.title = "Turn on new online order sounds";
+    return;
+  }
+  if (!(window.AudioContext || window.webkitAudioContext)) {
+    orderSoundButton.textContent = "🔔 Sound unavailable";
+    orderSoundButton.title = "This browser does not support order sounds";
+    return;
+  }
+  const audioIsRunning = orderAudioContext?.state === "running";
+  orderSoundButton.textContent = audioIsRunning ? "🔔 Order sound on · Test" : "🔔 Sound on · tap to activate";
+  orderSoundButton.title = audioIsRunning
+    ? "Tap to test the sound; tap again to turn it off"
+    : "Sound is on; tap or press a key after refresh if your browser pauses audio";
+}
+
+async function activateOrderSoundFromGesture(event) {
+  if (event?.target && orderSoundButton?.contains(event.target)) return;
+  if (!orderSoundEnabled || orderAudioContext?.state === "running") return;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) {
+    updateOrderSoundButton();
+    return;
+  }
+  try {
+    orderAudioContext ||= new AudioContextClass();
+    await orderAudioContext.resume();
+    if (!orderSoundEnabled) return;
+    updateOrderSoundButton();
+    if (orderAudioContext.state === "running" && newOrderAlert && !newOrderAlert.hidden) playOrderChime();
+  } catch (error) {
+    console.warn("Could not resume order sound:", error);
+    updateOrderSoundButton();
+  }
+}
+
+document.addEventListener("pointerdown", activateOrderSoundFromGesture, true);
+document.addEventListener("keydown", activateOrderSoundFromGesture, true);
+updateOrderSoundButton();
+
 function announceNewOnlineOrders(newOrders) {
   const count = newOrders.length;
   const latestOrder = newOrders[0];
@@ -353,31 +411,28 @@ function announceNewOnlineOrders(newOrders) {
 }
 
 orderSoundButton.addEventListener("click", async () => {
-  if (orderSoundEnabled) {
+  if (orderSoundEnabled && orderAudioContext?.state === "running") {
     orderSoundEnabled = false;
+    saveOrderSoundPreference(false);
     stopOrderChime();
-    orderSoundButton.textContent = "🔔 Enable order sound";
-    orderSoundButton.setAttribute("aria-pressed", "false");
-    orderSoundButton.title = "Turn off new online order sounds";
+    updateOrderSoundButton();
     return;
   }
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   if (!AudioContextClass) {
-    orderSoundButton.textContent = "Sound unavailable";
-    orderSoundButton.title = "This browser does not support order sounds";
+    updateOrderSoundButton();
     return;
   }
+  orderSoundEnabled = true;
+  saveOrderSoundPreference(true);
   try {
     orderAudioContext ||= new AudioContextClass();
     await orderAudioContext.resume();
-    orderSoundEnabled = true;
-    orderSoundButton.textContent = "🔔 Order sound on · Test";
-    orderSoundButton.setAttribute("aria-pressed", "true");
-    orderSoundButton.title = "Tap to test the sound; tap again to turn it off";
+    updateOrderSoundButton();
     playOrderChime();
   } catch (error) {
     console.warn("Could not enable order sound:", error);
-    orderSoundButton.textContent = "Tap to enable sound";
+    updateOrderSoundButton();
   }
 });
 function renderTodaySales(data) {
