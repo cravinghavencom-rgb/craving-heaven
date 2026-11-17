@@ -33,6 +33,8 @@
       }
     ],
     "ignore": [
+      "**/*.md",
+      "firestore.indexes.json",
       "firebase.json",
       "functions/**",
       "firestore.rules",
