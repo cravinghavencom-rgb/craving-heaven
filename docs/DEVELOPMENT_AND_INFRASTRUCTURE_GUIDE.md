@@ -99,13 +99,13 @@ There is no root `package.json`/bundler build. Browser code imports Firebase Web
 | Firebase Cloud Messaging (FCM) | `index.html`, `script.js`, `firebase-messaging-sw.js`, `functions/index.js` | Customers can opt in to browser notifications; Admin Desk can send an immediate offer/reward message to all registered browser tokens; the service worker displays background notifications | Firebase lists FCM as no-cost. Function invocation, Firestore token reads, and network usage can still have separate costs. |
 | Google Analytics 4 tag | `index.html` | Sends browser analytics through `gtag.js` | Firebase lists Analytics as no-cost for standard product use |
 | DM Sans and Montserrat font files | `assets/fonts/`, `style.css`, `index.html` | Self-hosted variable fonts; preloaded by the homepage | No Google Fonts network request or Google Maps Platform API is involved |
-| Browser Geolocation API | `navigator.geolocation` in `script.js` | Requests GPS coordinates after the customer grants browser permission | This is a browser API, not a Google Geolocation API request; the site does not call the Google Geolocation endpoint |
+| Manual delivery address | `index.html`, `script.js` | Customers enter an address and select a delivery area; saved addresses are account-backed | No location permission or geolocation service is used |
 
 ### APIs not used by the current site code
 
 - **Google Fonts network service:** no hosted Google Fonts CSS/font requests remain; DM Sans and Montserrat are served from the site's own `assets/fonts/` directory.
-- **Google Maps JavaScript API, Places API, Geocoding API, Distance Matrix/Routes APIs:** no SDK/script/API calls were found. Address entry is manual; the GPS button saves device coordinates after permission. No reverse-geocoding service converts coordinates to a street address.
-- **Google Geolocation API:** not called. It is a separate billable Google web service; `navigator.geolocation` is the browser’s device-location API.
+- **Google Maps JavaScript API, Places API, Geocoding API, Distance Matrix/Routes APIs:** no SDK/script/API calls were found. Address entry is manual, and no reverse-geocoding service converts coordinates to a street address.
+- **Browser Geolocation API and Google Geolocation API:** neither is called by the customer address flow. Customers enter addresses manually and choose a delivery area.
 - **Online payment API (Razorpay, Stripe, PayU, Google Pay/UPI API):** none found. Checkout currently records pay-on-delivery or pay-on-pickup options; it does not charge a card or process an online UPI payment.
 - **Firebase Storage API:** a storage bucket name is present in client configuration, but no Storage SDK is imported and no upload/download code was found. The bucket may still exist or contain objects; check the Firebase Storage console before assuming its bill is zero.
 - **Firebase Analytics SDK:** the site loads the Google `gtag.js` tag directly; it does not import `firebase/analytics`.

@@ -146,7 +146,6 @@ const FCM_VAPID_KEY =
   const customerLoginSubtitle = document.getElementById("customerLoginSubtitle");
   const defaultCustomerLoginSubtitle = customerLoginSubtitle?.textContent.trim() || "Enter your mobile number to continue.";
   let returnToDeliveryAfterCustomerLogin = false;
-  let gpsCoordinatesToRestoreAfterCustomerLogin = null;
 
   const phoneLoginStep = document.getElementById("phoneLoginStep");
   const otpLoginStep = document.getElementById("otpLoginStep");
@@ -278,29 +277,17 @@ const FCM_VAPID_KEY =
     resetRecaptcha();
 
     if (shouldReturnToDelivery) {
-      pendingGpsCoordinates = gpsCoordinatesToRestoreAfterCustomerLogin;
-      gpsCoordinatesToRestoreAfterCustomerLogin = null;
-      if (deliveryLocationMessage) {
-        deliveryLocationMessage.textContent = pendingGpsCoordinates
-          ? "GPS pin ready. Add your building or flat and confirm the delivery area below."
-          : "";
-      }
       window.setTimeout(() => {
         if (!isCustomerSignedIn() || !deliveryLocationDialog) return;
         refreshHomeDeliverySelector();
         if (!deliveryLocationDialog.open) deliveryLocationDialog.showModal();
         homeDeliveryPicker?.setAttribute("aria-expanded", String(deliveryLocationDialog.open));
       }, 0);
-    } else {
-      gpsCoordinatesToRestoreAfterCustomerLogin = null;
     }
   }
 
   function requestDeliveryLogin(subtitle) {
     returnToDeliveryAfterCustomerLogin = true;
-    gpsCoordinatesToRestoreAfterCustomerLogin = pendingGpsCoordinates
-      ? { ...pendingGpsCoordinates }
-      : null;
     deliveryLocationDialog?.close();
     openCustomerLogin(subtitle);
   }
@@ -1046,8 +1033,7 @@ async function handlePlaceOrderClick() {
     const addresses = [...(currentCustomerProfile.addresses || [])];
     const addressId = id || (crypto.randomUUID ? crypto.randomUUID() : `addr-${Date.now()}`);
     const oldAddress = addresses.find(item => item.id === addressId);
-    const location = pendingGpsCoordinates || oldAddress?.location || null;
-    const nextAddress = { id: addressId, label: label || "Address", name, address, landmark, area, isDefault: isDefault || addresses.length === 0, ...(location ? { location } : {}) };
+    const nextAddress = { id: addressId, label: label || "Address", name, address, landmark, area, isDefault: isDefault || addresses.length === 0, ...(oldAddress?.location ? { location: oldAddress.location } : {}) };
     const existingIndex = addresses.findIndex(item => item.id === addressId);
     if (existingIndex < 0 && addresses.length >= 10) {
       addressMessage.textContent = "You can save up to 10 addresses.";
@@ -1061,7 +1047,6 @@ async function handlePlaceOrderClick() {
     submitButton.textContent = "SAVING…";
     try {
       await saveCustomerProfile({ ...currentCustomerProfile, name, addresses });
-      pendingGpsCoordinates = null;
       addressForm.reset();
       document.getElementById("addressId").value = "";
       setAddressFormVisible(false);
@@ -1145,7 +1130,7 @@ async function handlePlaceOrderClick() {
       return;
     }
     if (!addresses.length) {
-      homeSavedAddressList.innerHTML = `<p class="delivery-address-empty">No saved addresses yet. Use GPS or add an address below.</p>`;
+      homeSavedAddressList.innerHTML = `<p class="delivery-address-empty">No saved addresses yet. Add an address to make checkout quicker.</p>`;
       return;
     }
     const selectedId = homeDeliveryArea?.value.startsWith("address:") ? homeDeliveryArea.value.slice(8) : "";
@@ -1551,8 +1536,6 @@ const homeDeliveryLabel = document.getElementById("homeDeliveryLabel");
 const homeDeliveryDetail = document.getElementById("homeDeliveryDetail");
 const deliveryLocationDialog = document.getElementById("deliveryLocationDialog");
 const homeSavedAddressList = document.getElementById("homeSavedAddressList");
-const deliveryLocationMessage = document.getElementById("deliveryLocationMessage");
-const useCurrentLocationButton = document.getElementById("useCurrentLocationButton");
 const checkoutSavedAddress = document.getElementById("checkoutSavedAddress");
 const checkoutAddressLabel = document.getElementById("checkoutAddressLabel");
 const savedAddressPickerWrap = document.getElementById("savedAddressPickerWrap");
@@ -2179,7 +2162,6 @@ function firstOrderWelcomeEligible() {
   const addressArea = document.getElementById("addressArea");
   const addressMessage = document.getElementById("addressMessage");
   let currentCustomerProfile = { addresses: [] };
-let pendingGpsCoordinates = null;
   let currentLoyaltyAccount = { points: 0, completedOrders: 0, availableRewards: [] };
   let loyaltyAccountLoaded = false;
   let customerAccountLoadFailed = false;
@@ -3298,7 +3280,6 @@ document.addEventListener("click", async event => {
       const selectedArea = currentSelection.startsWith("area:") ? currentSelection.slice(5) : checkoutArea.value;
       if (selectedArea) addressArea.value = selectedArea;
       if (addressMessage) addressMessage.textContent = "";
-      if (deliveryLocationMessage) deliveryLocationMessage.textContent = pendingGpsCoordinates ? "GPS pin ready. Add your building or flat and confirm the delivery area." : "";
       setAddressFormVisible(true);
     });
     homeSavedAddressList?.addEventListener("click", event => {
@@ -3307,43 +3288,6 @@ document.addEventListener("click", async event => {
       homeDeliveryArea.value = `address:${button.dataset.homeAddress}`;
       homeDeliveryArea.dispatchEvent(new Event("change", { bubbles: true }));
       deliveryLocationDialog?.close();
-    });
-    useCurrentLocationButton?.addEventListener("click", () => {
-      if (!navigator.geolocation) {
-        if (deliveryLocationMessage) deliveryLocationMessage.textContent = "This browser can’t share its location. Choose your area or enter an address manually.";
-        return;
-      }
-      useCurrentLocationButton.disabled = true;
-      if (deliveryLocationMessage) deliveryLocationMessage.textContent = "Finding your location… Your browser will ask permission first.";
-      navigator.geolocation.getCurrentPosition(position => {
-        pendingGpsCoordinates = {
-          latitude: Number(position.coords.latitude.toFixed(6)),
-          longitude: Number(position.coords.longitude.toFixed(6))
-        };
-        useCurrentLocationButton.disabled = false;
-        if (deliveryLocationMessage) deliveryLocationMessage.textContent = "GPS pin found. Add your building or flat and confirm the delivery area below. The pin is saved only when you save this address.";
-        if (!isCustomerSignedIn()) {
-          requestDeliveryLogin("Sign in with your mobile number to save this delivery location.");
-          return;
-        }
-        addressForm.reset();
-        document.getElementById("addressId").value = "";
-        document.getElementById("addressDefault").checked = !(currentCustomerProfile.addresses || []).length;
-        document.getElementById("addressContactName").value = currentCustomerProfile.name || "";
-        const currentSelection = homeDeliveryArea.value || "";
-        const selectedArea = currentSelection.startsWith("area:") ? currentSelection.slice(5) : checkoutArea.value;
-        if (selectedArea) addressArea.value = selectedArea;
-        if (addressMessage) addressMessage.textContent = "";
-        setAddressFormVisible(true);
-      }, error => {
-        useCurrentLocationButton.disabled = false;
-        const message = error.code === 1
-          ? "Location permission is off. Allow it in your browser, or choose an area and enter your address manually."
-          : error.code === 3
-            ? "Location took too long to find. Try again or enter your address manually."
-            : "We couldn’t find your location. Choose an area and enter your address manually.";
-        if (deliveryLocationMessage) deliveryLocationMessage.textContent = message;
-      }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
     });
     homeDeliveryArea.addEventListener("change", () => {
       const value = homeDeliveryArea.value;
@@ -3375,7 +3319,6 @@ document.addEventListener("click", async event => {
   });
   deliveryLocationDialog?.addEventListener("close", () => {
     homeDeliveryPicker?.setAttribute("aria-expanded", "false");
-    pendingGpsCoordinates = null;
   });
   deliveryLocationDialog?.addEventListener("cancel", () => homeDeliveryPicker?.setAttribute("aria-expanded", "false"));
   checkoutSavedAddress?.addEventListener("change", () => {

@@ -11,7 +11,7 @@
   <link rel="preload" href="assets/fonts/dm-sans/latin-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/montserrat/latin-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" as="image" href="images/burgers/classic-crunchy-burger.webp" type="image/webp" fetchpriority="high">
-  <link rel="stylesheet" href="style.css?v=20261117-address-login-top-layer-v1">
+  <link rel="stylesheet" href="style.css?v=20261117-manual-address-only-v1">
   <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-GD2EPLFYZP">
 </script>
@@ -45,13 +45,10 @@
   <dialog class="delivery-location-dialog" id="deliveryLocationDialog" aria-labelledby="deliveryLocationTitle">
     <div class="delivery-location-sheet">
       <div class="delivery-location-heading"><div><span class="section-kicker">YOUR DELIVERY LOCATION</span><h2 id="deliveryLocationTitle">Where should we deliver?</h2></div><button type="button" class="delivery-location-close" aria-label="Close address selector" data-close-delivery-location>×</button></div>
-      <button type="button" class="use-current-location-button" id="useCurrentLocationButton"><span aria-hidden="true">◎</span><span><strong>Use current location</strong><small>Capture a GPS pin for this address</small></span><b aria-hidden="true">→</b></button>
-      <p class="delivery-location-message" id="deliveryLocationMessage" role="status" aria-live="polite"></p>
       <div class="delivery-address-list-heading"><h3>Saved addresses</h3><button type="button" id="homeAddAddressButton">+ Add address</button></div>
       <div class="home-saved-address-list" id="homeSavedAddressList"></div>
       <label class="delivery-area-picker-label" for="homeDeliveryArea">OR CHOOSE YOUR DELIVERY AREA</label>
       <select class="delivery-area-picker" id="homeDeliveryArea" name="homeDeliveryArea" aria-label="Choose your delivery area"><option value="">Choose your area</option></select>
-      <p class="delivery-location-footnote">Your browser asks before sharing location. We save the pin only when you save the address. Add your building details and choose the area.</p>
       <form id="addressForm" class="address-form delivery-address-form" hidden>
         <input type="hidden" id="addressId">
         <label>ADDRESS LABEL<select id="addressLabel" required><option value="Home">Home</option><option value="Work">Work</option><option value="Other">Other</option></select></label>
@@ -725,7 +722,7 @@
 
 <script src="rewards-config.js?v=20261021-first-order-gift" defer></script>
 <script src="menu.js?v=20261027-combo-webp" defer></script>
-<script src="script.js?v=20261117-address-login-top-layer-v1" defer></script>
+<script src="script.js?v=20261117-manual-address-only-v1" defer></script>
 <script src="craving-dash.js?v=20261105-pagespeed-opt-v2" defer></script>
 </body>
 </html>
