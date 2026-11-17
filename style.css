@@ -898,12 +898,22 @@ button:focus-visible, a:focus-visible { outline: 3px solid rgba(201,0,0,.30); ou
   position: fixed;
   inset: 0;
   z-index: 3000;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  border: 0;
   display: none;
   align-items: center;
   justify-content: center;
   padding: 20px;
   background: rgba(0, 0, 0, 0.72);
   backdrop-filter: blur(6px);
+}
+
+.customer-login-overlay::backdrop {
+  background: transparent;
 }
 
 .customer-login-overlay.open {

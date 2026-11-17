@@ -238,8 +238,8 @@ const FCM_VAPID_KEY =
     confirmationResult = null;
     resetRecaptcha();
 
+    if (!customerLoginOverlay.open) customerLoginOverlay.showModal();
     customerLoginOverlay.classList.add("open");
-    customerLoginOverlay.setAttribute("aria-hidden", "false");
     if (customerLoginSubtitle) customerLoginSubtitle.textContent = subtitle;
 
     document.body.classList.add("customer-login-open");
@@ -269,7 +269,7 @@ const FCM_VAPID_KEY =
     }
 
     customerLoginOverlay.classList.remove("open");
-    customerLoginOverlay.setAttribute("aria-hidden", "true");
+    if (customerLoginOverlay.open) customerLoginOverlay.close();
     if (customerLoginSubtitle) customerLoginSubtitle.textContent = defaultCustomerLoginSubtitle;
 
     document.body.classList.remove("customer-login-open");
@@ -1448,6 +1448,10 @@ async function handlePlaceOrderClick() {
         }
       }
     );
+    customerLoginOverlay.addEventListener("cancel", event => {
+      event.preventDefault();
+      closeCustomerLogin();
+    });
   }
 
   if (placeOrderButton) {
