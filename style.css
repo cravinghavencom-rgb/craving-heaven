@@ -3391,3 +3391,27 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   .home-dashboard-cards .home-dashboard-card { grid-template-columns: 34px minmax(0,1fr); }
   .home-dashboard-cards .home-card-action { grid-column: 2; grid-row: 3; justify-self: start; }
 }
+
+/* Public Craving Run placeholder */
+.game-coming-soon-card {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  min-height: 300px;
+  padding: clamp(24px, 5vw, 40px);
+  border-color: #efd7c6;
+  background: radial-gradient(circle at 95% 5%, #ffe4d2, transparent 34%), linear-gradient(145deg, #fff8f0, #fff 78%);
+}
+.game-coming-soon-art { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+.game-coming-soon-art span { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 16px; background: #fff0df; font-size: 26px; }
+.game-coming-soon-art i { color: #ac6c25; font-style: normal; font-size: 19px; }
+.game-coming-soon-badge { display: inline-flex; align-items: center; min-height: 28px; padding: 0 11px; border-radius: 99px; background: #f7e6dc; color: #8e352a; font-size: 9px; font-weight: 950; letter-spacing: .1em; }
+.game-coming-soon-card h2 { max-width: 20ch; margin: 0; color: #2b1c18; font: 900 clamp(24px, 5.5vw, 34px)/1.12 "Montserrat", sans-serif; letter-spacing: -.035em; }
+.game-coming-soon-card p { max-width: 48ch; margin: 0; color: #74655d; line-height: 1.6; }
+.game-coming-soon-card .game-secondary { margin-top: 4px; }
+@media (max-width: 650px) {
+  .game-coming-soon-card { min-height: 320px; justify-content: center; padding: 26px 22px; border-radius: 22px; }
+}

@@ -143,6 +143,10 @@ const FCM_VAPID_KEY =
 
   const customerLoginOverlay = document.getElementById("customerLoginOverlay");
   const customerLoginClose = document.getElementById("customerLoginClose");
+  const customerLoginSubtitle = document.getElementById("customerLoginSubtitle");
+  const defaultCustomerLoginSubtitle = customerLoginSubtitle?.textContent.trim() || "Enter your mobile number to continue.";
+  let returnToDeliveryAfterCustomerLogin = false;
+  let gpsCoordinatesToRestoreAfterCustomerLogin = null;
 
   const phoneLoginStep = document.getElementById("phoneLoginStep");
   const otpLoginStep = document.getElementById("otpLoginStep");
@@ -225,7 +229,7 @@ const FCM_VAPID_KEY =
   // CUSTOMER LOGIN POPUP
   // ---------------------------------------------------------
 
-  function openCustomerLogin() {
+  function openCustomerLogin(subtitle = defaultCustomerLoginSubtitle) {
     if (!customerLoginOverlay) return;
 
     // Each login attempt gets a fresh verifier and a fresh DOM target. This
@@ -236,6 +240,7 @@ const FCM_VAPID_KEY =
 
     customerLoginOverlay.classList.add("open");
     customerLoginOverlay.setAttribute("aria-hidden", "false");
+    if (customerLoginSubtitle) customerLoginSubtitle.textContent = subtitle;
 
     document.body.classList.add("customer-login-open");
 
@@ -256,17 +261,48 @@ const FCM_VAPID_KEY =
   function closeCustomerLogin() {
     if (!customerLoginOverlay) return;
 
+    const shouldReturnToDelivery = returnToDeliveryAfterCustomerLogin && isCustomerSignedIn();
+    returnToDeliveryAfterCustomerLogin = false;
+
     if (customerLoginOverlay.contains(document.activeElement)) {
       document.activeElement.blur();
     }
 
     customerLoginOverlay.classList.remove("open");
     customerLoginOverlay.setAttribute("aria-hidden", "true");
+    if (customerLoginSubtitle) customerLoginSubtitle.textContent = defaultCustomerLoginSubtitle;
 
     document.body.classList.remove("customer-login-open");
 
     confirmationResult = null;
     resetRecaptcha();
+
+    if (shouldReturnToDelivery) {
+      pendingGpsCoordinates = gpsCoordinatesToRestoreAfterCustomerLogin;
+      gpsCoordinatesToRestoreAfterCustomerLogin = null;
+      if (deliveryLocationMessage) {
+        deliveryLocationMessage.textContent = pendingGpsCoordinates
+          ? "GPS pin ready. Add your building or flat and confirm the delivery area below."
+          : "";
+      }
+      window.setTimeout(() => {
+        if (!isCustomerSignedIn() || !deliveryLocationDialog) return;
+        refreshHomeDeliverySelector();
+        if (!deliveryLocationDialog.open) deliveryLocationDialog.showModal();
+        homeDeliveryPicker?.setAttribute("aria-expanded", String(deliveryLocationDialog.open));
+      }, 0);
+    } else {
+      gpsCoordinatesToRestoreAfterCustomerLogin = null;
+    }
+  }
+
+  function requestDeliveryLogin(subtitle) {
+    returnToDeliveryAfterCustomerLogin = true;
+    gpsCoordinatesToRestoreAfterCustomerLogin = pendingGpsCoordinates
+      ? { ...pendingGpsCoordinates }
+      : null;
+    deliveryLocationDialog?.close();
+    openCustomerLogin(subtitle);
   }
 
   // Keep every customer surface (cart, checkout, rewards, profile and orders)
@@ -3247,8 +3283,7 @@ document.addEventListener("click", async event => {
     });
     document.getElementById("homeAddAddressButton")?.addEventListener("click", () => {
       if (!isCustomerSignedIn()) {
-        if (deliveryLocationMessage) deliveryLocationMessage.textContent = "Sign in with your mobile number to save addresses to your account.";
-        openCustomerLogin();
+        requestDeliveryLogin("Sign in with your mobile number to save a delivery address.");
         return;
       }
       addressForm.reset();
@@ -3284,8 +3319,7 @@ document.addEventListener("click", async event => {
         useCurrentLocationButton.disabled = false;
         if (deliveryLocationMessage) deliveryLocationMessage.textContent = "GPS pin found. Add your building or flat and confirm the delivery area below. The pin is saved only when you save this address.";
         if (!isCustomerSignedIn()) {
-          if (deliveryLocationMessage) deliveryLocationMessage.textContent += " Sign in is needed to save it to your account.";
-          openCustomerLogin();
+          requestDeliveryLogin("Sign in with your mobile number to save this delivery location.");
           return;
         }
         addressForm.reset();
