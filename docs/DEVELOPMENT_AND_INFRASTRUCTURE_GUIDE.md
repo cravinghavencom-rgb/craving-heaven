@@ -231,6 +231,18 @@ firebase hosting:clone craving-heaven-e2e94:rollback-20261118-pre-ui-fixes cravi
 
 This restores Hosting content only; it does not change Firestore data or Cloud Functions.
 
+### Restore point for the 18 November 2026 home header and category layout
+
+- Git source commit: `be739fc` (`Polish home delivery header and menu shortcuts`).
+- Before release, the current public Hosting version was cloned to `rollback-20261118-home-header` at https://craving-heaven-e2e94--rollback-20261118-home-header-yzcm6tjw.web.app.
+- The rollback channel expires 25 November 2026 at 15:32 UTC (20:32 India time). Restore the saved Hosting version before then with:
+
+```powershell
+firebase hosting:clone craving-heaven-e2e94:rollback-20261118-home-header craving-heaven-e2e94:live --project craving-heaven-e2e94
+```
+
+This restores Hosting content only; it does not change Firestore data or Cloud Functions. The release styles the delivery-address picker as a compact card, displays the four home menu categories in a two-column grid without horizontal scrolling, adds a full-width “View complete menu” action, and keeps the bottom navigation label “Home” in both English and Hinglish/Hindi modes.
+
 Local emulator start command is `start-local-emulators.cmd`. Avoid using real customer accounts or live order data for development. The local demo OTP-free session is guarded to the emulator project.
 
 ## 9. Cost guide (official rates checked 3 November 2026)
