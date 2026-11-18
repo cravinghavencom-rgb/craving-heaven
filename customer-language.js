@@ -2,7 +2,7 @@
   const STORAGE_KEY = "chCustomerLanguageV1";
   const languages = {
     hinglish: {
-      "DELIVER TO": "DELIVER TO",
+      "DELIVER TO": "YAHAN DELIVERY KAREIN",
       "Choose your location": "Apni location chunein",
       "Tap to set delivery address": "Delivery address set karne ke liye tap karein",
       "CRAVING POINTS": "CRAVING POINTS",
@@ -92,6 +92,10 @@
       "LOG IN": "LOGIN KAREIN",
       "LOGIN": "LOGIN KAREIN",
       "LOG OUT": "LOG OUT",
+      "LOGGED IN AS": "LOGIN HAI",
+      "DEFAULT": "MUKHYA",
+      "EDIT": "BADLEIN",
+      "DELETE": "HATAAYEIN",
       "ORDER PLACED!": "ORDER CONFIRM HO GAYA!",
       "ORDER ID": "ORDER ID",
       "Thank you for ordering with us. Your order has been received successfully.": "Thank you! Aapka order successfully place ho gaya hai.",
@@ -101,7 +105,7 @@
       "DELIVERY DETAILS": "DELIVERY DETAILS",
       "Enter your details to place your order.": "Order place karne ke liye apni details bharein.",
       "HOW WOULD YOU LIKE TO GET YOUR ORDER?": "Aap apna order kaise lena chahenge?",
-      "Delivery": "Delivery",
+      "Delivery": "GHAR TAK DELIVERY",
       "Bring it to your address": "Aapke address par pahunchayenge",
       "Pickup": "Pickup",
       "Collect from our store": "Store se collect karein",
@@ -142,7 +146,103 @@
       "A new Craving Heaven game is in the works. Check back here soon.": "Craving Heaven ka naya game ban raha hai. Jaldi wapas aayein.",
       "Pick your favourites": "Apne favourites chunein",
       "Choose a category or search for a dish.": "Category chunein ya dish search karein.",
-      "COMBO MENU": "COMBO MENU",
+      "COMBO MENU": "COMBOS KA MENU",
+      "MENU VALUE": "MENU KI KEEMAT",
+      "YOU SAVE": "AAPKI BACCHAT",
+      "COMBO PRICE": "COMBO KI KEEMAT",
+      "TOTAL PAID": "KUL BILL",
+      "ITEM": "ITEM",
+      "ITEMS": "ITEMS",
+      "FREE": "FREE",
+      "DELIVERED": "DELIVER HO GAYA",
+      "CANCELLED": "CANCEL HO GAYA",
+      "NEW": "NAYA",
+      "RECEIVED": "MILA",
+      "PREPARING": "TAIYAAR HO RAHA HAI",
+      "STORE PICKUP": "STORE SE PICKUP",
+      "READY TO USE": "USE KARNE KE LIYE READY",
+      "LOCKED": "LOCK HAI",
+      "UP NEXT": "AGLA REWARD",
+      "ADD KAREIN +": "ADD KAREIN +",
+      "CART MEIN ADD KAREIN": "CART MEIN ADD KAREIN",
+      "COMBO CART MEIN ADD KAREIN": "COMBO CART MEIN ADD KAREIN",
+      "BACK HOME": "HOME PAR JAAYEIN",
+      "Ready when you are": "Aap jab ready hon, game shuru karein",
+      "The game is offline right now. Come back soon for a fresh run.": "Game abhi available nahi hai. Nayi run ke liye jaldi wapas aayein.",
+      "STORE HOURS": "STORE KA TIME",
+      "CHECKING": "CHECK HO RAHA HAI",
+      "OPEN NOW": "ABHI KHULA HAI",
+      "BUSY RIGHT NOW": "ABHI BUSY HAIN",
+      "CLOSED": "BAND",
+      "ADDRESS": "PATA",
+      "DELIVERY AREAS": "DELIVERY WALE ILAAQE",
+      "MADE WITH QUALITY, SERVED WITH LOVE!": "QUALITY KE SAATH BANA, PYAAR SE SERVE KIYA!",
+      "CHICKEN WRAPS": "CHICKEN WRAPS",
+      "LOADED BOWLS": "BHARPOOR BOWLS",
+      "STRIPS": "CHICKEN STRIPS",
+      "HOT WINGS": "HOT WINGS",
+      "CHICKEN POPCORN": "CHICKEN POPCORN",
+      "SIGNATURE FRIES": "SIGNATURE FRIES",
+      "FRENCH FRIES": "FRENCH FRIES",
+      "EXTRAS & DIPS": "EXTRAS AUR DIPS",
+      "BAND": "BAND",
+      "STORE HOURS": "STORE KA TIME",
+      "TOTAL PAID": "KUL BILL",
+      "TEST TOTAL · NO PAYMENT DUE": "TEST ORDER · PAYMENT NAHI",
+      "FREE": "FREE",
+      "USE IN CART": "CART MEIN USE KAREIN",
+      "FIRST ONLINE ORDER GIFT": "FIRST ORDER KA GIFT",
+      "UP NEXT · ORDER": "AGLA REWARD · ORDER",
+      "ORDER": "ORDER",
+      "ITEMS": "ITEMS",
+      "SAVE": "BACHAT",
+      "MENU VALUE": "MENU KI KEEMAT",
+      "YOU SAVE": "AAPKI BACCHAT",
+      "COMBO PRICE": "COMBO KI KEEMAT",
+      "Home": "GHAR",
+      "Home": "GHAR",
+      "Default": "DEFAULT",
+      "Menu": "MENU",
+      "Combos": "COMBOS",
+      "Rewards": "INAAM",
+      "Orders": "MERE ORDERS",
+      "Profile": "ACCOUNT",
+      "Burgers": "BURGERS",
+      "Shawarma": "SHAWARMA",
+      "Wraps": "WRAPS",
+      "Bowls": "BOWLS",
+      "Strips": "STRIPS",
+      "Hot Wings": "HOT WINGS",
+      "Chicken Popcorn": "CHICKEN POPCORN",
+      "Signature Fries": "SIGNATURE FRIES",
+      "French Fries": "FRENCH FRIES",
+      "Extras & Dips": "EXTRAS AUR DIPS",
+      "CHICKEN WRAPS": "CHICKEN WRAPS",
+      "LOADED BOWLS": "LOADED BOWLS",
+      "HOT WINGS": "HOT WINGS",
+      "CHICKEN POPCORN": "CHICKEN POPCORN",
+      "SIGNATURE FRIES": "SIGNATURE FRIES",
+      "FRENCH FRIES": "FRENCH FRIES",
+      "EXTRAS & DIPS": "EXTRAS AUR DIPS",
+      "STORE HOURS": "STORE KA TIME",
+      "CHECKING": "CHECK HO RAHA HAI",
+      "OPEN NOW": "ABHI KHULA HAI",
+      "BUSY RIGHT NOW": "ABHI BUSY HAIN",
+      "PREPARING": "TAIYAARI JAARI HAI",
+      "LOGGED IN AS": "LOGIN HAI",
+      "EDIT": "BADLEIN",
+      "DELETE": "HATAAYEIN",
+      "USE BY": "ISTEMAL KAREIN",
+      "STORE PICKUP": "STORE SE PICKUP",
+      "MENU VALUE": "MENU KI KEEMAT",
+      "YOU SAVE": "AAPKI BACCHAT",
+      "COMBO PRICE": "COMBO KI KEEMAT",
+      "READY TO USE": "USE KARNE KE LIYE READY",
+      "LOCKED": "LOCK HAI",
+      "UP NEXT": "AGLA REWARD",
+      "BACK HOME": "HOME PAR JAAYEIN",
+      "Ready when you are": "Aap jab ready hon, game shuru karein",
+      "The game is offline right now. Come back soon for a fresh run.": "Game abhi available nahi hai. Nayi run ke liye jaldi wapas aayein.",
       "COMPLETE MEALS AT A BETTER PRICE.": "Behtar price par complete meals.",
       "Aaj aapko mila hai: {quantity} {item} free!": "Aaj aapko mila hai: {quantity} {item} free!",
       "Yay! Aaj ki delivery free hai!": "Yay! Aaj ki delivery free hai!",
@@ -179,11 +279,14 @@
       "Search burgers, wings, fries…": "Burgers, wings, fries search karein…",
       "Clear menu search": "Menu search saaf karein",
       "0 completed orders": "0 completed orders",
+      "No orders yet": "Abhi koi order nahi hai",
+      "Your order history will show here after your first order.": "Pehla order karne ke baad uski details yahan dikhegi.",
+      "EXPLORE MENU": "MENU DEKHEIN",
       "Menu": "Menu",
       "Combos": "Combos",
-      "ADD +": "CART MEIN DALEIN +",
-      "ADD TO CART": "CART MEIN DALEIN",
-      "ADD COMBO TO CART": "COMBO CART MEIN DALEIN",
+      "ADD +": "ADD KAREIN +",
+      "ADD TO CART": "CART MEIN ADD KAREIN",
+      "ADD COMBO TO CART": "COMBO CART MEIN ADD KAREIN",
       "ALL COMBOS": "SAARE COMBOS",
       "FEATURED COMBO": "FEATURED COMBO",
       "IN YOUR CART": "AAPKE CART MEIN",
@@ -215,8 +318,6 @@
       "Shop 10, Pearl Oasis Building, Pathanwadi, Malad East, Mumbai – 400097": "Shop 10, Pearl Oasis Building, Pathanwadi, Malad East, Mumbai – 400097",
       "Track your order anytime from the Orders screen.": "Apne order ko Orders page par kabhi bhi track karein.",
       "Thank you for ordering with us. Your order has been received successfully.": "Thank you! Aapka order successfully place ho gaya hai.",
-      "ADDRESS": "ADDRESS",
-      "DELIVERY AREAS": "DELIVERY AREAS",
       "Order confirm ho gaya! Aapka reward neeche hai.": "Order confirm ho gaya! Aapka reward neeche hai.",
       "Aapka order successfully place ho gaya hai.": "Aapka order successfully place ho gaya hai.",
       "This is a test order. It will not be prepared or earn rewards.": "Yeh test order hai. Isse prepare nahi kiya jayega aur koi reward nahi milega.",
@@ -228,7 +329,7 @@
       "Pickup at Shop 10, Pearl Oasis Building, Pathanwadi, Malad East. Pay at the store and track readiness from Your Orders.": "Pickup: Shop 10, Pearl Oasis Building, Pathanwadi, Malad East. Store par payment karein aur Your Orders mein ready status dekhein."
     },
     hi: {
-      "DELIVER TO": "यहाँ डिलीवर करें",
+      "DELIVER TO": "डिलीवरी यहाँ करें",
       "Choose your location": "अपना स्थान चुनें",
       "Tap to set delivery address": "डिलीवरी पता सेट करने के लिए टैप करें",
       "CRAVING POINTS": "क्रेविंग पॉइंट्स",
@@ -405,6 +506,9 @@
       "Search burgers, wings, fries…": "बर्गर, विंग्स, फ्राइज़ खोजें…",
       "Clear menu search": "मेन्यू सर्च साफ़ करें",
       "0 completed orders": "0 ऑर्डर पूरे",
+      "No orders yet": "अभी कोई ऑर्डर नहीं है",
+      "Your order history will show here after your first order.": "पहले ऑर्डर के बाद उसकी जानकारी यहाँ दिखेगी।",
+      "EXPLORE MENU": "मेन्यू देखें",
       "Menu": "मेन्यू",
       "Combos": "कॉम्बो",
       "ADD +": "कार्ट में जोड़ें +",
@@ -443,6 +547,60 @@
       "Thank you for ordering with us. Your order has been received successfully.": "धन्यवाद! आपका ऑर्डर सफलतापूर्वक प्लेस हो गया है।",
       "ADDRESS": "पता",
       "DELIVERY AREAS": "डिलीवरी एरिया",
+      "MADE WITH QUALITY, SERVED WITH LOVE!": "क्वालिटी से बनाया, प्यार से परोसा!",
+      "CHICKEN WRAPS": "चिकन रैप्स",
+      "LOADED BOWLS": "लोडेड बाउल्स",
+      "STRIPS": "चिकन स्ट्रिप्स",
+      "HOT WINGS": "हॉट विंग्स",
+      "CHICKEN POPCORN": "चिकन पॉपकॉर्न",
+      "SIGNATURE FRIES": "सिग्नेचर फ्राइज़",
+      "FRENCH FRIES": "फ्रेंच फ्राइज़",
+      "EXTRAS & DIPS": "एक्स्ट्रा और डिप्स",
+      "BAND": "बंद",
+      "STORE HOURS": "स्टोर का समय",
+      "TOTAL PAID": "कुल भुगतान",
+      "TEST TOTAL · NO PAYMENT DUE": "टेस्ट ऑर्डर · पेमेंट नहीं",
+      "FREE": "मुफ़्त",
+      "USE IN CART": "कार्ट में इस्तेमाल करें",
+      "FIRST ONLINE ORDER GIFT": "पहले ऑर्डर का तोहफ़ा",
+      "ORDER": "ऑर्डर",
+      "ITEMS": "आइटम",
+      "SAVE": "बचत",
+      "MENU VALUE": "मेन्यू की कीमत",
+      "YOU SAVE": "आपकी बचत",
+      "COMBO PRICE": "कॉम्बो की कीमत",
+      "Home": "होम",
+      "Home": "होम",
+      "Menu": "मेन्यू",
+      "Combos": "कॉम्बो",
+      "Play": "खेलें",
+      "Rewards": "रिवॉर्ड",
+      "Orders": "ऑर्डर",
+      "Profile": "प्रोफ़ाइल",
+      "LOGGED IN AS": "लॉग इन हैं",
+      "LOG OUT": "लॉग आउट",
+      "DEFAULT": "डिफ़ॉल्ट",
+      "EDIT": "बदलें",
+      "DELETE": "हटाएँ",
+      "STORE HOURS": "स्टोर का समय",
+      "CHECKING": "जाँच हो रही है",
+      "OPEN NOW": "अभी खुला है",
+      "BUSY RIGHT NOW": "अभी व्यस्त हैं",
+      "PREPARING": "तैयारी जारी है",
+      "DELIVERED": "डिलीवर हो गया",
+      "CANCELLED": "रद्द",
+      "NEW": "नया",
+      "RECEIVED": "मिल गया",
+      "STORE PICKUP": "स्टोर से पिकअप",
+      "TOTAL PAID": "कुल भुगतान",
+      "MENU VALUE": "मेन्यू की कीमत",
+      "YOU SAVE": "आपकी बचत",
+      "COMBO PRICE": "कॉम्बो की कीमत",
+      "LOCKED": "लॉक है",
+      "UP NEXT": "अगला रिवॉर्ड",
+      "BACK HOME": "होम पर जाएँ",
+      "Ready when you are": "जब आप तैयार हों, गेम शुरू करें",
+      "The game is offline right now. Come back soon for a fresh run.": "गेम अभी उपलब्ध नहीं है। नई रन के लिए जल्द वापस आएँ।",
       "Order confirm ho gaya! Aapka reward neeche hai.": "ऑर्डर कन्फ़र्म हो गया! आपका रिवॉर्ड नीचे है।",
       "Aapka order successfully place ho gaya hai.": "आपका ऑर्डर सफलतापूर्वक प्लेस हो गया है।",
       "This is a test order. It will not be prepared or earn rewards.": "यह टेस्ट ऑर्डर है। इसे तैयार नहीं किया जाएगा और कोई रिवॉर्ड नहीं मिलेगा।",
@@ -454,6 +612,11 @@
       "Pickup at Shop 10, Pearl Oasis Building, Pathanwadi, Malad East. Pay at the store and track readiness from Your Orders.": "पिकअप: Shop 10, Pearl Oasis Building, Pathanwadi, Malad East। स्टोर पर पेमेंट करें और Your Orders में तैयार होने का स्टेटस देखें।"
     }
   };
+
+  const foldedDictionaries = Object.fromEntries(Object.entries(languages).map(([key, entries]) => [
+    key,
+    Object.fromEntries(Object.entries(entries).map(([source, translated]) => [source.toLocaleLowerCase(), translated]))
+  ]));
 
   const sourceText = new WeakMap();
   const lastText = new WeakMap();
@@ -489,7 +652,8 @@
     if (!phrase) return phrase;
     if (target === "en") return englishOverrides[phrase] || phrase;
     const dictionary = languages[target] || languages.hinglish;
-    if (dictionary[phrase]) return dictionary[phrase];
+    const direct = dictionary[phrase] ?? foldedDictionaries[target]?.[phrase.toLocaleLowerCase()];
+    if (direct !== undefined) return direct;
     let match = phrase.match(/^(\d+) completed (orders?)$/i);
     if (match) return target === "hi" ? `${match[1]} ऑर्डर पूरे` : `${match[1]} completed orders`;
     match = phrase.match(/^(\d+) (orders?) to unlock$/i);
@@ -502,6 +666,20 @@
     if (match) return target === "hi" ? `${match[1] ? "अगला राउंड · " : ""}ऑर्डर ${match[2]}` : `${match[1] ? "AGLA ROUND · " : "ORDER "}${match[2]}`;
     match = phrase.match(/^(\d+) upcoming rewards$/i);
     if (match) return target === "hi" ? `${match[1]} आने वाले रिवॉर्ड` : `${match[1]} upcoming rewards`;
+    match = phrase.match(/^(UP NEXT · )?(NEXT ROUND · )?ORDER (\d+)$/i);
+    if (match) return target === "hi" ? `${match[1] || match[2] ? "अगला रिवॉर्ड · " : "ऑर्डर "}${match[3]}` : `${match[1] || match[2] ? "AGLA REWARD · " : "ORDER "}${match[3]}`;
+    match = phrase.match(/^(\d+) ITEMS?$/i);
+    if (match) return target === "hi" ? `${match[1]} आइटम` : `${match[1]} ITEMS`;
+    match = phrase.match(/^(\d+) items?$/i);
+    if (match) return target === "hi" ? `${match[1]} आइटम` : `${match[1]} items`;
+    match = phrase.match(/^(\d+) dishes found$/i);
+    if (match) return target === "hi" ? `${match[1]} डिश मिलीं` : `${match[1]} dishes mile`;
+    match = phrase.match(/^Opens (today|tomorrow) at (.+)$/i);
+    if (match) return target === "hi" ? `${match[1].toLowerCase() === "today" ? "आज" : "कल"} ${match[2]} बजे खुलेगा` : `${match[1].toLowerCase() === "today" ? "Aaj" : "Kal"} ${match[2]} baje khulega`;
+    match = phrase.match(/^On ₹([\d,]+) food subtotal · combos count$/i);
+    if (match) return target === "hi" ? `₹${match[1]} के खाने के सबटोटल पर · कॉम्बो भी गिने जाएँगे` : `₹${match[1]} food subtotal par · combos bhi count honge`;
+    match = phrase.match(/^TEST ORDER ·\s*(.*)$/i);
+    if (match) return `${target === "hi" ? "टेस्ट ऑर्डर · " : "TEST ORDER · "}${match[1]}`;
     match = phrase.match(/^Add ₹([\d,]+) more for FREE DELIVERY!?$/i);
     if (match) return target === "hi" ? `मुफ़्त डिलीवरी के लिए ₹${match[1]} और जोड़ें!` : `FREE DELIVERY ke liye ₹${match[1]} aur add karein!`;
     match = phrase.match(/^(Add|Remove one|Decrease|Increase) (.+?)(?: to cart| for ₹([\d,.]+))?$/i);
@@ -530,7 +708,7 @@
   function shouldSkipText(node) {
     const parent = node.parentElement;
     if (!parent) return true;
-    if (parent.closest("script,style,noscript,[data-no-translate],.menu-card h3,.combo-menu-card h3,.home-combo-card h2,.home-saved-address .address-name,.order-history-item-copy strong,.journey-card > strong")) return true;
+    if (parent.closest("script,style,noscript,[data-no-translate],.menu-card h3,.combo-menu-card h3,.home-combo-card h2,.home-saved-address strong,.saved-address-card header strong,.saved-address-card p,.order-history-item-copy strong,.journey-card > strong,.footer-block p")) return true;
     return false;
   }
 

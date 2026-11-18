@@ -3104,7 +3104,7 @@ body { background:#fbf7f1; color:var(--premium-ink); }
 .test-order-notice{margin:10px 0;padding:11px 13px;border:1px solid #f1c66e;border-radius:12px;background:#fff8e8;color:#754c13;font-size:11px;font-weight:800;line-height:1.45}
 
 /* Keep the last menu rows clear of both the floating cart and fixed section bar. */
-body { padding-bottom: calc(148px + env(safe-area-inset-bottom)); }
+body { padding-bottom: calc(82px + env(safe-area-inset-bottom)); }
 .floating-cart {
   position: fixed;
   top: auto;

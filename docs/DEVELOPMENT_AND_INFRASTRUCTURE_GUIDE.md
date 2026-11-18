@@ -16,7 +16,7 @@ This is the project's canonical development and infrastructure guide. Update it 
 | Area | Current implementation |
 |---|---|
 | Customer site | Static HTML, CSS, and browser JavaScript; single-page customer experience in `index.html` |
-| Customer language | Hinglish by default, with Hinglish/Hindi/English selector in Profile; preference saved in browser local storage and applied to customer UI, including dynamically rendered text |
+| Customer language | Hinglish by default, with Hinglish/Hindi/English selector in Profile; preference saved in browser local storage and applied to customer UI, navigation, ordering status, menu/category controls, account/rewards/orders, game, and footer, including dynamically rendered text |
 | Admin and staff | Separate pages and browser modules: `admin.html`/`admin.js`, `staff.html`/`staff.js` |
 | Hosting | Firebase Hosting; `firebase.json` publishes the repository root except ignored paths |
 | Backend | Firebase Cloud Functions, second-generation callable functions and a Firestore document trigger |
@@ -66,7 +66,7 @@ flowchart TD
 | `index.html` | Customer home, menu, cart, checkout, account, order history, and rewards page markup; also loads Google tag and FCM client setup |
 | `style.css` | Shared customer presentation and responsive layouts |
 | `script.js` | Customer interactions, Firebase account flow, cart, checkout, address selection, order/reward display, and notification opt-in; cart and rewards screen share the same completed-order milestone calculation |
-| `customer-language.js` | Customer-only Hinglish/Hindi/English UI translations, persisted language preference, and localized order-success reward message; product names and customer-entered address text are preserved |
+| `customer-language.js` | Customer-only Hinglish/Hindi/English UI translations, persisted language preference, case-insensitive dynamic label translations, and localized order-success reward message; product names, configured reward titles, and customer-entered address text are preserved |
 | `menu.js` | Initial menu and combo catalog data exposed to the customer page and staff tools |
 | `rewards-config.js` | Local fallback/default reward configuration; live configuration is also fetched from Functions |
 | `craving-dash.js` | Customer game and reward interactions through callable Functions |
