@@ -1692,6 +1692,19 @@ body.checkout-open {
   font-size: 14px;
 }
 
+.order-success-reward {
+  margin: 0 0 18px;
+  padding: 15px 16px;
+  border: 1px solid #e9bf68;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #fff4d5, #fffaf0 56%, #f7e1b0);
+  color: #61271f;
+  font: 900 16px/1.5 "Montserrat", sans-serif;
+  box-shadow: 0 10px 26px rgba(160, 100, 23, .12);
+}
+
+.order-success-reward[hidden] { display: none; }
+
 .order-success-id {
   padding: 15px;
   margin-bottom: 16px;
@@ -1724,7 +1737,7 @@ body.checkout-open {
   border: 0;
   border-radius: 12px;
   padding: 14px 18px;
-  background: #111;
+  background: linear-gradient(105deg, #a90d19, #d51019);
   color: #fff;
   font-weight: 800;
   cursor: pointer;
@@ -3118,6 +3131,8 @@ body { padding-bottom: calc(148px + env(safe-area-inset-bottom)); }
 .rewards-journey-heading h2 { color: var(--premium-ink); font-size: 21px; }
 .rewards-order-count { border: 1px solid #f0dfc8; background: #fff7e8; color: #805a2d; }
 .rewards-journey-note { margin: 8px 0 14px; font-size: 11px; }
+.order-rewards-followup { margin: 0 0 13px; padding: 11px 13px; border: 1px solid #e8c96c; border-radius: 13px; background: linear-gradient(110deg,#fff5d9,#fffaf0); color: #75402a; font-size: 12px; font-weight: 750; line-height: 1.5; }
+.order-rewards-followup[hidden] { display: none; }
 .rewards-journey-cards { grid-template-columns: 1fr; gap: 9px; }
 .journey-card { min-height: 0; gap: 7px; padding: 14px; }
 .journey-card-next { border-color: #e8c995; background: linear-gradient(140deg,#fff7e8 0%,#fffdf9 72%); box-shadow: 0 7px 18px rgba(150,103,43,.08); }
@@ -3272,6 +3287,13 @@ main { width: 100%; min-width: 0; }
 .rewards-journey-heading > div,.journey-card { min-width: 0; }
 .rewards-journey-heading h2 { line-height: 1.2; }
 .profile-content { display: grid; gap: 14px; }
+.language-preference-card { display: grid; grid-template-columns: minmax(0,1fr) minmax(150px,.55fr); align-items: center; gap: 8px 16px; margin: 0 0 18px; padding: 18px; border: 1px solid var(--premium-line); border-radius: 17px; background: linear-gradient(135deg,#fffdfa,#fff4e8); box-shadow: 0 8px 22px rgba(66,39,26,.05); }
+.language-preference-card > div { grid-column: 1; grid-row: 1 / span 2; }
+.language-preference-card h2 { margin-top: 4px; font: 850 16px/1.25 "Montserrat",sans-serif; }
+.language-preference-card p { margin-top: 4px; color: var(--muted); font-size: 12px; }
+.language-preference-card label { grid-column: 2; grid-row: 1; color: var(--muted); font-size: 9px; font-weight: 900; letter-spacing: .08em; }
+.language-preference-card select { grid-column: 2; grid-row: 2; align-self: start; min-height: 42px; padding: 0 12px; border: 1px solid var(--premium-line); border-radius: 11px; background: #fff; color: var(--premium-ink); font: 750 13px "DM Sans",sans-serif; }
+@media (max-width: 560px) { .language-preference-card { grid-template-columns: minmax(0,1fr) 125px; gap: 8px 10px; padding: 15px; } .language-preference-card h2 { font-size: 14px; } .language-preference-card p { font-size: 10px; } .language-preference-card select { min-height: 40px; font-size: 12px; } }
 .address-book { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--premium-line); }
 .address-book-heading { align-items: end; }
 .saved-address-card p { overflow-wrap: anywhere; }

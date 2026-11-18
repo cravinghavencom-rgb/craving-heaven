@@ -1,6 +1,6 @@
 # Craving Heaven Website — Development and Infrastructure Guide
 
-**Prepared:** 6 November 2026 — notifications deployed
+**Prepared:** 18 November 2026 — customer language preference and order-success rewards
 **Repository:** `craving-heaven` (`main`)  
 **Firebase project configured by this checkout:** `craving-heaven-e2e94`  
 **Firebase Hosting site configured by this checkout:** `craving-heaven-e2e94`
@@ -16,6 +16,7 @@ This is the project's canonical development and infrastructure guide. Update it 
 | Area | Current implementation |
 |---|---|
 | Customer site | Static HTML, CSS, and browser JavaScript; single-page customer experience in `index.html` |
+| Customer language | Hinglish by default, with Hinglish/Hindi/English selector in Profile; preference saved in browser local storage and applied to customer UI, including dynamically rendered text |
 | Admin and staff | Separate pages and browser modules: `admin.html`/`admin.js`, `staff.html`/`staff.js` |
 | Hosting | Firebase Hosting; `firebase.json` publishes the repository root except ignored paths |
 | Backend | Firebase Cloud Functions, second-generation callable functions and a Firestore document trigger |
@@ -48,7 +49,6 @@ flowchart TD
   Customer --> AppCheck[Firebase App Check<br/>reCAPTCHA Enterprise]
   Customer --> FCM[Firebase Cloud Messaging client]
   Functions -->|order status trigger| Firestore
-  Customer --> BrowserGPS[Browser Geolocation API]
 ```
 
 **Customer order flow:** the browser builds the cart and asks the `createOrder` callable to create the order. The server checks the authenticated customer, order availability/test mode, active catalog and reward rules, prices/quantities, delivery rules, points, and reward eligibility before writing. Website test orders are stored separately from live customer orders. The `onOrderStatusChanged` trigger updates loyalty records after relevant order status transitions.
@@ -66,6 +66,7 @@ flowchart TD
 | `index.html` | Customer home, menu, cart, checkout, account, order history, and rewards page markup; also loads Google tag and FCM client setup |
 | `style.css` | Shared customer presentation and responsive layouts |
 | `script.js` | Customer interactions, Firebase account flow, cart, checkout, address selection, order/reward display, and notification opt-in; cart and rewards screen share the same completed-order milestone calculation |
+| `customer-language.js` | Customer-only Hinglish/Hindi/English UI translations, persisted language preference, and localized order-success reward message; product names and customer-entered address text are preserved |
 | `menu.js` | Initial menu and combo catalog data exposed to the customer page and staff tools |
 | `rewards-config.js` | Local fallback/default reward configuration; live configuration is also fetched from Functions |
 | `craving-dash.js` | Customer game and reward interactions through callable Functions |

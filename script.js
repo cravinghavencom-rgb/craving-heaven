@@ -825,6 +825,10 @@ async function handlePlaceOrderClick() {
 
 
   function setAppScreen(screenName) {
+    if (screenName !== "rewards") {
+      const orderRewardsFollowup = document.getElementById("orderRewardsFollowup");
+      if (orderRewardsFollowup) orderRewardsFollowup.hidden = true;
+    }
     document.querySelectorAll("[data-app-screen]").forEach(section => {
       section.hidden = section.dataset.appScreen !== screenName;
     });
@@ -1568,11 +1572,14 @@ const orderSuccessClose =
 const orderSuccessId =
   document.getElementById("orderSuccessId");
 const orderSuccessNote = document.getElementById("orderSuccessNote");
+const orderSuccessReward = document.getElementById("orderSuccessReward");
+let orderSuccessWasTest = false;
 
 
-function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false, addressLabel = "", displayOrderNumber = "", isTestOrder = false) {
+function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false, addressLabel = "", displayOrderNumber = "", isTestOrder = false, orderData = null, appliedReward = null) {
 
   if (!orderSuccessOverlay) return;
+  orderSuccessWasTest = isTestOrder;
 
   if (orderSuccessId) {
     const prefix = orderType === "pickup" ? "PK" : "DL";
@@ -1580,13 +1587,24 @@ function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false,
   }
   if (orderSuccessNote) {
     orderSuccessNote.textContent = isTestOrder
-      ? "TEST ORDER ONLY — it is saved separately and will not be prepared, sent to staff, charged, or earn Craving Points."
+      ? window.CustomerLanguage?.t("TEST ORDER ONLY — it is saved separately and will not be prepared, sent to staff, charged, or earn Craving Points.") || "TEST ORDER ONLY — it is saved separately and will not be prepared, sent to staff, charged, or earn Craving Points."
       : orderType === "pickup"
-      ? "Pickup at Shop 10, Pearl Oasis Building, Pathanwadi, Malad East. Pay at the store and track readiness from Your Orders."
-      : `${addressSaved ? `Your ${addressLabel || "delivery"} address is saved to your account. ` : ""}Track your order anytime from the Orders screen.`;
+      ? window.CustomerLanguage?.t("Pickup at Shop 10, Pearl Oasis Building, Pathanwadi, Malad East. Pay at the store and track readiness from Your Orders.") || "Pickup at Shop 10, Pearl Oasis Building, Pathanwadi, Malad East. Pay at the store and track readiness from Your Orders."
+      : `${addressSaved ? `${window.CustomerLanguage?.t("Your delivery address is saved to your account.") || "Your delivery address is saved to your account."} ` : ""}${window.CustomerLanguage?.t("Track your order anytime from the Orders screen.") || "Track your order anytime from the Orders screen."}`;
   }
+  const rewardMessage = !isTestOrder ? window.CustomerLanguage?.rewardMessage(orderData, appliedReward) || "" : "";
+  if (orderSuccessReward) {
+    orderSuccessReward.hidden = !rewardMessage;
+    orderSuccessReward.textContent = rewardMessage;
+  }
+  const successText = orderSuccessOverlay.querySelector(".order-success-text");
+  if (successText) successText.textContent = isTestOrder
+    ? window.CustomerLanguage?.t("This is a test order. It will not be prepared or earn rewards.") || "This is a test order. It will not be prepared or earn rewards."
+    : rewardMessage
+      ? window.CustomerLanguage?.t("Order confirm ho gaya! Aapka reward neeche hai.") || "Order confirm ho gaya! Aapka reward neeche hai."
+      : window.CustomerLanguage?.t("Aapka order successfully place ho gaya hai.") || "Aapka order successfully place ho gaya hai.";
   const successTitle = document.getElementById("orderSuccessTitle");
-  if (successTitle) successTitle.textContent = isTestOrder ? "TEST ORDER PLACED" : "ORDER PLACED!";
+  if (successTitle) successTitle.textContent = window.CustomerLanguage?.t(isTestOrder ? "TEST ORDER PLACED" : "ORDER PLACED!") || (isTestOrder ? "TEST ORDER PLACED" : "ORDER PLACED!");
 
   orderSuccessOverlay.classList.add("open");
 
@@ -1619,6 +1637,15 @@ function closeOrderSuccess() {
   document.body.classList.remove(
     "order-success-open"
   );
+  const orderRewardsFollowup = document.getElementById("orderRewardsFollowup");
+  if (orderRewardsFollowup) {
+    const followupCopy = orderSuccessWasTest
+      ? "This test order will not count toward rewards."
+      : "Your new order will count toward the next reward after delivery or pickup.";
+    orderRewardsFollowup.textContent = window.CustomerLanguage?.t(followupCopy) || followupCopy;
+    orderRewardsFollowup.hidden = false;
+  }
+  setAppScreen("rewards");
 }
 
 
@@ -1628,7 +1655,6 @@ if (orderSuccessClose) {
     "click",
     () => {
       closeOrderSuccess();
-      setAppScreen("orders");
     }
   );
 }
@@ -2018,6 +2044,9 @@ async function continueToOrder() {
     });
     const order = response.data;
     if (!order?.orderId || !Array.isArray(order.items)) throw new Error("The order service returned an invalid confirmation.");
+    const claimedReward = order.claimedReward || (selectedMilestoneRewardId
+      ? (currentLoyaltyAccount.availableRewards || []).find(item => (item.ticketId || item.id) === selectedMilestoneRewardId) || null
+      : null);
     if (order.welcomeUsed === true && user.uid) {
       try {
         localStorage.setItem("cravingHeavenLastCustomerUid_v1", user.uid);
@@ -2041,7 +2070,7 @@ async function continueToOrder() {
     closeCheckout();
     closeCart();
     render();
-    openOrderSuccess(order.orderId, pickup ? "pickup" : "delivery", order.addressSaved === true, checkoutAddressLabel?.value || "", order.orderNumber || "", order.isTestOrder === true);
+    openOrderSuccess(order.orderId, pickup ? "pickup" : "delivery", order.addressSaved === true, checkoutAddressLabel?.value || "", order.orderNumber || "", order.isTestOrder === true, order, claimedReward);
     refreshAccountScreens(currentCustomerUser(), { force: true });
   } catch (error) {
     console.error("Order creation failed:", error);

@@ -210,6 +210,7 @@
       <section class="rewards-journey" aria-labelledby="rewardsJourneyTitle">
         <div class="rewards-journey-heading"><div><span class="section-kicker">YOUR ORDER JOURNEY</span><h2 id="rewardsJourneyTitle">Your next rewards</h2></div><span class="rewards-order-count" id="rewardOrderCount">0 completed orders</span></div>
         <p class="rewards-journey-note">Every completed order brings your next treat closer. Free food rewards are valid for 7 days.</p>
+        <p class="order-rewards-followup" id="orderRewardsFollowup" hidden></p>
         <div id="rewardsJourneyCards" class="rewards-journey-cards"><div class="rewards-login-hint">Sign in to see your next rewards.</div></div>
       </section>
     </section>
@@ -217,6 +218,15 @@
     <section id="screen-profile" class="app-screen account-screen" data-app-screen="profile" aria-labelledby="profileTitle" hidden>
       <div class="account-heading"><span class="section-kicker">YOUR ACCOUNT</span><h1 id="profileTitle">Profile</h1><p>Manage your account and discover member rewards.</p></div>
       <div id="profileContent" class="profile-content"></div>
+      <section class="language-preference-card" aria-labelledby="customerLanguageTitle">
+        <div><span class="section-kicker">LANGUAGE</span><h2 id="customerLanguageTitle">Choose your language</h2><p>Your choice is saved on this device.</p></div>
+        <label for="customerLanguageSelect">WEBSITE LANGUAGE</label>
+        <select id="customerLanguageSelect" aria-label="Website language">
+          <option value="hinglish">Hinglish</option>
+          <option value="hi">हिन्दी</option>
+          <option value="en">English</option>
+        </select>
+      </section>
       <section class="address-book" aria-labelledby="addressBookTitle">
         <div class="address-book-heading"><div><span class="section-kicker">DELIVERY DETAILS</span><h2 id="addressBookTitle">Saved Addresses</h2></div><button type="button" class="account-secondary-button" id="addAddressButton">LOGIN TO ADD ADDRESS</button></div>
         <div id="savedAddresses" class="saved-addresses"></div>
@@ -651,6 +661,8 @@
       Your order has been received successfully.
     </p>
 
+    <div class="order-success-reward" id="orderSuccessReward" role="status" hidden></div>
+
     <div class="order-success-id">
       <span>ORDER ID</span>
       <strong id="orderSuccessId">#CH-0000</strong>
@@ -665,7 +677,7 @@
       class="order-success-close"
       id="orderSuccessClose"
     >
-      DONE
+      See my next reward
     </button>
 
   </section>
@@ -722,7 +734,8 @@
 
 <script src="rewards-config.js?v=20261021-first-order-gift" defer></script>
 <script src="menu.js?v=20261027-combo-webp" defer></script>
-<script src="script.js?v=20261117-manual-address-only-v1" defer></script>
+<script src="customer-language.js?v=20261118-hinglish-language-v1" defer></script>
+<script src="script.js?v=20261118-order-reward-flow-v1" defer></script>
 <script src="craving-dash.js?v=20261105-pagespeed-opt-v2" defer></script>
 </body>
 </html>
