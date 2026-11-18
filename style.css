@@ -3437,3 +3437,89 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 @media (max-width: 650px) {
   .game-coming-soon-card { min-height: 320px; justify-content: center; padding: 26px 22px; border-radius: 22px; }
 }
+
+/* Home polish: compact delivery control and visible menu shortcuts without sideways scrolling. */
+.home-delivery-picker {
+  gap: 11px;
+  min-height: 62px;
+  padding: 8px 11px 8px 13px;
+  border-color: #eadfd4;
+  border-radius: 17px;
+  background: linear-gradient(135deg, #fffdfa, #fff8f0);
+  box-shadow: 0 5px 16px rgba(55,33,24,.055);
+}
+.home-delivery-picker > svg {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  padding: 9px;
+  border-radius: 13px;
+  background: #fff0e8;
+  stroke: #aa1820;
+}
+.home-delivery-copy { flex: 1 1 auto; gap: 3px; }
+.home-delivery-copy > span { color: #8e7669; font-size: 8px; letter-spacing: .12em; }
+.home-delivery-copy strong { overflow: hidden; color: #30231e; font-size: 13px; font-weight: 900; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.home-delivery-copy small { overflow: hidden; color: #83746b; font-size: 10px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.home-delivery-chevron { display: grid; flex: 0 0 30px; width: 30px; height: 30px; place-items: center; margin: 0; border-radius: 10px; background: #f5ebe1; color: #773b33; font-size: 17px; }
+.home-quick-categories {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: min(1180px, calc(100% - 40px));
+  margin: 16px auto 0;
+  padding: 0;
+  overflow: visible;
+}
+.home-quick-categories button {
+  display: flex;
+  min-width: 0;
+  min-height: 58px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 11px;
+  padding: 8px 13px;
+  border: 1px solid #eee2d7;
+  border-radius: 16px;
+  background: #fff;
+  color: #392821;
+  font: 850 12px "DM Sans", sans-serif;
+  box-shadow: 0 5px 14px rgba(58,34,24,.045);
+}
+.home-quick-categories button > span { display: grid; flex: 0 0 38px; width: 38px; height: 38px; place-items: center; border-radius: 12px; background: #fff3df; font-size: 20px; }
+.home-quick-categories .home-quick-all {
+  grid-column: 1 / -1;
+  min-height: 48px;
+  justify-content: space-between;
+  margin: 2px 0 0;
+  padding: 0 17px;
+  border-color: #ae1019;
+  border-radius: 13px;
+  background: linear-gradient(110deg, #a90d17, #d71920);
+  color: #fff;
+  font-size: 11px;
+  letter-spacing: .045em;
+  box-shadow: 0 8px 18px rgba(181,18,27,.18);
+}
+.home-quick-categories .home-quick-all > span { display: inline; flex: initial; width: auto; height: auto; border-radius: 0; background: transparent; color: inherit; font-size: 17px; }
+.home-quick-categories button:hover,.home-quick-categories button:focus-visible { transform: translateY(-1px); border-color: #d8b27a; outline: 0; background-color: #fff8eb; }
+.home-quick-categories .home-quick-all:hover,.home-quick-categories .home-quick-all:focus-visible { background: #8f0c15; }
+@media (max-width: 650px) {
+  .home-delivery-picker { min-height: 58px; gap: 8px; padding: 7px 8px 7px 9px; border-radius: 15px; }
+  .home-delivery-picker > svg { width: 34px; height: 34px; flex-basis: 34px; padding: 8px; }
+  .home-delivery-copy > span { font-size: 7px; }
+  .home-delivery-copy strong { font-size: 11px; }
+  .home-delivery-copy small { font-size: 9px; }
+  .home-delivery-chevron { flex-basis: 27px; width: 27px; height: 27px; }
+  .home-quick-categories { width: 100%; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; margin: 12px 0 0; padding: 0; overflow: visible; }
+  .home-quick-categories button { min-height: 52px; padding: 7px 9px; font-size: 11px; }
+  .home-quick-categories button > span { flex-basis: 34px; width: 34px; height: 34px; font-size: 18px; }
+  .home-quick-categories .home-quick-all { min-height: 46px; grid-column: 1 / -1; margin: 1px 0 0; padding-inline: 14px; }
+}
+@media (max-width: 380px) {
+  .home-delivery-picker { gap: 6px; padding-inline: 7px; }
+  .home-delivery-picker > svg { width: 31px; height: 31px; flex-basis: 31px; }
+  .home-delivery-chevron { flex-basis: 24px; width: 24px; height: 24px; }
+  .home-quick-categories { gap: 7px; }
+  .home-quick-categories button { gap: 7px; padding-inline: 7px; font-size: 10px; }
+}
