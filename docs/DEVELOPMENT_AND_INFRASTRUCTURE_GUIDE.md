@@ -195,18 +195,6 @@ firebase deploy --only firestore:rules,firestore:indexes --project craving-heave
 
 Only deploy functions/rules/indexes when the relevant code or configuration changed. A Hosting-only UI change does not require a Functions deployment. Always confirm the selected project before deployment; `firebase.json` and `.firebaserc` are configured for `craving-heaven-e2e94`.
 
-### Restore point for the 6 November 2026 release
-
-- Git source checkpoint: tag `restore-20261106-1241` (commit `b97d83f`).
-- Previous public Hosting content is copied to the `restore-261106-1241` preview channel, retained through 6 December 2026.
-- Restore the previous public website during that period with:
-
-```powershell
-firebase hosting:clone craving-heaven-e2e94:restore-261106-1241 craving-heaven-e2e94:live
-```
-
-This restores Hosting content only. It does not roll back Cloud Functions; the Git tag preserves the deployed source checkpoint for function recovery.
-
 ### Restore point for the 18 November 2026 language release
 
 - Git source commit: `9b1647d` (`Add customer language and order reward flow`); previous source commit: `945e8b5`.
@@ -230,6 +218,25 @@ firebase hosting:clone craving-heaven-e2e94:rollback-20261118-pre-ui-fixes cravi
 ```
 
 This restores Hosting content only; it does not change Firestore data or Cloud Functions.
+
+### Restore point for the 18 November 2026 cart cleanup
+
+- Live source commit: `01cb617` (`Simplify cart reward progress and delivery totals`), pushed to `origin/main`.
+- Git source backup tag: `live-backup-20261118-pre-cart-cleanup` points to pre-change commit `913d052`.
+- Before deployment, the previous live Hosting version was cloned to `rollback-20261118-cart-cleanup` at https://craving-heaven-e2e94--rollback-20261118-cart-cleanup-7m0vy68x.web.app.
+- This Hosting rollback channel expires 21 November 2026 at 16:21 UTC (21:51 India time). Restore it before expiry with:
+
+```powershell
+firebase hosting:clone craving-heaven-e2e94:rollback-20261118-cart-cleanup craving-heaven-e2e94:live --project craving-heaven-e2e94
+```
+
+The cart progress now states only the number of completed orders until the next reward. A selected free-delivery reward is shown as a delivery charge offset by a matching discount, and its duplicate green applied banner was removed. Hosting only was deployed; reward eligibility, order counting, points, Firestore, and Functions were not changed.
+
+### Backup retention cleanup (18 November 2026)
+
+- Deleted Firebase Hosting preview channels `pre-reward-261106` and `restore-261106-1241` (6 November backups).
+- Deleted Git tags `live-rewards-five-20261106`, `restore-20261106-1241`, and `stable-before-security` (6 November and 19 September backups).
+- Recent November 17–18 restore points were retained. New cart-cleanup Hosting backup is configured to expire after three days.
 
 ### Restore point for the 18 November 2026 home header and category layout
 
