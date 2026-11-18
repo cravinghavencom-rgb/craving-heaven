@@ -1,6 +1,6 @@
 # Craving Heaven Website — Development and Infrastructure Guide
 
-**Prepared:** 18 November 2026 — customer language preference and order-success rewards
+**Prepared:** 18 November 2026 — customer language and order-success update deployed
 **Repository:** `craving-heaven` (`main`)  
 **Firebase project configured by this checkout:** `craving-heaven-e2e94`  
 **Firebase Hosting site configured by this checkout:** `craving-heaven-e2e94`
@@ -206,6 +206,18 @@ firebase hosting:clone craving-heaven-e2e94:restore-261106-1241 craving-heaven-e
 ```
 
 This restores Hosting content only. It does not roll back Cloud Functions; the Git tag preserves the deployed source checkpoint for function recovery.
+
+### Restore point for the 18 November 2026 language release
+
+- Git source commit: `9b1647d` (`Add customer language and order reward flow`); previous source commit: `945e8b5`.
+- Before release, the previous live Hosting version was cloned to preview channel `rollback-20261118-language` at https://craving-heaven-e2e94--rollback-20261118-language-6ov2yfm1.web.app.
+- This rollback channel expires 25 November 2026 at 06:03 UTC. Restore the saved website before then with:
+
+```powershell
+firebase hosting:clone craving-heaven-e2e94:rollback-20261118-language craving-heaven-e2e94:live --project craving-heaven-e2e94
+```
+
+This command rolls back Hosting only; it does not change Firestore data or Cloud Functions.
 
 Local emulator start command is `start-local-emulators.cmd`. Avoid using real customer accounts or live order data for development. The local demo OTP-free session is guarded to the emulator project.
 
