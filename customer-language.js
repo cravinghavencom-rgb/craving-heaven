@@ -658,8 +658,8 @@
     if (match) return target === "hi" ? `${match[1]} ऑर्डर पूरे` : `${match[1]} completed orders`;
     match = phrase.match(/^(\d+) (orders?) to unlock$/i);
     if (match) return target === "hi" ? `${match[1]} ऑर्डर में अनलॉक होगा` : `${match[1]} order${match[1] === "1" ? "" : "s"} mein unlock hoga`;
-    match = phrase.match(/^(\d+) more completed orders? to unlock · added after delivery or pickup$/i);
-    if (match) return target === "hi" ? `${match[1]} और पूरे ऑर्डर के बाद अनलॉक होगा · डिलीवरी या पिकअप के बाद गिना जाएगा` : `${match[1]} aur completed order ke baad unlock hoga · delivery ya pickup ke baad count hoga`;
+    match = phrase.match(/^(\d+) more completed orders? to unlock(?: · added after delivery or pickup)?$/i);
+    if (match) return target === "hi" ? `${match[1]} और पूरे ऑर्डर के बाद अनलॉक होगा` : `${match[1]} aur completed order ke baad unlock hoga`;
     match = phrase.match(/^Locked · (\d+) (orders?) away$/i);
     if (match) return target === "hi" ? `लॉक है · ${match[1]} ऑर्डर बाकी` : `Locked · ${match[1]} order${match[1] === "1" ? "" : "s"} baaki`;
     match = phrase.match(/^(NEXT ROUND · )?ORDER (\d+)$/i);

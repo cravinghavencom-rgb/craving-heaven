@@ -1779,7 +1779,7 @@ function renderCheckoutSummary() {
     <div class="checkout-summary-item">
       <span>${isPickupSelected() ? "PICKUP" : "DELIVERY"}</span>
 
-      <strong class="${delivery === 0 ? "free" : ""}">
+      <strong class="${delivery === 0 && selectedReward?.kind !== "free-delivery" ? "free" : ""}">
         ${isPickupSelected() ? "NO CHARGE" : delivery === 0 ? "FREE" : money(delivery)}
       </strong>
     </div>
@@ -2912,7 +2912,7 @@ ${esc(offer.freeItem)}
   const ordersUntilReward = cartJourneyProgress.ordersRemaining;
   const rewardProgressPercent = ordersBetweenRewards ? Math.round(completedSinceReward / ordersBetweenRewards * 100) : 0;
   const cartRewardProgress = !isTestOrder && customerAuthStateResolved && isCustomerSignedIn() && loyaltyAccountLoaded && customerOnlineOrderHistoryLoaded && nextRewardMilestone
-    ? `<section class="cart-reward-progress" aria-label="Next Craving reward progress"><div class="cart-reward-progress-head"><span>YOUR NEXT CRAVING REWARD</span><strong>${completedRewardOrders} completed ${completedRewardOrders === 1 ? "order" : "orders"}</strong></div><b>${esc(nextRewardMilestone.title)}</b><div class="cart-reward-progress-track" role="progressbar" aria-label="Progress toward next reward" aria-valuemin="0" aria-valuemax="${ordersBetweenRewards}" aria-valuenow="${completedSinceReward}"><span style="width:${rewardProgressPercent}%"></span></div><small>${ordersUntilReward === 1 ? "1 more completed order" : `${ordersUntilReward} more completed orders`} to unlock · added after delivery or pickup</small></section>`
+    ? `<section class="cart-reward-progress" aria-label="Next Craving reward progress"><div class="cart-reward-progress-head"><span>YOUR NEXT CRAVING REWARD</span><strong>${completedRewardOrders} completed ${completedRewardOrders === 1 ? "order" : "orders"}</strong></div><b>${esc(nextRewardMilestone.title)}</b><div class="cart-reward-progress-track" role="progressbar" aria-label="Progress toward next reward" aria-valuemin="0" aria-valuemax="${ordersBetweenRewards}" aria-valuenow="${completedSinceReward}"><span style="width:${rewardProgressPercent}%"></span></div><small>${ordersUntilReward === 1 ? "1 more completed order" : `${ordersUntilReward} more completed orders`} to unlock</small></section>`
     : "";
   const testOrderNotice = isTestOrder ? `<p class="test-order-notice">TEST MODE · No payment is due. This order won’t be prepared or sent to staff; offers, rewards and points can’t be used or earned.</p>` : "";
   const pointsAvailable = loyaltyAccountLoaded && !isTestOrder ? Math.floor(Math.min(REWARDS_CONFIG.maxRedeemPointsPerOrder, pointsBalance, offerEligibleSubtotal * 10) / 100) * 100 : 0;
@@ -2936,8 +2936,10 @@ ${esc(offer.freeItem)}
     && nextRewardDefinition?.kind === "free-delivery"
     && getRewardMinimumSpend(nextRewardDefinition) >= Number(nextRewardDefinition.minimum || 0);
 
-  const deliveryProgress = delivery === 0
-    ? `<div class="free-progress free-progress-complete">${selectedReward?.kind === "free-delivery" ? `🎁 <strong>FREE DELIVERY REWARD APPLIED · SAVE ${money(DELIVERY_CHARGE)}</strong>` : "🎉 <strong>FREE DELIVERY!</strong>"}</div>`
+  const deliveryProgress = delivery === 0 && selectedReward?.kind === "free-delivery"
+    ? ""
+    : delivery === 0
+    ? `<div class="free-progress free-progress-complete">🎉 <strong>FREE DELIVERY!</strong></div>`
     : freeDeliveryRewardReady
     ? `<div class="free-progress free-progress-complete">🎁 <strong>YOUR FREE-DELIVERY REWARD IS READY · SELECT IT ABOVE</strong></div>`
     : subtotal < FREE_DELIVERY_THRESHOLD
@@ -2971,12 +2973,12 @@ ${esc(offer.freeItem)}
     <div class="sum-row">
       <span>DELIVERY</span>
       <strong class="${delivery === 0 ? "free" : ""}">
-        ${delivery === 0 ? "FREE" : money(delivery)}
+        ${selectedReward?.kind === "free-delivery" ? money(DELIVERY_CHARGE) : delivery === 0 ? "FREE" : money(delivery)}
       </strong>
     </div>
 
     ${promotionDiscount > 0 ? `<div class="sum-row sum-discount"><span>${selectedReward?.kind === "percent-discount" ? `ROYAL REWARD · ${Number(selectedReward.percent)}% OFF REGULAR ITEMS` : "OFFER SAVINGS"}</span><strong>−${money(promotionDiscount)}</strong></div>` : ""}
-    ${selectedReward?.kind === "free-delivery" ? `<div class="sum-row sum-discount"><span>REWARD DELIVERY SAVING</span><strong>${money(DELIVERY_CHARGE)}</strong></div>` : ""}
+    ${selectedReward?.kind === "free-delivery" ? `<div class="sum-row sum-discount"><span>FREE DELIVERY REWARD</span><strong>−${money(DELIVERY_CHARGE)}</strong></div>` : ""}
     ${pointsDiscount > 0 ? `<div class="sum-row sum-discount"><span>CRAVING POINTS REDEEMED</span><strong>−${money(pointsDiscount)}</strong></div>` : ""}
     ${selectedReward?.kind === "bonus-points" ? `<div class="sum-row sum-discount"><span>CRAVING POINTS BONUS</span><strong>+${selectedReward.points}</strong></div>` : ""}
     ${selectedReward?.kind === "double-points" ? `<div class="sum-row sum-discount"><span>DOUBLE CRAVING POINTS REWARD</span><strong>UP TO +${selectedReward.maxBonusPoints}</strong></div>` : ""}
