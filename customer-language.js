@@ -1,5 +1,5 @@
 (() => {
-  const STORAGE_KEY = "chCustomerLanguageV1";
+  const STORAGE_KEY = "chCustomerLanguageV2";
   const languages = {
     hinglish: {
       "DELIVER TO": "DELIVERY YAHAN",

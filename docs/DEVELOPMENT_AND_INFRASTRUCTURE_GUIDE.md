@@ -228,7 +228,7 @@ This restores Hosting content only; it does not change Firestore data or Cloud F
 firebase hosting:clone craving-heaven-e2e94:rollback-20261123-language-en craving-heaven-e2e94:live --project craving-heaven-e2e94
 ```
 
-This restores Hosting content only; it does not change Firestore data or Cloud Functions. The release sets English as the default for new visitors, adds English/Hinglish selection to the first-order welcome flyer, and keeps both choices available in Profile. Existing saved Hinglish preferences remain in effect until changed by the customer.
+This restores Hosting content only; it does not change Firestore data or Cloud Functions. The release sets English as the default, adds English/Hinglish selection to the first-order welcome flyer, and keeps both choices available in Profile. The new preference key makes English the initial choice for existing devices too; the selected language is then saved on that device.
 
 ### Restore point for the 18 November 2026 cart cleanup
 
