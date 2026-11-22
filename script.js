@@ -6,6 +6,8 @@ function optimizedComboImageUrl(image) {
 }
 let menuInitialized = false;
 let welcomeFlyerShownThisPage = false;
+let activeMenuTab = "menu";
+let activeProfileTab = "details";
 let customerOnlineOrderHistoryLoaded = false;
 let customerAuthStateResolved = false;
 let customerSessionType = "signed-out";
@@ -824,7 +826,44 @@ async function handlePlaceOrderClick() {
   }
 
 
+  function setMenuTab(tab = "menu") {
+    activeMenuTab = tab === "combos" ? "combos" : "menu";
+    document.querySelectorAll("[data-menu-tab]").forEach(button => {
+      const active = button.dataset.menuTab === activeMenuTab;
+      button.setAttribute("aria-selected", String(active));
+      button.classList.toggle("is-active", active);
+    });
+    document.querySelectorAll("[data-menu-panel]").forEach(panel => {
+      panel.hidden = panel.dataset.menuPanel !== activeMenuTab;
+    });
+    const categoryNavigation = document.getElementById("categoryNav");
+    if (categoryNavigation) categoryNavigation.hidden = activeMenuTab !== "menu" || !document.getElementById("screen-menu")?.classList.contains("is-active");
+  }
+
+  function setProfileTab(tab = "details") {
+    activeProfileTab = tab === "orders" ? "orders" : "details";
+    document.querySelectorAll("[data-profile-tab]").forEach(button => {
+      const active = button.dataset.profileTab === activeProfileTab;
+      button.setAttribute("aria-selected", String(active));
+      button.classList.toggle("is-active", active);
+    });
+    document.querySelectorAll("[data-profile-panel]").forEach(panel => {
+      panel.hidden = panel.dataset.profilePanel !== activeProfileTab;
+    });
+  }
+
   function setAppScreen(screenName) {
+    if (screenName === "offers") {
+      screenName = "menu";
+      activeMenuTab = "combos";
+    } else if (screenName === "menu") {
+      activeMenuTab = "menu";
+    } else if (screenName === "orders") {
+      screenName = "profile";
+      activeProfileTab = "orders";
+    } else if (screenName === "profile") {
+      activeProfileTab = "details";
+    }
     if (screenName !== "rewards") {
       const orderRewardsFollowup = document.getElementById("orderRewardsFollowup");
       if (orderRewardsFollowup) orderRewardsFollowup.hidden = true;
@@ -841,10 +880,12 @@ async function handlePlaceOrderClick() {
       if (active) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     });
-    if (categoryNavigation) categoryNavigation.hidden = screenName !== "menu";
+    setMenuTab(activeMenuTab);
+    setProfileTab(activeProfileTab);
+    if (categoryNavigation) categoryNavigation.hidden = screenName !== "menu" || activeMenuTab !== "menu";
     if (screenName === "game") window.dispatchEvent(new Event("craving-heaven:show-game"));
     window.scrollTo({ top: 0, behavior: "smooth" });
-    if (screenName === "orders" || screenName === "profile" || screenName === "rewards") refreshAccountScreens(currentCustomerUser());
+    if (screenName === "profile" || screenName === "rewards") refreshAccountScreens(currentCustomerUser());
   }
 
   const notificationDeepLinkScreen = /^#screen-(home|menu|offers|game|rewards|orders|profile)$/.exec(location.hash)?.[1];
@@ -3114,6 +3155,18 @@ document.addEventListener("click", async event => {
     saveCustomerProfile({ ...currentCustomerProfile, addresses }).then(prefillCheckoutFromDefaultAddress).catch(error => {
       console.error("Could not update default address:", error);
     });
+    return;
+  }
+
+  const menuTabButton = event.target.closest("[data-menu-tab]");
+  if (menuTabButton) {
+    setMenuTab(menuTabButton.dataset.menuTab);
+    return;
+  }
+
+  const profileTabButton = event.target.closest("[data-profile-tab]");
+  if (profileTabButton) {
+    setProfileTab(profileTabButton.dataset.profileTab);
     return;
   }
 

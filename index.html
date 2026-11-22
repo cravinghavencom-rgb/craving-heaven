@@ -11,7 +11,7 @@
   <link rel="preload" href="assets/fonts/dm-sans/latin-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/montserrat/latin-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" as="image" href="images/burgers/classic-crunchy-burger.webp" type="image/webp" fetchpriority="high">
-  <link rel="stylesheet" href="style.css?v=20261123-language-choice-v1">
+  <link rel="stylesheet" href="style.css?v=20261123-nav-cleanup-v1">
   <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-GD2EPLFYZP">
 </script>
@@ -175,14 +175,12 @@
       </div>
     </section>
 
-    <section id="screen-offers" class="app-screen account-screen" data-app-screen="offers" aria-labelledby="comboMenuTitle" hidden>
-      <section class="combo-menu-section" id="comboMenu" aria-labelledby="comboMenuTitle">
-        <div class="section-heading"><span class="section-kicker">MORE FLAVOUR · MORE VALUE</span><h2 id="comboMenuTitle">COMBO MENU</h2><p>COMPLETE MEALS AT A BETTER PRICE.</p></div>
-        <div class="combo-menu-grid" id="comboMenuGrid"></div>
-      </section>
-    </section>
-
     <section id="screen-menu" class="app-screen" data-app-screen="menu" aria-label="Food menu" hidden>
+    <nav class="menu-view-tabs" aria-label="Choose menu or combos" role="tablist">
+      <button type="button" id="menuItemsTab" role="tab" aria-selected="true" aria-controls="menuItemsPanel" data-menu-tab="menu">MENU</button>
+      <button type="button" id="menuCombosTab" role="tab" aria-selected="false" aria-controls="menuCombosPanel" data-menu-tab="combos">COMBOS</button>
+    </nav>
+    <div id="menuItemsPanel" class="menu-tab-panel" role="tabpanel" aria-labelledby="menuItemsTab" data-menu-panel="menu">
     <section class="menu-discovery" aria-label="Find food in the menu">
       <div class="menu-discovery-copy"><span class="section-kicker">CRAVING HEAVEN MENU</span><h1>Pick your favourites</h1><p>Choose a category or search for a dish.</p></div>
       <label class="menu-search-field"><span aria-hidden="true">⌕</span><input id="customerMenuSearch" type="search" placeholder="Search burgers, wings, fries…" autocomplete="off" aria-label="Search menu items"><button id="clearCustomerMenuSearch" type="button" aria-label="Clear menu search" hidden>×</button></label>
@@ -190,11 +188,13 @@
     </section>
 
     <div id="menuSections"></div>
-    </section>
-
-    <section id="screen-orders" class="app-screen account-screen" data-app-screen="orders" aria-labelledby="ordersTitle" hidden>
-      <div class="account-heading account-heading-with-action"><div><span class="section-kicker">YOUR CRAVING HEAVEN</span><h1 id="ordersTitle">Your Orders</h1><p>Track your recent orders and see what you enjoyed.</p></div><button type="button" class="account-secondary-button" data-reload-orders>REFRESH</button></div>
-      <div id="ordersContent" class="account-card"><div class="account-loading">Sign in to view your order history.</div></div>
+    </div>
+    <div id="menuCombosPanel" class="menu-tab-panel" role="tabpanel" aria-labelledby="menuCombosTab" data-menu-panel="combos" hidden>
+      <section class="combo-menu-section" id="comboMenu" aria-labelledby="comboMenuTitle">
+        <div class="section-heading"><span class="section-kicker">MORE FLAVOUR · MORE VALUE</span><h2 id="comboMenuTitle">COMBO MENU</h2><p>COMPLETE MEALS AT A BETTER PRICE.</p></div>
+        <div class="combo-menu-grid" id="comboMenuGrid"></div>
+      </section>
+    </div>
     </section>
 
     <section id="screen-rewards" class="app-screen account-screen" data-app-screen="rewards" aria-labelledby="rewardsTitle" hidden>
@@ -221,6 +221,11 @@
     </section>
 
     <section id="screen-profile" class="app-screen account-screen" data-app-screen="profile" aria-labelledby="profileTitle" hidden>
+      <nav class="profile-view-tabs" aria-label="Profile sections" role="tablist">
+        <button type="button" id="profileDetailsTab" role="tab" aria-selected="true" aria-controls="profileDetailsPanel" data-profile-tab="details">PROFILE</button>
+        <button type="button" id="profileOrdersTab" role="tab" aria-selected="false" aria-controls="profileOrdersPanel" data-profile-tab="orders">MY ORDERS</button>
+      </nav>
+      <div id="profileDetailsPanel" class="profile-tab-panel" role="tabpanel" aria-labelledby="profileDetailsTab" data-profile-panel="details">
       <div class="account-heading"><span class="section-kicker">YOUR ACCOUNT</span><h1 id="profileTitle">Profile</h1><p>Manage your account and discover member rewards.</p></div>
       <div id="profileContent" class="profile-content"></div>
       <section class="language-preference-card" aria-labelledby="customerLanguageTitle">
@@ -235,16 +240,19 @@
         <div class="address-book-heading"><div><span class="section-kicker">DELIVERY DETAILS</span><h2 id="addressBookTitle">Saved Addresses</h2></div><button type="button" class="account-secondary-button" id="addAddressButton">LOGIN TO ADD ADDRESS</button></div>
         <div id="savedAddresses" class="saved-addresses"></div>
       </section>
+      </div>
+      <div id="profileOrdersPanel" class="profile-tab-panel" role="tabpanel" aria-labelledby="profileOrdersTab" data-profile-panel="orders" hidden>
+        <div class="account-heading account-heading-with-action"><div><span class="section-kicker">YOUR CRAVING HEAVEN</span><h1 id="ordersTitle">Your Orders</h1><p>Track your recent orders and see what you enjoyed.</p></div><button type="button" class="account-secondary-button" data-reload-orders>REFRESH</button></div>
+        <div id="ordersContent" class="account-card"><div class="account-loading">Sign in to view your order history.</div></div>
+      </div>
     </section>
   </main>
 
   <nav class="customer-bottom-nav" aria-label="Customer sections">
     <button type="button" class="customer-nav-button is-active" data-screen="home" aria-current="page"><span aria-hidden="true">⌂</span><small>Home</small></button>
     <button type="button" class="customer-nav-button" data-screen="menu"><span aria-hidden="true">☰</span><small>Menu</small></button>
-    <button type="button" class="customer-nav-button" data-screen="offers"><span aria-hidden="true">✦</span><small>Combos</small></button>
-    <button type="button" class="customer-nav-button" data-screen="game"><span aria-hidden="true">🍔</span><small>Play</small></button>
+    <button type="button" class="customer-nav-button customer-nav-play" data-screen="game"><span aria-hidden="true">🍔</span><small>Play</small></button>
     <button type="button" class="customer-nav-button" data-screen="rewards"><span aria-hidden="true">★</span><small>Rewards</small></button>
-    <button type="button" class="customer-nav-button" data-screen="orders"><span aria-hidden="true">▤</span><small>Orders</small></button>
     <button type="button" class="customer-nav-button" data-screen="profile"><span aria-hidden="true">●</span><small>Profile</small></button>
   </nav>
 
@@ -738,8 +746,8 @@
 
 <script src="rewards-config.js?v=20261021-first-order-gift" defer></script>
 <script src="menu.js?v=20261027-combo-webp" defer></script>
-<script src="customer-language.js?v=20261123-english-default-v2" defer></script>
-<script src="script.js?v=20261123-english-default-v2" defer></script>
+<script src="customer-language.js?v=20261123-nav-cleanup-v1" defer></script>
+<script src="script.js?v=20261123-nav-cleanup-v1" defer></script>
 <script src="craving-dash.js?v=20261118-customer-ui-localization-v2" defer></script>
 </body>
 </html>

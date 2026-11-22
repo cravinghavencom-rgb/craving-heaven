@@ -1991,13 +1991,23 @@ button:disabled.checkout-button {
 /* Customer app navigation and account sections */
 [hidden] { display: none !important; }
 body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
-.customer-bottom-nav { position: fixed; z-index: 2100; left: 50%; bottom: 0; transform: translateX(-50%); display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); width: min(100%, 720px); padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); border: 1px solid #eee; border-bottom: 0; border-radius: 18px 18px 0 0; background: rgba(255,255,255,.97); box-shadow: 0 -8px 28px rgba(20,0,0,.12); backdrop-filter: blur(14px); }
+.customer-bottom-nav { position: fixed; z-index: 2100; left: 50%; bottom: 0; transform: translateX(-50%); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); width: min(100%, 720px); padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); border: 1px solid #eee; border-bottom: 0; border-radius: 18px 18px 0 0; background: rgba(255,255,255,.97); box-shadow: 0 -8px 28px rgba(20,0,0,.12); backdrop-filter: blur(14px); }
 .customer-nav-button { display: flex; min-width: 0; min-height: 52px; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 0; border-radius: 12px; background: transparent; color: #777; }
 .customer-nav-button > span { font-size: 19px; line-height: 1.15; }
 .customer-nav-button small { font-size: 9px; font-weight: 800; }
 .customer-nav-button.is-active { color: var(--red); background: #fff2f2; }
+.customer-nav-button.customer-nav-play { position:relative; gap:0; overflow:visible; transform:translateY(-7px); color:#70241e; }
+.customer-nav-play>span { display:grid; width:46px; height:46px; place-items:center; border:3px solid #fffaf7; border-radius:15px; background:linear-gradient(145deg,#c8161e,#75221d); color:#fff; font-size:24px; box-shadow:0 6px 15px rgba(124,31,26,.22); }
+.customer-nav-play small { margin-top:1px; }
+.customer-nav-play.is-active { background:transparent; }
 .floating-cart { bottom: calc(88px + env(safe-area-inset-bottom)); }
 .app-screen { min-height: 60vh; }
+.menu-view-tabs,.profile-view-tabs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; width:min(920px,calc(100% - 32px)); margin:16px auto 18px; padding:5px; border:1px solid #eee3dc; border-radius:15px; background:#f5eee8; }
+.menu-view-tabs button,.profile-view-tabs button { min-height:42px; border:0; border-radius:11px; background:transparent; color:#76675f; font:850 11px "DM Sans",sans-serif; letter-spacing:.08em; cursor:pointer; transition:background .18s ease,color .18s ease,box-shadow .18s ease; }
+.menu-view-tabs button.is-active,.profile-view-tabs button.is-active { background:#fff; color:#a60e14; box-shadow:0 3px 10px rgba(55,31,22,.09); }
+.menu-tab-panel,.profile-tab-panel { width:100%; min-width:0; }
+.profile-view-tabs { margin-top:0; }
+.profile-tab-panel[hidden],.menu-tab-panel[hidden] { display:none; }
 .home-dashboard-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; width: min(1040px, calc(100% - 32px)); margin: clamp(34px, 9vh, 92px) auto; }
 .home-dashboard-card { display: flex; min-height: 250px; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 12px; padding: 24px; border: 1px solid #eee; border-radius: 20px; background: #fff; color: #271b1b; text-align: left; box-shadow: 0 10px 30px rgba(30,15,15,.08); transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
 .home-dashboard-card:hover,.home-dashboard-card:focus-visible { transform: translateY(-3px); border-color: #e7b5b5; outline: 0; box-shadow: 0 16px 34px rgba(30,15,15,.12); }
@@ -2045,7 +2055,7 @@ body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 .game-round { padding:18px; }.game-timer { display:grid; width:52px; height:52px; align-content:center; justify-items:center; border-radius:16px; color:#fff; background:#b80808; }.game-timer strong { font-size:20px; }.game-timer small { font-size:8px; font-weight:900; }
 .game-ticket { display:grid; gap:8px; margin:12px 0 18px; padding:13px; border:1px dashed #d6b9a8; border-radius:14px; background:#fffaf5; }.game-ticket>span { color:#94523d; }.game-ticket>strong { display:flex; flex-wrap:wrap; gap:5px; }.game-ticket i { padding:6px 8px; border-radius:999px; color:#4a3027; background:#f4e8de; font-size:11px; font-style:normal; }.game-ticket>small { color:#736761; font-size:11px; }.game-deck-count { text-align:center; color:#98705e; }.game-food-card { display:grid; min-height:190px; place-content:center; justify-items:center; gap:10px; margin:10px 0; border:1px solid #efe1d5; border-radius:20px; background:radial-gradient(circle at 50% 30%,#fff0df,#fffaf5 63%,#fff); touch-action:pan-y; user-select:none; }.game-food-card .food-emoji { font-size:54px; }.game-food-card strong { font-size:18px; }.game-food-card small { color:#82716a; }.game-round-actions { display:grid; grid-template-columns:1fr 1.5fr; gap:8px; }.game-round-actions button { width:100%; }.game-round-meter { height:5px; margin-top:15px; overflow:hidden; border-radius:99px; background:#f0e7e0; }.game-round-meter span { display:block; height:100%; background:#b80808; transition:width .2s; }
 .game-promo-dialog { position:fixed; inset:0; width:min(440px,calc(100% - 28px)); max-width:none; max-height:calc(100dvh - 30px); margin:auto; padding:30px 24px 25px; overflow:auto; border:1px solid #efd7c7; border-radius:26px; background:radial-gradient(circle at 92% 0,#ffe2c9,transparent 33%),#fffaf6; color:#2a201d; text-align:center; box-shadow:0 24px 80px #0005; }.game-promo-dialog::backdrop { background:rgba(24,14,11,.63); backdrop-filter:blur(5px); }.game-promo-close { position:absolute; top:12px; right:12px; width:36px; height:36px; border:0; border-radius:50%; background:#f3e9e3; font-size:23px; }.game-promo-kicker { color:#9d301e; font-size:10px; font-weight:950; letter-spacing:.13em; }.game-promo-food { margin:18px 0 8px; font-size:36px; }.game-promo-dialog h2 { margin:0; font-size:clamp(26px,8vw,38px); line-height:1.03; }.game-promo-dialog h2 em { color:#bd2019; font-style:normal; }.game-promo-dialog p { color:#71635c; line-height:1.55; }.game-promo-cta { display:flex; width:100%; min-height:52px; align-items:center; justify-content:space-between; padding:0 17px; border:0; border-radius:14px; color:white; background:#b80808; font:900 13px inherit; font-family:inherit; }.game-promo-dialog>small { display:block; margin-top:11px; color:#84746c; line-height:1.45; }
-@media(max-width:600px) { .customer-bottom-nav { padding-inline:4px; }.customer-nav-button { min-height:49px; gap:1px; }.customer-nav-button>span { font-size:17px; }.customer-nav-button small { font-size:8px; }.home-dashboard-cards { grid-template-columns:1fr; }.home-dashboard-card { min-height:205px; }.game-progress>div { padding:10px 7px; }.game-progress strong { font-size:21px; }.game-progress span { font-size:8px; }.game-food-card { min-height:160px; } }
+@media(max-width:600px) { .customer-bottom-nav { padding-inline:7px; }.customer-nav-button { min-height:49px; gap:1px; }.customer-nav-button>span { font-size:17px; }.customer-nav-button small { font-size:9px; }.customer-nav-play>span { width:44px; height:44px; font-size:23px; }.menu-view-tabs,.profile-view-tabs { width:calc(100% - 28px); }.home-dashboard-cards { grid-template-columns:1fr; }.home-dashboard-card { min-height:205px; }.game-progress>div { padding:10px 7px; }.game-progress strong { font-size:21px; }.game-progress span { font-size:8px; }.game-food-card { min-height:160px; } }
 .home-combo-details { display: flex; flex: 1; width: 100%; flex-direction: column; gap: 8px; padding: 0 18px 18px; }
 .home-card-kicker { color: var(--red); font-size: 8px; font-weight: 900; letter-spacing: 1px; }
 .home-combo-details h2 { color: #271b1b; font: 900 15px "Montserrat", sans-serif; }
@@ -2346,7 +2356,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid rgba(181,18,27,.38); 
 }
 
 @media (max-width: 360px) {
-  .customer-nav-button small { font-size: 7px; }
+  .customer-nav-button small { font-size: 8px; }
   .customer-nav-button > span { font-size: 16px; }
   .home-combo-actions { align-items: stretch; flex-direction: column; }
   .home-combo-view { min-height: 34px; }

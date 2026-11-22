@@ -1,6 +1,6 @@
 # Craving Heaven Website — Development and Infrastructure Guide
 
-**Prepared:** 23 November 2026 — English default and welcome-flyer language choice deployed
+**Prepared:** 23 November 2026 — five-button customer navigation and combined menu/combos and profile/orders views deployed
 **Repository:** `craving-heaven` (`main`)  
 **Firebase project configured by this checkout:** `craving-heaven-e2e94`  
 **Firebase Hosting site configured by this checkout:** `craving-heaven-e2e94`
@@ -17,6 +17,7 @@ This is the project's canonical development and infrastructure guide. Update it 
 |---|---|
 | Customer site | Static HTML, CSS, and browser JavaScript; single-page customer experience in `index.html` |
 | Customer language | English by default, with English/Hinglish selector in the welcome flyer and Profile; preference saved in browser local storage and applied to customer UI, navigation, ordering status, menu/category controls, account/rewards/orders, game, and footer, including dynamically rendered text |
+| Customer navigation | Home, Menu, centered Play, Rewards, and Profile; Menu contains Menu/Combos tabs, Profile contains Profile/My Orders tabs |
 | Admin and staff | Separate pages and browser modules: `admin.html`/`admin.js`, `staff.html`/`staff.js` |
 | Hosting | Firebase Hosting; `firebase.json` publishes the repository root except ignored paths |
 | Backend | Firebase Cloud Functions, second-generation callable functions and a Firestore document trigger |
@@ -229,6 +230,17 @@ firebase hosting:clone craving-heaven-e2e94:rollback-20261123-language-en cravin
 ```
 
 This restores Hosting content only; it does not change Firestore data or Cloud Functions. The release sets English as the default, adds English/Hinglish selection to the first-order welcome flyer, and keeps both choices available in Profile. The new preference key makes English the initial choice for existing devices too; the selected language is then saved on that device.
+
+### Restore point for the 23 November 2026 navigation update
+
+- Before deployment, the live Hosting version was cloned to `rollback-20261123-nav-cleanup` at https://craving-heaven-e2e94--rollback-20261123-nav-cleanup-xvynppbv.web.app.
+- This Firebase Hosting preview expires seven days after creation. Restore it with:
+
+```powershell
+firebase hosting:clone craving-heaven-e2e94:rollback-20261123-nav-cleanup craving-heaven-e2e94:live --project craving-heaven-e2e94
+```
+
+The customer navigation now has Home, Menu, centered Play, Rewards, and Profile. The Menu view contains Menu and Combos tabs; Profile contains Profile and My Orders tabs. Existing Home links to combos and order-history links are routed into the corresponding tab.
 
 ### Restore point for the 18 November 2026 cart cleanup
 
