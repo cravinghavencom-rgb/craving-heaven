@@ -622,7 +622,7 @@
   const lastText = new WeakMap();
   const sourceAttributes = new WeakMap();
   const lastAttributes = new WeakMap();
-  let language = "hinglish";
+  let language = "en";
   let applying = false;
 
   const englishOverrides = {
@@ -638,7 +638,7 @@
 
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (["hinglish", "hi", "en"].includes(saved)) language = saved;
+    if (["hinglish", "en"].includes(saved)) language = saved;
   } catch (_) {}
 
   const trimParts = value => {
@@ -757,11 +757,14 @@
   }
 
   function applyLanguage(nextLanguage) {
-    language = ["hinglish", "hi", "en"].includes(nextLanguage) ? nextLanguage : "hinglish";
+    language = ["hinglish", "en"].includes(nextLanguage) ? nextLanguage : "en";
     try { localStorage.setItem(STORAGE_KEY, language); } catch (_) {}
-    document.documentElement.lang = language === "hi" ? "hi" : language === "hinglish" ? "hi-Latn" : "en-IN";
+    document.documentElement.lang = language === "hinglish" ? "hi-Latn" : "en-IN";
     const selector = document.getElementById("customerLanguageSelect");
     if (selector && selector.value !== language) selector.value = language;
+    document.querySelectorAll("[data-first-visit-language]").forEach(button => {
+      button.setAttribute("aria-pressed", String(button.dataset.firstVisitLanguage === language));
+    });
     translateRoot();
     window.dispatchEvent(new CustomEvent("customer-language-change", { detail: { language } }));
   }
@@ -812,6 +815,9 @@
       selector.value = language;
       selector.addEventListener("change", () => applyLanguage(selector.value));
     }
+    document.querySelectorAll("[data-first-visit-language]").forEach(button => {
+      button.addEventListener("click", () => applyLanguage(button.dataset.firstVisitLanguage));
+    });
     applyLanguage(language);
     const observer = new MutationObserver(records => {
       if (applying) return;

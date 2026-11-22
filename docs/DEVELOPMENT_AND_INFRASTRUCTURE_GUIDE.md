@@ -1,6 +1,6 @@
 # Craving Heaven Website — Development and Infrastructure Guide
 
-**Prepared:** 18 November 2026 — customer language, navigation, store-status, footer, and spacing updates deployed
+**Prepared:** 23 November 2026 — English default and welcome-flyer language choice deployed
 **Repository:** `craving-heaven` (`main`)  
 **Firebase project configured by this checkout:** `craving-heaven-e2e94`  
 **Firebase Hosting site configured by this checkout:** `craving-heaven-e2e94`
@@ -16,7 +16,7 @@ This is the project's canonical development and infrastructure guide. Update it 
 | Area | Current implementation |
 |---|---|
 | Customer site | Static HTML, CSS, and browser JavaScript; single-page customer experience in `index.html` |
-| Customer language | Hinglish by default, with Hinglish/Hindi/English selector in Profile; preference saved in browser local storage and applied to customer UI, navigation, ordering status, menu/category controls, account/rewards/orders, game, and footer, including dynamically rendered text |
+| Customer language | English by default, with English/Hinglish selector in the welcome flyer and Profile; preference saved in browser local storage and applied to customer UI, navigation, ordering status, menu/category controls, account/rewards/orders, game, and footer, including dynamically rendered text |
 | Admin and staff | Separate pages and browser modules: `admin.html`/`admin.js`, `staff.html`/`staff.js` |
 | Hosting | Firebase Hosting; `firebase.json` publishes the repository root except ignored paths |
 | Backend | Firebase Cloud Functions, second-generation callable functions and a Firestore document trigger |
@@ -66,7 +66,7 @@ flowchart TD
 | `index.html` | Customer home, menu, cart, checkout, account, order history, and rewards page markup; also loads Google tag and FCM client setup |
 | `style.css` | Shared customer presentation and responsive layouts |
 | `script.js` | Customer interactions, Firebase account flow, cart, checkout, address selection, order/reward display, and notification opt-in; cart and rewards screen share the same completed-order milestone calculation |
-| `customer-language.js` | Customer-only Hinglish/Hindi/English UI translations, persisted language preference, case-insensitive dynamic label translations, and localized order-success reward message; product names, configured reward titles, and customer-entered address text are preserved |
+| `customer-language.js` | Customer-only Hinglish UI translations, English/Hinglish persisted language preference, welcome-flyer and Profile language controls, case-insensitive dynamic label translations, and localized order-success reward message; product names, configured reward titles, and customer-entered address text are preserved |
 | `menu.js` | Initial menu and combo catalog data exposed to the customer page and staff tools |
 | `rewards-config.js` | Local fallback/default reward configuration; live configuration is also fetched from Functions |
 | `craving-dash.js` | Customer game and reward interactions through callable Functions |
@@ -218,6 +218,17 @@ firebase hosting:clone craving-heaven-e2e94:rollback-20261118-pre-ui-fixes cravi
 ```
 
 This restores Hosting content only; it does not change Firestore data or Cloud Functions.
+
+### Restore point for the 23 November 2026 language-choice release
+
+- Before deployment, the live Hosting version was cloned to preview channel `rollback-20261123-language-en` at https://craving-heaven-e2e94--rollback-20261123-language-en-pntmvgel.web.app.
+- The preview channel expires seven days after creation. Restore the saved Hosting version before it expires with:
+
+```powershell
+firebase hosting:clone craving-heaven-e2e94:rollback-20261123-language-en craving-heaven-e2e94:live --project craving-heaven-e2e94
+```
+
+This restores Hosting content only; it does not change Firestore data or Cloud Functions. The release sets English as the default for new visitors, adds English/Hinglish selection to the first-order welcome flyer, and keeps both choices available in Profile. Existing saved Hinglish preferences remain in effect until changed by the customer.
 
 ### Restore point for the 18 November 2026 cart cleanup
 

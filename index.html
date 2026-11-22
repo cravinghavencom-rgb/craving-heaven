@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="hi-Latn">
+<html lang="en-IN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -11,7 +11,7 @@
   <link rel="preload" href="assets/fonts/dm-sans/latin-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/montserrat/latin-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" as="image" href="images/burgers/classic-crunchy-burger.webp" type="image/webp" fetchpriority="high">
-  <link rel="stylesheet" href="style.css?v=20261118-home-header-menu-v3">
+  <link rel="stylesheet" href="style.css?v=20261123-language-choice-v1">
   <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-GD2EPLFYZP">
 </script>
@@ -82,6 +82,11 @@
     <h2 id="firstVisitFlyerTitle">Your first order gets a free burger!</h2>
     <p id="firstVisitFlyerDescription">Add any regular menu item to your first online order and get a Classic Crunchy Burger free.</p>
     <div class="first-visit-flyer-rule"><span id="firstVisitFlyerRuleLabel">YOUR FIRST-ORDER GIFT</span><strong id="firstVisitFlyerReward">Classic Crunchy Burger <em>FREE</em></strong></div>
+    <fieldset class="first-visit-language" data-no-translate>
+      <legend>Choose website language</legend>
+      <button type="button" data-first-visit-language="en" aria-pressed="true">English</button>
+      <button type="button" data-first-visit-language="hinglish" aria-pressed="false">Hinglish</button>
+    </fieldset>
     <button class="first-visit-flyer-cta" type="button" data-first-visit-menu>VIEW MENU <span aria-hidden="true">→</span></button>
     <span class="first-visit-flyer-foot" id="firstVisitFlyerFoot">FIRST ONLINE ORDER · ONE GIFT PER CUSTOMER</span>
   </dialog>
@@ -222,9 +227,8 @@
         <div><span class="section-kicker">LANGUAGE</span><h2 id="customerLanguageTitle">Choose your language</h2><p>Your choice is saved on this device.</p></div>
         <label for="customerLanguageSelect">WEBSITE LANGUAGE</label>
         <select id="customerLanguageSelect" aria-label="Website language">
-          <option value="hinglish">Hinglish</option>
-          <option value="hi">हिन्दी</option>
           <option value="en">English</option>
+          <option value="hinglish">Hinglish</option>
         </select>
       </section>
       <section class="address-book" aria-labelledby="addressBookTitle">
@@ -734,8 +738,8 @@
 
 <script src="rewards-config.js?v=20261021-first-order-gift" defer></script>
 <script src="menu.js?v=20261027-combo-webp" defer></script>
-<script src="customer-language.js?v=20261118-cart-copy-cleanup-v1" defer></script>
-<script src="script.js?v=20261118-cart-copy-cleanup-v2" defer></script>
+<script src="customer-language.js?v=20261123-english-default-v1" defer></script>
+<script src="script.js?v=20261123-english-default-v1" defer></script>
 <script src="craving-dash.js?v=20261118-customer-ui-localization-v2" defer></script>
 </body>
 </html>

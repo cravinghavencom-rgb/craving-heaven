@@ -2813,6 +2813,10 @@ body { background:#fbf7f1; color:var(--premium-ink); }
 .first-visit-flyer-rule span { color: #9a8170; font-size: 9px; font-weight: 950; letter-spacing: .15em; }
 .first-visit-flyer-rule strong { color: #35271f; font-size: 16px; }
 .first-visit-flyer-rule em { display:inline-block; margin-left:4px; color:#13834a; font-size:.78em; font-style:normal; letter-spacing:.04em; }
+.first-visit-language { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin:12px 0 11px; padding:8px; border:1px solid #ead6c4; border-radius:15px; background:rgba(255,255,255,.74); }
+.first-visit-language legend { grid-column:1/-1; padding:0 7px; color:#89776b; font-size:9px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; }
+.first-visit-language button { min-height:38px; padding:8px 12px; border:1px solid transparent; border-radius:10px; background:transparent; color:#65554b; font:800 12px "DM Sans",sans-serif; cursor:pointer; }
+.first-visit-language button[aria-pressed="true"] { border-color:#e9c78f; background:#fff1d6; color:#8f251b; box-shadow:0 2px 7px rgba(77,42,23,.08); }
 .first-visit-flyer .first-visit-flyer-fineprint { margin: 8px auto 12px; font-size: 12px; line-height: 1.45; }
 .first-visit-flyer-cta { display: flex; width: 100%; min-height: 50px; align-items: center; justify-content: center; gap: 12px; padding: 12px 20px; border: 0; border-radius: 15px; background: #b80808; color: #fff; font-size: 13px; font-weight: 950; letter-spacing: .07em; box-shadow: 0 9px 19px rgba(184,8,8,.2); cursor: pointer; }
 .first-visit-flyer-cta:hover { background: #970606; }
