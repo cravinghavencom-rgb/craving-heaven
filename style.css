@@ -3537,3 +3537,24 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   .home-quick-categories { gap: 7px; }
   .home-quick-categories button { gap: 7px; padding-inline: 7px; font-size: 10px; }
 }
+
+/* Final alignment polish for the welcome flyer and five-item navigation. */
+.first-visit-flyer { padding-top: 60px; }
+.first-visit-flyer-close { z-index: 5; top: 11px; right: 12px; display: grid; width: 46px; height: 46px; place-items: center; border: 2px solid #fff; background: linear-gradient(145deg,#c81720,#8e0b14); color: #fff; font-size: 29px; font-weight: 500; line-height: 1; box-shadow: 0 5px 16px rgba(85,19,17,.3); }
+.first-visit-flyer-close span { display: block; line-height: 1; transform: translateY(-1px); }
+.first-visit-flyer-close:hover,.first-visit-flyer-close:focus-visible { background: #771019; outline: 3px solid rgba(184,8,8,.2); outline-offset: 2px; }
+.customer-bottom-nav { align-items: center; padding: 6px 10px calc(6px + env(safe-area-inset-bottom)); }
+.customer-nav-button { min-height: 58px; gap: 3px; }
+.customer-nav-button > span { line-height: 1; }
+.customer-nav-button.customer-nav-play { align-self: center; gap: 2px; padding: 0; transform: none; }
+.customer-nav-play > span { width: 42px; height: 42px; border: 0; border-radius: 50%; background: linear-gradient(145deg,#bd111b,#76221d); color: #fff; box-shadow: 0 5px 14px rgba(124,31,26,.24), inset 0 1px 0 rgba(255,255,255,.24); }
+.customer-nav-play svg { display: block; width: 20px; height: 20px; fill: currentColor; }
+.customer-nav-button.customer-nav-play.is-active { background: transparent; color: #70241e; }
+.customer-nav-play small { margin-top: 1px; }
+@media (max-width: 480px) {
+  .first-visit-flyer { padding-top: 56px; }
+  .first-visit-flyer-close { top: 10px; right: 10px; width: 44px; height: 44px; }
+  .customer-bottom-nav { padding-inline: 7px; }
+  .customer-nav-button { min-height: 56px; }
+  .customer-nav-play > span { width: 40px; height: 40px; }
+}

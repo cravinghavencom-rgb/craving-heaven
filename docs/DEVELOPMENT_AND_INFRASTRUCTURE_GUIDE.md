@@ -1,6 +1,6 @@
 # Craving Heaven Website — Development and Infrastructure Guide
 
-**Prepared:** 23 November 2026 — five-button customer navigation and combined menu/combos and profile/orders views deployed
+**Prepared:** 23 November 2026 — customer navigation alignment and welcome-flyer close control polished
 **Repository:** `craving-heaven` (`main`)  
 **Firebase project configured by this checkout:** `craving-heaven-e2e94`  
 **Firebase Hosting site configured by this checkout:** `craving-heaven-e2e94`
@@ -241,6 +241,17 @@ firebase hosting:clone craving-heaven-e2e94:rollback-20261123-nav-cleanup cravin
 ```
 
 The customer navigation now has Home, Menu, centered Play, Rewards, and Profile. The Menu view contains Menu and Combos tabs; Profile contains Profile and My Orders tabs. Existing Home links to combos and order-history links are routed into the corresponding tab.
+
+### Restore point for the 23 November 2026 flyer and navigation polish
+
+- Before deployment, the live Hosting version was cloned to `rollback-20261123-flyer-play` at https://craving-heaven-e2e94--rollback-20261123-flyer-play-jr3a9ghi.web.app.
+- The seven-day preview can be restored with:
+
+```powershell
+firebase hosting:clone craving-heaven-e2e94:rollback-20261123-flyer-play craving-heaven-e2e94:live --project craving-heaven-e2e94
+```
+
+The release gives the first-order flyer a high-contrast, 44–46 px close button with dedicated space at the top. The Play item uses a centered play icon in a consistent circular button and aligns to the other navigation labels.
 
 ### Restore point for the 18 November 2026 cart cleanup
 

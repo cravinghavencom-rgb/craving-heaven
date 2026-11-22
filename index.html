@@ -11,7 +11,7 @@
   <link rel="preload" href="assets/fonts/dm-sans/latin-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/montserrat/latin-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" as="image" href="images/burgers/classic-crunchy-burger.webp" type="image/webp" fetchpriority="high">
-  <link rel="stylesheet" href="style.css?v=20261123-nav-cleanup-v1">
+  <link rel="stylesheet" href="style.css?v=20261123-nav-polish-v1">
   <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-GD2EPLFYZP">
 </script>
@@ -76,7 +76,7 @@
 <p id="onlineOrderNotice" class="order-availability-note" role="status" hidden></p>
 
   <dialog class="first-visit-flyer" id="firstVisitFlyer" aria-labelledby="firstVisitFlyerTitle">
-    <button class="first-visit-flyer-close" type="button" aria-label="Close welcome offer" data-close-first-visit>×</button>
+    <button class="first-visit-flyer-close" type="button" aria-label="Close welcome offer" title="Close offer" data-close-first-visit><span aria-hidden="true">×</span></button>
     <div class="first-visit-flyer-art"><img id="firstVisitFlyerImage" src="images/burgers/classic-crunchy-burger.webp" alt="Classic Crunchy Burger" width="259" height="242"><strong id="firstVisitFlyerEmblem" hidden>✦</strong><i aria-hidden="true">✦</i><b aria-hidden="true">✦</b><span id="firstVisitFlyerValue">₹80 VALUE</span></div>
     <span class="first-visit-flyer-kicker" id="firstVisitFlyerKicker">A FIRST-ORDER TREAT FROM CRAVING HEAVEN</span>
     <h2 id="firstVisitFlyerTitle">Your first order gets a free burger!</h2>
@@ -251,7 +251,7 @@
   <nav class="customer-bottom-nav" aria-label="Customer sections">
     <button type="button" class="customer-nav-button is-active" data-screen="home" aria-current="page"><span aria-hidden="true">⌂</span><small>Home</small></button>
     <button type="button" class="customer-nav-button" data-screen="menu"><span aria-hidden="true">☰</span><small>Menu</small></button>
-    <button type="button" class="customer-nav-button customer-nav-play" data-screen="game"><span aria-hidden="true">🍔</span><small>Play</small></button>
+    <button type="button" class="customer-nav-button customer-nav-play" data-screen="game"><span aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M8 5.8c0-.8.9-1.3 1.6-.9l9.1 5.2a1 1 0 0 1 0 1.8l-9.1 5.2a1.05 1.05 0 0 1-1.6-.9V5.8Z"/></svg></span><small>Play</small></button>
     <button type="button" class="customer-nav-button" data-screen="rewards"><span aria-hidden="true">★</span><small>Rewards</small></button>
     <button type="button" class="customer-nav-button" data-screen="profile"><span aria-hidden="true">●</span><small>Profile</small></button>
   </nav>
@@ -747,7 +747,7 @@
 <script src="rewards-config.js?v=20261021-first-order-gift" defer></script>
 <script src="menu.js?v=20261027-combo-webp" defer></script>
 <script src="customer-language.js?v=20261123-nav-cleanup-v1" defer></script>
-<script src="script.js?v=20261123-nav-cleanup-v1" defer></script>
+<script src="script.js?v=20261123-nav-polish-v1" defer></script>
 <script src="craving-dash.js?v=20261118-customer-ui-localization-v2" defer></script>
 </body>
 </html>
