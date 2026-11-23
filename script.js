@@ -1201,9 +1201,13 @@ async function handlePlaceOrderClick() {
     const chosen = (selectedId && addresses.find(item => item.id === selectedId))
       || (!selectedArea && (addresses.find(item => item.isDefault) || addresses[0]));
     if (!chosen) {
+      if (checkoutAddressLabelWrap) checkoutAddressLabelWrap.hidden = false;
+      if (checkoutAddressLabel) checkoutAddressLabel.required = true;
       if (checkoutArea && selectedArea) checkoutArea.value = selectedArea;
       return;
     }
+    if (checkoutAddressLabelWrap) checkoutAddressLabelWrap.hidden = true;
+    if (checkoutAddressLabel) checkoutAddressLabel.required = false;
     if (checkoutSavedAddress) checkoutSavedAddress.value = chosen.id;
     if (checkoutAddressLabel && chosen.label) {
       if (![...checkoutAddressLabel.options].some(option => option.value === chosen.label)) checkoutAddressLabel.add(new Option(chosen.label, chosen.label));
@@ -1583,6 +1587,7 @@ const deliveryLocationDialog = document.getElementById("deliveryLocationDialog")
 const homeSavedAddressList = document.getElementById("homeSavedAddressList");
 const checkoutSavedAddress = document.getElementById("checkoutSavedAddress");
 const checkoutAddressLabel = document.getElementById("checkoutAddressLabel");
+const checkoutAddressLabelWrap = document.getElementById("checkoutAddressLabelWrap");
 const savedAddressPickerWrap = document.getElementById("savedAddressPickerWrap");
 const deliveryDetailsFields = document.getElementById("deliveryDetailsFields");
 const pickupInfo = document.getElementById("pickupInfo");
@@ -1615,7 +1620,82 @@ const orderSuccessId =
 const orderSuccessNote = document.getElementById("orderSuccessNote");
 const orderSuccessReward = document.getElementById("orderSuccessReward");
 const orderSuccessNextReward = document.getElementById("orderSuccessNextReward");
+const orderSuccessScratch = document.getElementById("orderSuccessScratch");
+const orderSuccessScratchSurface = document.getElementById("orderSuccessScratchSurface");
+const orderSuccessScratchReveal = document.getElementById("orderSuccessScratchReveal");
 let orderSuccessWasTest = false;
+
+function revealOrderSuccessScratch() {
+  if (!orderSuccessScratch || orderSuccessScratch.dataset.revealed === "true") return;
+  orderSuccessScratch.dataset.revealed = "true";
+  if (orderSuccessScratchSurface) {
+    orderSuccessScratchSurface.classList.add("is-scratched");
+    window.setTimeout(() => {
+      orderSuccessScratchSurface.hidden = true;
+    }, 280);
+  }
+  if (orderSuccessScratchReveal) orderSuccessScratchReveal.hidden = true;
+}
+
+function resetOrderSuccessScratch() {
+  if (!orderSuccessScratch || !orderSuccessScratchSurface) return;
+  orderSuccessScratch.dataset.revealed = "false";
+  orderSuccessScratchSurface.hidden = false;
+  orderSuccessScratchSurface.classList.remove("is-scratched");
+  if (orderSuccessScratchReveal) orderSuccessScratchReveal.hidden = false;
+  const bounds = orderSuccessScratchSurface.getBoundingClientRect();
+  if (!bounds.width || !bounds.height) return;
+  const scale = Math.min(2, window.devicePixelRatio || 1);
+  orderSuccessScratchSurface.width = Math.round(bounds.width * scale);
+  orderSuccessScratchSurface.height = Math.round(bounds.height * scale);
+  const context = orderSuccessScratchSurface.getContext("2d");
+  if (!context) return;
+  context.scale(scale, scale);
+  const foil = context.createLinearGradient(0, 0, bounds.width, bounds.height);
+  foil.addColorStop(0, "#e2c382");
+  foil.addColorStop(.48, "#fff0c7");
+  foil.addColorStop(1, "#c99a4a");
+  context.fillStyle = foil;
+  context.fillRect(0, 0, bounds.width, bounds.height);
+  context.fillStyle = "rgba(117, 74, 32, .24)";
+  const scratchLabel = window.CustomerLanguage?.t("SCRATCH TO REVEAL") || "SCRATCH TO REVEAL";
+  const fontSize = Math.max(8, Math.min(12, (bounds.width - 32) / Math.max(1, scratchLabel.length * .62)));
+  context.font = `800 ${fontSize}px Montserrat, sans-serif`;
+  context.textAlign = "center";
+  context.fillText(`✦  ${scratchLabel}  ✦`, bounds.width / 2, bounds.height / 2 + 4);
+}
+
+if (orderSuccessScratchReveal) orderSuccessScratchReveal.addEventListener("click", revealOrderSuccessScratch);
+if (orderSuccessScratchSurface) {
+  let scratching = false;
+  let scratchMoves = 0;
+  const scratchAt = event => {
+    if (!scratching || orderSuccessScratch?.dataset.revealed === "true") return;
+    const context = orderSuccessScratchSurface.getContext("2d");
+    const bounds = orderSuccessScratchSurface.getBoundingClientRect();
+    if (!context || !bounds.width) return;
+    context.globalCompositeOperation = "destination-out";
+    context.beginPath();
+    context.arc(event.clientX - bounds.left, event.clientY - bounds.top, 19, 0, Math.PI * 2);
+    context.fill();
+    context.globalCompositeOperation = "source-over";
+    scratchMoves += 1;
+    if (scratchMoves % 10 !== 0) return;
+    const pixels = context.getImageData(0, 0, orderSuccessScratchSurface.width, orderSuccessScratchSurface.height).data;
+    let cleared = 0;
+    for (let index = 3; index < pixels.length; index += 4) if (pixels[index] < 32) cleared += 1;
+    if (cleared / (pixels.length / 4) > .38) revealOrderSuccessScratch();
+  };
+  orderSuccessScratchSurface.addEventListener("pointerdown", event => {
+    if (orderSuccessScratch?.dataset.revealed === "true") return;
+    scratching = true;
+    scratchMoves = 0;
+    orderSuccessScratchSurface.setPointerCapture?.(event.pointerId);
+    scratchAt(event);
+  });
+  orderSuccessScratchSurface.addEventListener("pointermove", scratchAt);
+  ["pointerup", "pointercancel", "lostpointercapture"].forEach(type => orderSuccessScratchSurface.addEventListener(type, () => { scratching = false; }));
+}
 
 
 function renderOrderSuccessNextReward(isTestOrder, orderData, appliedReward) {
@@ -1678,8 +1758,8 @@ function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false,
       : `${addressSaved ? `${window.CustomerLanguage?.t("Your delivery address is saved to your account.") || "Your delivery address is saved to your account."} ` : ""}${window.CustomerLanguage?.t("Track your order anytime from the Orders screen.") || "Track your order anytime from the Orders screen."}`;
   }
   const rewardMessage = !isTestOrder ? window.CustomerLanguage?.rewardMessage(orderData, appliedReward) || "" : "";
+  if (orderSuccessScratch) orderSuccessScratch.hidden = !rewardMessage;
   if (orderSuccessReward) {
-    orderSuccessReward.hidden = !rewardMessage;
     orderSuccessReward.textContent = rewardMessage;
   }
   renderOrderSuccessNextReward(isTestOrder, orderData, appliedReward);
@@ -1698,6 +1778,8 @@ function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false,
     "aria-hidden",
     "false"
   );
+
+  if (rewardMessage) window.requestAnimationFrame(resetOrderSuccessScratch);
 
   document.body.classList.add(
     "order-success-open"
@@ -1788,7 +1870,7 @@ function updateCheckoutFulfillmentUI() {
   if (pickupInfo) pickupInfo.hidden = !pickup;
   if (checkoutAddress) checkoutAddress.required = !pickup;
   if (checkoutArea) checkoutArea.required = !pickup;
-  if (checkoutAddressLabel) checkoutAddressLabel.required = !pickup;
+  if (checkoutAddressLabel) checkoutAddressLabel.required = !pickup && !checkoutSavedAddress?.value;
   if (checkoutTitle) checkoutTitle.textContent = pickup ? "PICKUP ORDER" : "DELIVERY DETAILS";
   if (checkoutPaymentTitle) checkoutPaymentTitle.textContent = pickup ? "PAY ON PICKUP" : "PAY ON DELIVERY";
   if (checkoutPaymentNote) checkoutPaymentNote.textContent = pickup ? "Cash / UPI when you collect at the store" : "Cash / UPI on delivery";
@@ -2047,7 +2129,7 @@ function validateCheckoutForm() {
     return false;
   }
 
-  if (!pickup && !checkoutAddressLabel.value) {
+  if (!pickup && !checkoutAddressLabel.value && !checkoutSavedAddress?.value) {
     checkoutMessage.textContent = "Choose whether this address is Home, Work, or Other.";
     checkoutAddressLabel.focus();
     return false;
@@ -3453,6 +3535,8 @@ document.addEventListener("click", async event => {
   checkoutSavedAddress?.addEventListener("change", () => {
     const chosen = (currentCustomerProfile.addresses || []).find(item => item.id === checkoutSavedAddress.value);
     if (!chosen) {
+      if (checkoutAddressLabelWrap) checkoutAddressLabelWrap.hidden = false;
+      checkoutAddressLabel.required = true;
       checkoutAddressLabel.value = "";
       checkoutName.value = currentCustomerProfile.name || "";
       checkoutAddress.value = "";
@@ -3460,6 +3544,8 @@ document.addEventListener("click", async event => {
       checkoutArea.value = "";
       return;
     }
+    if (checkoutAddressLabelWrap) checkoutAddressLabelWrap.hidden = true;
+    checkoutAddressLabel.required = false;
     if (chosen.label && ![...checkoutAddressLabel.options].some(option => option.value === chosen.label)) checkoutAddressLabel.add(new Option(chosen.label, chosen.label));
     checkoutAddressLabel.value = chosen.label || "";
     checkoutName.value = chosen.name || "";

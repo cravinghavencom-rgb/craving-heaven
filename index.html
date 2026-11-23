@@ -460,6 +460,11 @@
         <label><input type="radio" name="fulfillmentType" value="pickup"> <span><strong>Pickup</strong><small>Collect from our store</small></span></label>
       </fieldset>
 
+      <div class="checkout-section-heading">
+        <span aria-hidden="true">1</span>
+        <div><strong>Contact details</strong><small>Who should we contact about the order?</small></div>
+      </div>
+
       <div id="pickupInfo" class="pickup-info" hidden>
         <strong>Pick up your order at CRAVING HEAVEN</strong>
         <span>Shop 10, Pearl Oasis Building, Pathanwadi, Malad East, Mumbai – 400097</span>
@@ -473,20 +478,14 @@
 
       <div id="deliveryDetailsFields">
 
+      <div class="checkout-section-heading checkout-address-heading">
+        <span aria-hidden="true">2</span>
+        <div><strong>Delivery address</strong><small>Choose a saved address or enter a new one.</small></div>
+      </div>
+
       <div id="savedAddressPickerWrap" class="checkout-field" hidden>
         <label for="checkoutSavedAddress">USE A SAVED ADDRESS</label>
         <select id="checkoutSavedAddress"><option value="">Enter a new address</option></select>
-      </div>
-
-      <div class="checkout-field">
-        <label for="checkoutAddressLabel">SAVE THIS ADDRESS AS</label>
-        <select id="checkoutAddressLabel" required>
-          <option value="">Choose a label</option>
-          <option value="Home">Home</option>
-          <option value="Work">Work</option>
-          <option value="Other">Other</option>
-        </select>
-        <small class="checkout-address-note">We’ll save this address to your account for your next order.</small>
       </div>
 
       <div class="checkout-field">
@@ -584,6 +583,17 @@
 
       </div>
 
+
+      <div class="checkout-field" id="checkoutAddressLabelWrap">
+        <label for="checkoutAddressLabel">SAVE THIS ADDRESS AS</label>
+        <select id="checkoutAddressLabel" required>
+          <option value="">Choose a label</option>
+          <option value="Home">Home</option>
+          <option value="Work">Work</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+
       </div>
 
 
@@ -674,7 +684,14 @@
       Your order has been received successfully.
     </p>
 
-    <div class="order-success-reward" id="orderSuccessReward" role="status" hidden></div>
+    <article class="order-success-scratch-card" id="orderSuccessScratch" hidden>
+      <div class="order-success-scratch-content">
+        <span class="order-success-scratch-label">YOUR ORDER REWARD</span>
+        <div class="order-success-reward" id="orderSuccessReward" role="status"></div>
+      </div>
+      <canvas class="order-success-scratch-surface" id="orderSuccessScratchSurface" aria-hidden="true"></canvas>
+      <button class="order-success-scratch-reveal" id="orderSuccessScratchReveal" type="button">TAP TO REVEAL</button>
+    </article>
 
     <article class="order-success-next-reward" id="orderSuccessNextReward" aria-live="polite" hidden></article>
 
