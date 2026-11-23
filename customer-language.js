@@ -255,6 +255,9 @@
       "COMPLETE MEALS AT A BETTER PRICE.": "Behtar price par complete meals.",
       "Aaj aapko mila hai: {quantity} {item} free!": "Aaj aapko mila hai: {quantity} {item} free!",
       "Yay! Aaj ki delivery free hai!": "Yay! Aaj ki delivery free hai!",
+      "Yay! You earned {points} bonus Craving Points!": "Yay! Aapne {points} bonus Craving Points kamaaye!",
+      "Double Craving Points on this order!": "Is order par double Craving Points!",
+      "This order will add {points} Craving Points after delivery or pickup.": "Delivery ya pickup complete hone par is order ke {points} Craving Points milenge.",
       "Yay! Aapko ₹{amount} ki bachat mili! {title}": "Yay! Aapko ₹{amount} ki bachat mili! {title}",
       "Aapne {points} Craving Points use karke ₹{amount} bachaye!": "Aapne {points} Craving Points use karke ₹{amount} bachaye!",
       "A FIRST-ORDER TREAT FROM CRAVING HEAVEN": "CRAVING HEAVEN se first-order ka treat",
@@ -639,6 +642,7 @@
   const englishOverrides = {
     "Aaj aapko mila hai: {quantity} {item} free!": "You got {quantity} free {item} today!",
     "Yay! Aaj ki delivery free hai!": "Great news! Today’s delivery is free!",
+    "This order will add {points} Craving Points after delivery or pickup.": "This order will add {points} Craving Points after delivery or pickup.",
     "Yay! Aapko ₹{amount} ki bachat mili! {title}": "You saved ₹{amount}! {title}",
     "Aapne {points} Craving Points use karke ₹{amount} bachaye!": "You used {points} Craving Points and saved ₹{amount}!",
     "Order confirm ho gaya! Aapka reward neeche hai.": "Your order is confirmed! Your reward is below.",
@@ -796,8 +800,25 @@
       });
     }
     const kind = appliedReward?.kind || appliedReward?.definition?.kind;
-    const title = appliedReward?.title || appliedReward?.definition?.title || "";
+    const definition = appliedReward?.definition || appliedReward || {};
+    const title = appliedReward?.title || definition.title || "";
     if (kind === "free-delivery") return translateCore("Yay! Aaj ki delivery free hai!");
+    if (kind === "free-item") {
+      return template("Aaj aapko mila hai: {quantity} {item} free!", {
+        quantity: 1, item: definition.item || title || "reward"
+      });
+    }
+    if (kind === "buy-get") {
+      return template("Aaj aapko mila hai: {quantity} {item} free!", {
+        quantity: Math.max(1, Number(definition.getQuantity) || 1), item: definition.getItem || title || "reward"
+      });
+    }
+    if (kind === "bonus-points") {
+      return template("Yay! You earned {points} bonus Craving Points!", {
+        points: Math.max(0, Number(definition.points) || 0).toLocaleString("en-IN")
+      });
+    }
+    if (kind === "double-points") return translateCore("Double Craving Points on this order!");
     if (["discount", "percent-discount"].includes(kind)) {
       return template("Yay! Aapko ₹{amount} ki bachat mili! {title}", {
         amount: Number(order?.discountAmount || 0).toLocaleString("en-IN"), title

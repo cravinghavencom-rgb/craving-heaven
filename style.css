@@ -3747,3 +3747,74 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   .checkout-fulfillment label { gap:7px; padding:8px; }
   .checkout-section-heading { margin-top:8px; }
 }
+
+/* Square, fully visible reward tiles inspired by offer-card layouts. */
+.journey-ready-grid,
+.journey-upcoming-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+  width:100%;
+}
+.journey-ready-grid .journey-card,
+.journey-upcoming-grid .journey-card {
+  position:relative;
+  display:flex;
+  min-width:0;
+  min-height:0;
+  aspect-ratio:1 / 1;
+  flex-direction:column;
+  gap:7px;
+  overflow:hidden;
+  padding:12px;
+  border-radius:17px;
+  box-shadow:0 8px 20px rgba(55,34,23,.07);
+}
+.journey-ready-grid .journey-card::before,
+.journey-upcoming-grid .journey-card::before {
+  position:absolute;
+  inset:0 0 auto;
+  height:4px;
+  background:linear-gradient(90deg,#d2a451,#f4dda6,#b5121b);
+  content:"";
+}
+.journey-upcoming-grid .journey-card-next.journey-card-locked { grid-column:auto; }
+.journey-ready-grid .journey-card-status,
+.journey-upcoming-grid .journey-card-status { font-size:8px; line-height:1.25; }
+.journey-ready-grid .journey-card > strong,
+.journey-upcoming-grid .journey-card > strong {
+  display:-webkit-box;
+  overflow:hidden;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  font-size:12px;
+  line-height:1.35;
+}
+.journey-ready-grid .journey-card > p,
+.journey-upcoming-grid .journey-card > p {
+  display:-webkit-box;
+  flex:1 1 auto;
+  overflow:hidden;
+  margin:0;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:3;
+  font-size:9px;
+  line-height:1.4;
+}
+.journey-ready-grid .journey-card > small,
+.journey-upcoming-grid .journey-card > small { font-size:8px; line-height:1.35; }
+.journey-ready-grid .journey-card .journey-use-button { align-self:flex-start; margin-top:auto; padding:7px 9px; font-size:8px; }
+.journey-upcoming-grid .journey-next-top { align-items:flex-start; gap:5px; }
+.journey-upcoming-grid .journey-next-distance { flex:0 0 auto; padding:4px 6px; font-size:7px; }
+.journey-upcoming-grid .journey-card-next > strong { font-size:12px; }
+.journey-upcoming-grid .journey-card-next > small:last-child { display:none; }
+.journey-upcoming-grid .journey-progress-track { flex:0 0 6px; height:6px; margin-top:auto; }
+.journey-upcoming-grid .journey-lock-icon { flex:0 0 22px; width:22px; height:22px; }
+.journey-upcoming-grid .journey-future-top { min-height:24px; }
+.journey-upcoming-grid .journey-card-future > small { margin-top:auto; }
+.journey-upcoming-heading { margin-top:12px; }
+@media(max-width:380px) {
+  .journey-ready-grid,.journey-upcoming-grid { gap:8px; }
+  .journey-ready-grid .journey-card,.journey-upcoming-grid .journey-card { padding:10px; }
+  .journey-ready-grid .journey-card > p,.journey-upcoming-grid .journey-card > p { font-size:8px; }
+}

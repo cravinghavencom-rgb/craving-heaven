@@ -989,7 +989,7 @@ async function handlePlaceOrderClick() {
       : "";
     const readyCards = [
       ...(welcomeAvailableNow ? [`<article class="journey-card journey-card-ready"><span class="journey-card-status">FIRST ONLINE ORDER GIFT</span><strong>${esc(REWARDS_CONFIG.welcomeItem)} · FREE</strong><p>Add any regular menu item to your first online order. The burger appears in your cart at ₹0; combos or extras alone do not qualify.</p><button type="button" class="journey-use-button" data-screen="menu">VIEW MENU</button></article>`] : []),
-      ...visibleAvailable.slice(0, 1).map(reward => {
+      ...visibleAvailable.map(reward => {
         const definition = resolveCustomerRewardDefinition(reward) || reward;
         const expiry = reward.expiresAt ? (reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt)) : null;
         const gameReward = ["craving-dash", "craving-runner"].includes(reward.source);
@@ -1012,7 +1012,10 @@ async function handlePlaceOrderClick() {
       }
       return `<article class="journey-card journey-card-locked journey-card-future"><div class="journey-future-top"><span class="journey-lock-icon" aria-hidden="true">🔒</span><span class="journey-card-status">${cycleLabel}</span></div><strong>${esc(item.title)}</strong><p>${esc(item.detail || "A reward for a future completed order.")}</p><small>Locked · ${orderText} away</small></article>`;
     });
-    root.innerHTML = `${readyCards.join("")}${upcomingCards.length
+    const readyGrid = readyCards.length
+      ? `<div class="journey-ready-grid">${readyCards.join("")}</div>`
+      : "";
+    root.innerHTML = `${readyGrid}${upcomingCards.length
       ? `<div class="journey-upcoming-heading"><div><strong>${upcomingCards.length} upcoming rewards</strong><small>Each one unlocks after its order is completed.</small></div><span>🔒 LOCKED</span></div><div class="journey-upcoming-grid">${upcomingCards.join("")}</div>`
       : `<div class="rewards-login-hint">Your next reward lineup is being updated.</div>`}`;
   }
@@ -1757,7 +1760,16 @@ function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false,
       ? window.CustomerLanguage?.t("Pickup at Shop 10, Pearl Oasis Building, Pathanwadi, Malad East. Pay at the store and track readiness from Your Orders.") || "Pickup at Shop 10, Pearl Oasis Building, Pathanwadi, Malad East. Pay at the store and track readiness from Your Orders."
       : `${addressSaved ? `${window.CustomerLanguage?.t("Your delivery address is saved to your account.") || "Your delivery address is saved to your account."} ` : ""}${window.CustomerLanguage?.t("Track your order anytime from the Orders screen.") || "Track your order anytime from the Orders screen."}`;
   }
-  const rewardMessage = !isTestOrder ? window.CustomerLanguage?.rewardMessage(orderData, appliedReward) || "" : "";
+  let rewardMessage = !isTestOrder ? window.CustomerLanguage?.rewardMessage(orderData, appliedReward) || "" : "";
+  if (!isTestOrder && !rewardMessage && orderType === "delivery" && Number(orderData?.deliveryCharge) === 0) {
+    rewardMessage = window.CustomerLanguage?.t("Yay! Aaj ki delivery free hai!") || "Great news! Today’s delivery is free!";
+  }
+  if (!isTestOrder && !rewardMessage && Number(orderData?.pointsToAward) > 0) {
+    rewardMessage = window.CustomerLanguage?.template(
+      "This order will add {points} Craving Points after delivery or pickup.",
+      { points: Number(orderData.pointsToAward).toLocaleString("en-IN") }
+    ) || `This order will add ${Number(orderData.pointsToAward).toLocaleString("en-IN")} Craving Points after delivery or pickup.`;
+  }
   if (orderSuccessScratch) orderSuccessScratch.hidden = !rewardMessage;
   if (orderSuccessReward) {
     orderSuccessReward.textContent = rewardMessage;
