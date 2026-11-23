@@ -1,4 +1,4 @@
-import { firebaseAuth as auth, firebaseAuthPersistenceReady, firebaseFunctions, FirebaseAuthAPI, FirebaseFunctionsAPI } from "./firebase-client.js?v=20261105-pagespeed-opt-v2";
+import { firebaseAuth as auth, firebaseAuthPersistenceReady, firebaseFunctions, FirebaseAuthAPI, FirebaseFunctionsAPI } from "./firebase-client.js?v=20261123-persistent-auth-v1";
 
 const $ = id => document.getElementById(id);
 const setupMessage = $("setupMessage");

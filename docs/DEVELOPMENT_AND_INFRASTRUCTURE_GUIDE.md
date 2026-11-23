@@ -1,6 +1,6 @@
 # Craving Heaven Website — Development and Infrastructure Guide
 
-**Prepared:** 23 November 2026 — customer navigation alignment and welcome-flyer close control polished
+**Prepared:** 23 November 2026 — persistent mobile customer sign-in strengthened with IndexedDB and localStorage fallback
 **Repository:** `craving-heaven` (`main`)  
 **Firebase project configured by this checkout:** `craving-heaven-e2e94`  
 **Firebase Hosting site configured by this checkout:** `craving-heaven-e2e94`
@@ -120,7 +120,7 @@ There is no root `package.json`/bundler build. Browser code imports Firebase Web
 
 ## 5. Authentication and security model
 
-- **Customers:** Firebase phone-number OTP with reCAPTCHA verification. `firebase-client.js` sets `browserLocalPersistence`, so the customer session can survive reloads/browser restarts subject to browser storage and user sign-out.
+- **Customers:** Firebase phone-number OTP with reCAPTCHA verification. `firebase-client.js` prefers `indexedDBLocalPersistence` and falls back to `browserLocalPersistence`; both are Firebase LOCAL persistence stores intended to survive page reloads and browser restarts. Existing saved LOCAL sessions are migrated by the Auth SDK. Users can remove the saved session by logging out; private browsing or browser storage-clearing settings can still prevent persistence.
 - **Team:** email/password sign-in. Server code checks custom claims (`admin: true` / `staff: true`) and disabled status. Team accounts are distinct from customer phone-auth sessions.
 - **Customer access:** server functions reject disabled, blocked, deleted, and team-as-customer sessions where applicable.
 - **Firestore client rules:** customers can read their own profile, eligible own orders/test orders and loyalty data. Customer profile writes are constrained to allowed fields. Orders, loyalty mutations, and privileged changes are server-owned. Unmatched Firestore paths default to deny.
@@ -252,6 +252,17 @@ firebase hosting:clone craving-heaven-e2e94:rollback-20261123-flyer-play craving
 ```
 
 The release gives the first-order flyer a high-contrast, 44–46 px close button with dedicated space at the top. The Play item uses a centered play icon in a consistent circular button and aligns to the other navigation labels.
+
+### Restore point for the 23 November 2026 persistent sign-in update
+
+- Before deployment, the live Hosting version was cloned to `rollback-20261123-auth-persistence` at https://craving-heaven-e2e94--rollback-20261123-auth-persisten-xyomlpnd.web.app.
+- The seven-day preview can be restored with:
+
+```powershell
+firebase hosting:clone craving-heaven-e2e94:rollback-20261123-auth-persistence craving-heaven-e2e94:live --project craving-heaven-e2e94
+```
+
+Firebase Auth now prefers IndexedDB LOCAL persistence on mobile and falls back to browser localStorage LOCAL persistence. Existing LOCAL sessions are migrated when the browser supports the new persistence store. This is client-side only and does not change customer or team role claims or server authorization.
 
 ### Restore point for the 18 November 2026 cart cleanup
 

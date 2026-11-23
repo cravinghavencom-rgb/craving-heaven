@@ -3,7 +3,7 @@ import {
   initializeAuth, RecaptchaVerifier, signInWithPhoneNumber, signInWithEmailAndPassword,
   signInWithCustomToken, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider,
   sendEmailVerification, verifyBeforeUpdateEmail, sendPasswordResetEmail,
-  onAuthStateChanged, browserLocalPersistence,
+  onAuthStateChanged, indexedDBLocalPersistence, browserLocalPersistence,
   signOut, connectAuthEmulator
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import { getFunctions, connectFunctionsEmulator, httpsCallable } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-functions.js";
@@ -23,7 +23,12 @@ const config = {
 };
 
 export const firebaseApp = initializeApp(config);
-export const firebaseAuth = initializeAuth(firebaseApp, { persistence: browserLocalPersistence });
+// Keep customer and team sessions across browser restarts. Prefer IndexedDB on
+// mobile browsers, while retaining localStorage as a supported fallback. The
+// Auth SDK migrates existing LOCAL sessions between supported persistence stores.
+export const firebaseAuth = initializeAuth(firebaseApp, {
+  persistence: [indexedDBLocalPersistence, browserLocalPersistence]
+});
 export const firebaseFunctions = getFunctions(firebaseApp, "asia-south1");
 export const firebaseAuthPersistenceReady = firebaseAuth.authStateReady();
 export const useLocalFirebaseEmulators = localEmulators;

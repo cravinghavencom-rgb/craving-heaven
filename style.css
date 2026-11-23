@@ -1100,6 +1100,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid rgba(201,0,0,.30); ou
   font-size: 11px;
   line-height: 1.45;
 }
+.customer-login-remember { margin:8px 4px 0; color:#6f5e55; text-align:center; font-size:11px; font-weight:700; line-height:1.45; }
 
 .local-demo-login {
   margin-top: 18px;

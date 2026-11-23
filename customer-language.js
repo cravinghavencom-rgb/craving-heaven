@@ -304,6 +304,7 @@
       "Mobile number": "Mobile number",
       "SEND OTP": "OTP BHEJEIN",
       "By continuing, you agree to receive an SMS OTP for verification.": "Aage badhne par verification ke liye SMS OTP aayega.",
+      "We’ll keep you signed in on this phone so you can return without another OTP. Log out to remove access.": "Is phone par aap login rahenge, agali baar OTP ki zaroorat nahi hogi. Access hatane ke liye log out karein.",
       "LOCAL TEST ACCOUNTS · no SMS or OTP": "LOCAL TEST ACCOUNTS · SMS ya OTP nahi",
       "Only works on this local emulator. Test orders stay separate from live orders.": "Sirf local emulator par chalta hai. Test orders live orders se alag rehte hain.",
       "ENTER OTP": "OTP DAALEIN",

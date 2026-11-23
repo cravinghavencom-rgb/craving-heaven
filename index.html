@@ -11,7 +11,7 @@
   <link rel="preload" href="assets/fonts/dm-sans/latin-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/montserrat/latin-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" as="image" href="images/burgers/classic-crunchy-burger.webp" type="image/webp" fetchpriority="high">
-  <link rel="stylesheet" href="style.css?v=20261123-nav-polish-v1">
+  <link rel="stylesheet" href="style.css?v=20261123-persistent-auth-v1">
   <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-GD2EPLFYZP">
 </script>
@@ -354,6 +354,7 @@
         <p class="customer-login-terms">
           By continuing, you agree to receive an SMS OTP for verification.
         </p>
+        <p class="customer-login-remember">We’ll keep you signed in on this phone so you can return without another OTP. Log out to remove access.</p>
 
         <div class="local-demo-login" id="localDemoLogin" hidden>
           <p>LOCAL TEST ACCOUNTS · no SMS or OTP</p>
@@ -720,7 +721,7 @@
   </footer>
 
 <script type="module">
-  import { firebaseApp, useLocalFirebaseEmulators } from "./firebase-client.js?v=20261105-pagespeed-opt-v2";
+  import { firebaseApp, useLocalFirebaseEmulators } from "./firebase-client.js?v=20261123-persistent-auth-v1";
 
   let firebaseMessagingPromise = null;
   window.loadFirebaseMessaging = () => {
@@ -746,8 +747,8 @@
 
 <script src="rewards-config.js?v=20261021-first-order-gift" defer></script>
 <script src="menu.js?v=20261027-combo-webp" defer></script>
-<script src="customer-language.js?v=20261123-nav-cleanup-v1" defer></script>
-<script src="script.js?v=20261123-nav-polish-v1" defer></script>
+<script src="customer-language.js?v=20261123-persistent-auth-v1" defer></script>
+<script src="script.js?v=20261123-persistent-auth-v1" defer></script>
 <script src="craving-dash.js?v=20261118-customer-ui-localization-v2" defer></script>
 </body>
 </html>

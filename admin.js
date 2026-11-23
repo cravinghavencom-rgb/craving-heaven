@@ -1,4 +1,4 @@
-import { firebaseAuth as auth, firebaseFunctions as functions, firebaseAuthPersistenceReady as authPersistence, ensureFirebaseAppCheck, FirebaseAuthAPI, FirebaseFunctionsAPI } from "./firebase-client.js?v=20261105-pagespeed-opt-v2";
+import { firebaseAuth as auth, firebaseFunctions as functions, firebaseAuthPersistenceReady as authPersistence, ensureFirebaseAppCheck, FirebaseAuthAPI, FirebaseFunctionsAPI } from "./firebase-client.js?v=20261123-persistent-auth-v1";
 const { signInWithEmailAndPassword, sendPasswordResetEmail, verifyBeforeUpdateEmail, onAuthStateChanged, signOut } = FirebaseAuthAPI;
 const { httpsCallable } = FirebaseFunctionsAPI;
 
