@@ -1614,7 +1614,51 @@ const orderSuccessId =
   document.getElementById("orderSuccessId");
 const orderSuccessNote = document.getElementById("orderSuccessNote");
 const orderSuccessReward = document.getElementById("orderSuccessReward");
+const orderSuccessNextReward = document.getElementById("orderSuccessNextReward");
 let orderSuccessWasTest = false;
+
+
+function renderOrderSuccessNextReward(isTestOrder, orderData, appliedReward) {
+  if (!orderSuccessNextReward) return;
+  orderSuccessNextReward.hidden = true;
+  orderSuccessNextReward.innerHTML = "";
+  if (isTestOrder || !isCustomerSignedIn() || !loyaltyAccountLoaded || !customerOnlineOrderHistoryLoaded || customerAccountLoadFailed) return;
+
+  const milestones = (Array.isArray(REWARDS_CONFIG.journey) ? REWARDS_CONFIG.journey : [])
+    .filter(item => item?.id && Number.isFinite(Number(item.order)));
+  if (!milestones.length) return;
+
+  const account = currentLoyaltyAccount || { completedOrders: 0, availableRewards: [] };
+  const progress = rewardJourneyProgress(account.completedOrders, milestones);
+  const availableIds = new Set((Array.isArray(account.availableRewards) ? account.availableRewards : []).map(item => item.ticketId || item.id).filter(Boolean));
+  const justUsedRewardId = appliedReward?.ticketId || appliedReward?.id;
+  if (justUsedRewardId) availableIds.add(justUsedRewardId);
+  const welcomeReward = milestones.find(item => Number(item.order) === 1 && item.kind === "free-item" && item.item === REWARDS_CONFIG.welcomeItem);
+  // This success view follows an online order, so the first-order gift is no
+  // longer the next reward to advertise, whether it was redeemed or declined.
+  const next = upcomingRewardMilestones(milestones, progress, availableIds, welcomeReward, true, 1)[0];
+  if (!next) return;
+
+  const targetOrder = Math.max(1, Number(next.order));
+  const remainingOrders = next.cycleOffset === 0
+    ? Math.max(1, targetOrder - progress.position)
+    : Math.max(0, 30 - progress.position) + Math.max(0, next.cycleOffset - 1) * 30 + targetOrder;
+  const afterThisOrder = Math.max(0, remainingOrders - 1);
+  const remainingCopy = afterThisOrder === 0
+    ? window.CustomerLanguage?.t("Unlocks after this order is delivered or picked up.") || "Unlocks after this order is delivered or picked up."
+    : window.CustomerLanguage?.template(afterThisOrder === 1
+      ? "After this order, {count} more completed order to unlock."
+      : "After this order, {count} more completed orders to unlock.", { count: afterThisOrder })
+      || `After this order, ${afterThisOrder} more completed orders to unlock.`;
+  const span = next.cycleOffset === 0 ? Math.max(1, targetOrder - progress.previousOrder) : Math.max(1, targetOrder);
+  const done = next.cycleOffset === 0 ? progress.completedSincePrevious : 0;
+  const anticipated = Math.min(span, done + 1);
+  const percent = Math.round(anticipated / span * 100);
+  const detail = next.detail || "Complete more orders to unlock this reward.";
+  const title = window.CustomerLanguage?.t("NEXT ORDER REWARD") || "NEXT ORDER REWARD";
+  orderSuccessNextReward.innerHTML = `<div class="order-success-next-top"><span>${esc(title)}</span><span>${esc(window.CustomerLanguage?.template("ORDER {order}", { order: targetOrder }) || `ORDER ${targetOrder}`)}</span></div><strong>${esc(next.title || "Your next reward")}</strong><p>${esc(detail)}</p><div class="order-success-next-track" role="progressbar" aria-label="Progress to ${esc(next.title || "next reward")}" aria-valuemin="0" aria-valuemax="${span}" aria-valuenow="${anticipated}"><span style="width:${percent}%"></span></div><small>${esc(remainingCopy)}</small>`;
+  orderSuccessNextReward.hidden = false;
+}
 
 
 function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false, addressLabel = "", displayOrderNumber = "", isTestOrder = false, orderData = null, appliedReward = null) {
@@ -1638,6 +1682,7 @@ function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false,
     orderSuccessReward.hidden = !rewardMessage;
     orderSuccessReward.textContent = rewardMessage;
   }
+  renderOrderSuccessNextReward(isTestOrder, orderData, appliedReward);
   const successText = orderSuccessOverlay.querySelector(".order-success-text");
   if (successText) successText.textContent = isTestOrder
     ? window.CustomerLanguage?.t("This is a test order. It will not be prepared or earn rewards.") || "This is a test order. It will not be prepared or earn rewards."

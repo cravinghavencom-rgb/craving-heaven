@@ -1637,6 +1637,8 @@ body.checkout-open {
 
 .order-success-modal {
   width: min(100%, 430px);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
   background: #fff;
   border-radius: 22px;
   padding: 34px 24px 26px;
@@ -1705,6 +1707,72 @@ body.checkout-open {
 }
 
 .order-success-reward[hidden] { display: none; }
+
+.order-success-next-reward {
+  margin: 0 0 16px;
+  padding: 15px 16px 14px;
+  border: 1px solid #ead9bd;
+  border-radius: 17px;
+  background: linear-gradient(145deg, #fffaf0, #fff 78%);
+  color: #36231d;
+  text-align: left;
+  box-shadow: 0 8px 22px rgba(95, 54, 28, .08);
+}
+
+.order-success-next-reward[hidden] { display: none; }
+
+.order-success-next-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 9px;
+  color: #87612d;
+  font: 800 9px/1.35 "Montserrat", sans-serif;
+  letter-spacing: .1em;
+}
+
+.order-success-next-top span:last-child {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #f8edda;
+  color: #7d392b;
+  white-space: nowrap;
+}
+
+.order-success-next-reward > strong {
+  display: block;
+  font: 900 16px/1.3 "Montserrat", sans-serif;
+}
+
+.order-success-next-reward > p {
+  margin: 6px 0 11px;
+  color: #71635b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.order-success-next-track {
+  height: 7px;
+  overflow: hidden;
+  margin-bottom: 8px;
+  border-radius: 99px;
+  background: #eee7dc;
+}
+
+.order-success-next-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #c79343, #a90d19);
+}
+
+.order-success-next-reward > small {
+  display: block;
+  color: #72554a;
+  font-size: 11px;
+  line-height: 1.4;
+}
 
 .order-success-id {
   padding: 15px;
