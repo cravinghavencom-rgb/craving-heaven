@@ -994,12 +994,12 @@ async function handlePlaceOrderClick() {
         const expiry = reward.expiresAt ? (reward.expiresAt?.toDate ? reward.expiresAt.toDate() : new Date(reward.expiresAt)) : null;
         const gameReward = ["craving-dash", "craving-runner"].includes(reward.source);
         const expires = expiry && !Number.isNaN(expiry.getTime()) ? `${gameReward ? "Expires" : "Use by"} ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: gameReward ? "numeric" : undefined, minute: gameReward ? "2-digit" : undefined }).format(expiry)}` : "Ready to use";
-        return `<article class="journey-card journey-card-ready"><span class="journey-card-status">✦ READY TO USE</span><strong>${esc(definition.title || reward.title)}</strong><p>${esc(definition.detail || reward.detail || "Use this reward on your next order")}</p>${comboSpendNote(definition) ? `<small>${esc(comboSpendNote(definition))}</small>` : ""}<small>${esc(expires)}</small><button type="button" class="journey-use-button" data-use-reward="${esc(reward.ticketId || reward.id)}">USE IN CART</button></article>`;
+        return `<article class="journey-card journey-card-ready"><span class="journey-card-status">✦ READY TO USE</span><strong>${esc(definition.title || reward.title)}</strong><p>${esc(definition.detail || reward.detail || "Use this reward on your next order")}</p><small>${esc(expires)}</small><button type="button" class="journey-use-button" data-use-reward="${esc(reward.ticketId || reward.id)}">USE IN CART</button></article>`;
       })
     ];
     const upcomingCards = upcoming.map((item, index) => {
       const targetOrder = Math.max(1, Number(item.order));
-      const cycleLabel = item.cycleOffset ? `NEXT ROUND · ORDER ${targetOrder}` : `ORDER ${targetOrder}`;
+      const cycleLabel = item.cycleOffset ? `ROUND ${item.cycleOffset + 1} · ${targetOrder}` : `ORDER ${targetOrder}`;
       const remainingOrders = item.cycleOffset === 0
         ? Math.max(1, targetOrder - progress.position)
         : Math.max(0, 30 - progress.position) + targetOrder;
@@ -1008,7 +1008,7 @@ async function handlePlaceOrderClick() {
         const span = item.cycleOffset === 0 ? Math.max(1, targetOrder - progress.previousOrder) : Math.max(1, targetOrder);
         const done = item.cycleOffset === 0 ? progress.completedSincePrevious : 0;
         const percent = Math.round(done / span * 100);
-        return `<article class="journey-card journey-card-next journey-card-locked"><div class="journey-next-top"><span class="journey-card-status"><span class="journey-lock-icon" aria-hidden="true">🔒</span> UP NEXT · ${cycleLabel}</span><span class="journey-next-distance">${orderText} to unlock</span></div><strong>${esc(item.title)}</strong><p>${esc(item.detail || "Complete more orders to unlock this reward.")}</p>${comboSpendNote(item) ? `<small>${esc(comboSpendNote(item))}</small>` : ""}<div class="journey-progress-track" role="progressbar" aria-label="Progress to ${esc(item.title)}" aria-valuemin="0" aria-valuemax="${span}" aria-valuenow="${done}"><span style="width:${percent}%"></span></div><small>Unlocks when the required order is completed and delivered or picked up.</small></article>`;
+        return `<article class="journey-card journey-card-next journey-card-locked"><div class="journey-next-top"><span class="journey-card-status"><span class="journey-lock-icon" aria-hidden="true">🔒</span> ${cycleLabel}</span><span class="journey-next-distance">${remainingOrders} LEFT</span></div><strong>${esc(item.title)}</strong><p>${esc(item.detail || "Complete more orders to unlock this reward.")}</p><div class="journey-progress-track" role="progressbar" aria-label="Progress to ${esc(item.title)}" aria-valuemin="0" aria-valuemax="${span}" aria-valuenow="${done}"><span style="width:${percent}%"></span></div><small>Unlocks after the required order is completed.</small></article>`;
       }
       return `<article class="journey-card journey-card-locked journey-card-future"><div class="journey-future-top"><span class="journey-lock-icon" aria-hidden="true">🔒</span><span class="journey-card-status">${cycleLabel}</span></div><strong>${esc(item.title)}</strong><p>${esc(item.detail || "A reward for a future completed order.")}</p><small>Locked · ${orderText} away</small></article>`;
     });
@@ -1761,9 +1761,6 @@ function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false,
       : `${addressSaved ? `${window.CustomerLanguage?.t("Your delivery address is saved to your account.") || "Your delivery address is saved to your account."} ` : ""}${window.CustomerLanguage?.t("Track your order anytime from the Orders screen.") || "Track your order anytime from the Orders screen."}`;
   }
   let rewardMessage = !isTestOrder ? window.CustomerLanguage?.rewardMessage(orderData, appliedReward) || "" : "";
-  if (!isTestOrder && !rewardMessage && orderType === "delivery" && Number(orderData?.deliveryCharge) === 0) {
-    rewardMessage = window.CustomerLanguage?.t("Yay! Aaj ki delivery free hai!") || "Great news! Today’s delivery is free!";
-  }
   if (!isTestOrder && !rewardMessage && Number(orderData?.pointsToAward) > 0) {
     rewardMessage = window.CustomerLanguage?.template(
       "This order will add {points} Craving Points after delivery or pickup.",

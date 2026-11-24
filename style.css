@@ -3813,8 +3813,29 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .journey-upcoming-grid .journey-future-top { min-height:24px; }
 .journey-upcoming-grid .journey-card-future > small { margin-top:auto; }
 .journey-upcoming-heading { margin-top:12px; }
+.journey-ready-grid .journey-card,
+.journey-upcoming-grid .journey-card { gap:5px; padding:9px; }
+.journey-ready-grid .journey-card-status,
+.journey-upcoming-grid .journey-card-status { flex:0 0 auto; font-size:7px; letter-spacing:.04em; }
+.journey-ready-grid .journey-card > strong,
+.journey-upcoming-grid .journey-card > strong { flex:0 0 auto; font-size:10px; line-height:1.25; -webkit-line-clamp:2; }
+.journey-ready-grid .journey-card > p,
+.journey-upcoming-grid .journey-card > p { flex:0 1 auto; max-height:2.65em; -webkit-line-clamp:2; font-size:8px; line-height:1.32; }
+.journey-ready-grid .journey-card > small,
+.journey-upcoming-grid .journey-card > small { flex:0 0 auto; font-size:7px; }
+.journey-ready-grid .journey-card .journey-use-button { flex:0 0 auto; min-height:24px; margin-top:auto; padding:5px 7px; font-size:7px; }
+.journey-upcoming-grid .journey-next-top { flex:0 0 auto; align-items:center; justify-content:space-between; gap:4px; }
+.journey-upcoming-grid .journey-card-next .journey-card-status { display:flex; min-width:0; align-items:center; gap:3px; white-space:nowrap; }
+.journey-upcoming-grid .journey-card-next .journey-lock-icon { flex:0 0 17px; width:17px; height:17px; margin:0; font-size:9px; }
+.journey-upcoming-grid .journey-next-distance { flex:0 0 auto; padding:4px 5px; font-size:7px; letter-spacing:0; }
+.journey-upcoming-grid .journey-card-next > strong { font-size:10px; }
+.journey-upcoming-grid .journey-progress-track { flex:0 0 5px; height:5px; margin-top:auto; }
+.journey-upcoming-grid .journey-card-next > small:last-child { display:block; margin-top:0; font-size:7px; }
+.journey-upcoming-grid .journey-future-top { flex:0 0 auto; min-height:18px; gap:4px; }
+.journey-upcoming-grid .journey-card-future > small { margin-top:auto; }
 @media(max-width:380px) {
   .journey-ready-grid,.journey-upcoming-grid { gap:8px; }
-  .journey-ready-grid .journey-card,.journey-upcoming-grid .journey-card { padding:10px; }
-  .journey-ready-grid .journey-card > p,.journey-upcoming-grid .journey-card > p { font-size:8px; }
+  .journey-ready-grid .journey-card,.journey-upcoming-grid .journey-card { gap:4px; padding:8px; }
+  .journey-ready-grid .journey-card > strong,.journey-upcoming-grid .journey-card > strong { font-size:9px; }
+  .journey-ready-grid .journey-card > p,.journey-upcoming-grid .journey-card > p { font-size:7px; }
 }
