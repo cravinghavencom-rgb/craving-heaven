@@ -681,6 +681,26 @@ function rewardSpendSubtotal(reward, regularSubtotal, comboSubtotal) {
   return Number(regularSubtotal || 0) + (includeCombos ? Number(comboSubtotal || 0) : 0);
 }
 
+function rewardCanBeUsedForOrder(ticket, context) {
+  if (ticket?.expiresAt && timestampMillis(ticket.expiresAt) <= Date.now()) return false;
+  const definition = ticket?.definition || context.rewardConfig.rewardById?.[ticket?.id] || ticket;
+  const kind = ticket?.source && ["craving-dash", "craving-runner"].includes(ticket.source)
+    ? ticket.kind
+    : definition?.kind || ticket?.kind;
+  const reward = { ...definition, kind };
+  if (!kind || rewardSpendSubtotal(reward, context.eligibleSubtotal, context.comboPointSubtotal) < Number(reward.minimum || 0)) return false;
+  if (kind === "free-delivery" && (context.orderType !== "delivery" || context.subtotal >= FREE_DELIVERY_THRESHOLD)) return false;
+  if (kind === "buy-get") {
+    const quantity = context.pricedItems
+      .filter(item => !item.isFreeOffer && !item.isLoyaltyReward && item.name === reward.buyItem)
+      .reduce((sum, item) => sum + Number(item.qty || 0), 0);
+    if (quantity < Number(reward.buyQuantity || 0)) return false;
+  }
+  if (kind === "free-item" && !context.priceByName.has(reward.item)) return false;
+  if (kind === "percent-discount" && Math.floor(context.eligibleSubtotal * Number(reward.percent || 0) / 100) <= 0) return false;
+  return true;
+}
+
 function validateAndPriceItems(items, menuData = MENU_DATA, comboData = COMBO_MENU_DATA) {
   if (!Array.isArray(items) || items.length < 1 || items.length > 50) {
     throw new HttpsError("invalid-argument", "Your cart is empty or has too many different items.");
@@ -1779,7 +1799,8 @@ exports.createOrder = onCall({ region: REGION }, async request => {
       if (!loyaltyReward || freeOffer || requestedPoints) {
         throw new HttpsError("failed-precondition", "This reward is no longer available or cannot be combined with another offer.");
       }
-      const oldestReward = availableRewards.filter(reward => !reward.expiresAt || timestampMillis(reward.expiresAt) > Date.now()).sort((a, b) => timestampMillis(a.issuedAt) - timestampMillis(b.issuedAt))[0];
+      const orderContext = { rewardConfig, orderType, subtotal, eligibleSubtotal, comboPointSubtotal, pricedItems, priceByName };
+      const oldestReward = availableRewards.filter(reward => rewardCanBeUsedForOrder(reward, orderContext)).sort((a, b) => timestampMillis(a.issuedAt) - timestampMillis(b.issuedAt))[0];
       if (!oldestReward || (oldestReward.ticketId || oldestReward.id) !== loyaltyRewardTicketId) {
         throw new HttpsError("failed-precondition", "Use your oldest available Royal Rewards benefit first.");
       }
@@ -2285,7 +2306,8 @@ exports.createWalkInOrder = onCall({ region: REGION }, async request => {
         : claimedReward ? (claimedReward.definition || rewardConfig.rewardById[claimedReward.id]) : null;
       if (!loyaltyReward || requestedPoints) throw new HttpsError("failed-precondition", "This reward is no longer available or cannot be combined with points.");
       const activeRewards = availableRewards.filter(reward => !reward.expiresAt || timestampMillis(reward.expiresAt) > Date.now());
-      const oldestReward = activeRewards.sort((a, b) => timestampMillis(a.issuedAt) - timestampMillis(b.issuedAt))[0];
+      const orderContext = { rewardConfig, orderType: "counter", subtotal, eligibleSubtotal, comboPointSubtotal, pricedItems, priceByName };
+      const oldestReward = activeRewards.filter(reward => rewardCanBeUsedForOrder(reward, orderContext)).sort((a, b) => timestampMillis(a.issuedAt) - timestampMillis(b.issuedAt))[0];
       if (!oldestReward || (oldestReward.ticketId || oldestReward.id) !== loyaltyRewardTicketId) {
         throw new HttpsError("failed-precondition", "Use the oldest available Royal Rewards benefit first.");
       }

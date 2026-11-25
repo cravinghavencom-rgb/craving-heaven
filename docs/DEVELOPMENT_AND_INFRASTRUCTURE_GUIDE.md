@@ -180,6 +180,10 @@ The customer rewards screen reads the completed-order total from the same authen
 
 ## 8. Hosting and deployment
 
+### Reward checkout compatibility fix (25 November 2026)
+
+The server now applies the oldest-reward rule only among rewards usable on the current order. Expired rewards, free-delivery rewards on pickup or on an order already meeting the free-delivery threshold, minimum-spend rewards below their threshold, and Buy & Get rewards without the required qualifying quantity no longer block a different eligible reward. Both customer checkout and staff walk-in reward validation use the same applicability check. The affected customer flow is `createOrder`; no Hosting/UI or reward configuration changes are required.
+
 `firebase.json` currently configures:
 
 - Hosting site `craving-heaven-e2e94`, with `public: "."` and root rewrite to `index.html`.
