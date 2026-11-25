@@ -1413,6 +1413,9 @@ async function handlePlaceOrderClick() {
       const homePointsSummary = document.getElementById("homeLoyaltySummary");
       if (homePointsSummary) homePointsSummary.textContent = loyaltyAccountLoaded ? "Craving Points · combos earn half rate" : "Points could not load · try again";
       renderRewardsJourney(currentLoyaltyAccount, true);
+      if (orderSuccessOverlay?.classList.contains("open")) {
+        renderOrderSuccessNextReward(orderSuccessWasTest, orderSuccessOrderData, orderSuccessAppliedReward);
+      }
       customerAccountLoadedUid = user.uid;
       customerAccountLoadedAt = Date.now();
       if (cartOverlay?.classList.contains("active")) renderCart();
@@ -1654,6 +1657,8 @@ const orderSuccessScratch = document.getElementById("orderSuccessScratch");
 const orderSuccessScratchSurface = document.getElementById("orderSuccessScratchSurface");
 const orderSuccessScratchReveal = document.getElementById("orderSuccessScratchReveal");
 let orderSuccessWasTest = false;
+let orderSuccessOrderData = null;
+let orderSuccessAppliedReward = null;
 
 function revealOrderSuccessScratch() {
   if (!orderSuccessScratch || orderSuccessScratch.dataset.revealed === "true") return;
@@ -1775,6 +1780,8 @@ function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false,
 
   if (!orderSuccessOverlay) return;
   orderSuccessWasTest = isTestOrder;
+  orderSuccessOrderData = orderData;
+  orderSuccessAppliedReward = appliedReward;
 
   if (orderSuccessId) {
     const prefix = orderType === "pickup" ? "PK" : "DL";
