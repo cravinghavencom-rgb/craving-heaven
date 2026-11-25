@@ -121,16 +121,17 @@ function renderGoogleAdsAnalytics(ads, report) {
     return;
   }
   $("adsAttributedConversions").textContent = Number(ads.attributedConversions || 0).toLocaleString("en-IN");
+  $("adsClicks").textContent = Number(ads.adClicks || 0).toLocaleString("en-IN");
   $("adsAttributedValue").textContent = money(ads.attributedOrderValue);
   $("adsWebsiteOrders").textContent = Number(ads.websiteOrders || 0).toLocaleString("en-IN");
   $("adsWebsiteValue").textContent = `${money(ads.websiteOrderValue)} total website order value`;
   $("adsVisits").textContent = ads.visits == null ? "Not connected" : Number(ads.visits).toLocaleString("en-IN");
   const daily = ads.daily || [];
-  $("googleAdsDailyRows").innerHTML = daily.length ? daily.map(row => `<tr><td>${escapeHtml(row.date)}</td><td>${Number(row.websiteOrders || 0)}</td><td>${Number(row.attributedConversions || 0)}</td><td>${money(row.attributedOrderValue)}</td></tr>`).join("") : '<tr><td colspan="4" class="empty-cell">No website orders for this period yet.</td></tr>';
+  $("googleAdsDailyRows").innerHTML = daily.length ? daily.map(row => `<tr><td>${escapeHtml(row.date)}</td><td>${Number(row.adClicks || 0).toLocaleString("en-IN")}</td><td>${Number(row.websiteOrders || 0)}</td><td>${Number(row.attributedConversions || 0)}</td><td>${money(row.attributedOrderValue)}</td></tr>`).join("") : '<tr><td colspan="5" class="empty-cell">No ad clicks or orders for this period yet.</td></tr>';
   const orders = ads.orders || [];
   $("googleAdsOrderRows").innerHTML = orders.length ? orders.map(row => `<tr><td>${escapeHtml(dateText(row.createdAt))}</td><td>${escapeHtml(row.mobile || "—")}</td><td>${escapeHtml(row.orderNumber || "—")}</td><td>${money(row.value)}</td><td class="google-click-id"><span>${escapeHtml(`${String(row.clickIdType || "").toUpperCase()}: ${row.clickId || ""}`)}</span></td></tr>`).join("") : '<tr><td colspan="5" class="empty-cell">No attributed orders for this period yet.</td></tr>';
   const period = report.range === "today" ? "Today" : report.range === "week" ? "This week" : "This month";
-  message($("googleAdsAnalyticsMessage"), `${period} · ${report.startDate} to ${report.endDate} · refreshed ${new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}${ads.truncatedOrders ? " · Showing the latest 500 attributed orders" : ""}`, "success");
+  message($("googleAdsAnalyticsMessage"), `${period} · ${report.startDate} to ${report.endDate} · refreshed ${new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}${ads.truncatedAdClicks ? " · Showing the first 20,000 ad clicks" : ""}${ads.truncatedOrders ? " · Showing the latest 500 attributed orders" : ""}`, "success");
 }
 document.querySelectorAll("[data-range]").forEach(button => button.addEventListener("click", () => {
   analyticsRange = button.dataset.range; document.querySelectorAll("[data-range]").forEach(item => item.classList.toggle("selected", item.dataset.range === analyticsRange)); loadAnalytics();

@@ -13,7 +13,20 @@ try {
     const value = params.get(key) || "";
     if (/^[A-Za-z0-9._~-]{8,500}$/.test(value)) clickIds[key] = value;
   }
-  if (Object.keys(clickIds).length) sessionStorage.setItem(GOOGLE_ADS_CLICK_IDS_KEY, JSON.stringify(clickIds));
+  if (Object.keys(clickIds).length) {
+    sessionStorage.setItem(GOOGLE_ADS_CLICK_IDS_KEY, JSON.stringify(clickIds));
+    const [clickIdType, clickId] = Object.entries(clickIds)[0];
+    const recordAdClick = async () => {
+      try {
+        if (typeof window.ensureFirebaseAppCheck === "function") await window.ensureFirebaseAppCheck();
+        const callable = window.FirebaseFunctionsAPI?.httpsCallable;
+        if (callable && window.firebaseFunctions) {
+          await callable(window.firebaseFunctions, "recordGoogleAdsClick")({ clickIdType, clickId });
+        }
+      } catch (error) { console.warn("Google Ads click measurement was unavailable", error); }
+    };
+    void recordAdClick();
+  }
 } catch (_) { /* Ads attribution is optional when browser storage is unavailable. */ }
 const REWARDS_CONFIG = window.CRAVING_REWARDS || { journey: [], rewardById: {} };
 const REWARD_EXCLUDED_NAMES = new Set((MENU_DATA.extras?.items || []).map(item => item.name));

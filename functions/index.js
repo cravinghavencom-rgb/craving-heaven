@@ -1,4 +1,5 @@
 const { initializeApp } = require("firebase-admin/app");
+const { createHash } = require("node:crypto");
 const { getFirestore, FieldValue, Timestamp, FieldPath } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
 const { getMessaging } = require("firebase-admin/messaging");
@@ -1586,6 +1587,22 @@ function summarizeSales(orders) {
   return { summary, items: [...items.values()].sort((a, b) => b.quantity - a.quantity), locations: [...locations.values()].sort((a, b) => b.sales - a.sales), weekdays: [...weekdays.entries()].map(([day, values]) => ({ day, ...values })) };
 }
 
+exports.recordGoogleAdsClick = onCall({ region: REGION, enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
+  const clickIdType = String(request.data?.clickIdType || "").toLowerCase();
+  const clickId = String(request.data?.clickId || "");
+  if (!["gclid", "gbraid", "wbraid"].includes(clickIdType) || !/^[A-Za-z0-9._~-]{8,500}$/.test(clickId)) {
+    throw new HttpsError("invalid-argument", "A valid Google Ads click ID is required.");
+  }
+  const clickKey = createHash("sha256").update(`${clickIdType}:${clickId}`).digest("hex");
+  const clickRef = db.collection("googleAdsClicks").doc(clickKey);
+  return db.runTransaction(async transaction => {
+    const existing = await transaction.get(clickRef);
+    if (existing.exists) return { recorded: false };
+    transaction.create(clickRef, { clickIdType, createdAt: FieldValue.serverTimestamp() });
+    return { recorded: true };
+  });
+});
+
 exports.adminGetSalesAnalytics = onCall({ region: REGION }, async request => {
   await requireAdmin(request);
   const range = String(request.data?.range || "today");
@@ -1605,6 +1622,12 @@ exports.adminGetSalesAnalytics = onCall({ region: REGION }, async request => {
     return ["gclid", "gbraid", "wbraid"].map(key => ids[key] ? { type: key, value: String(ids[key]) } : null).find(Boolean) || null;
   };
   const attributedOrders = eligibleOnlineOrders.filter(order => clickIdFor(order));
+  const adClickSnapshot = await db.collection("googleAdsClicks")
+    .where("createdAt", ">=", Timestamp.fromDate(start))
+    .where("createdAt", "<", endTimestamp)
+    .orderBy("createdAt", "asc")
+    .limit(20000)
+    .get();
   const dailyAdsMap = new Map();
   for (const order of eligibleOnlineOrders) {
     const created = order.createdAt?.toDate?.();
@@ -1617,12 +1640,22 @@ exports.adminGetSalesAnalytics = onCall({ region: REGION }, async request => {
     if (clickIdFor(order)) { row.attributedConversions += 1; row.attributedOrderValue += amount; }
     dailyAdsMap.set(date, row);
   }
+  for (const document of adClickSnapshot.docs) {
+    const created = document.data().createdAt?.toDate?.();
+    if (!created) continue;
+    const date = mumbaiDateKey(created);
+    const row = dailyAdsMap.get(date) || { date, websiteOrders: 0, websiteOrderValue: 0, adClicks: 0, attributedConversions: 0, attributedOrderValue: 0 };
+    row.adClicks = (row.adClicks || 0) + 1;
+    dailyAdsMap.set(date, row);
+  }
   return {
     range, startDate: startKey, endDate: mumbaiDateKey(), timezone: "Asia/Kolkata", ...report,
     weekdays: weekdayReport, truncated: result.size === 20000,
     googleAds: {
       websiteOrders: eligibleOnlineOrders.length,
       websiteOrderValue: eligibleOnlineOrders.reduce((sum, order) => sum + Math.max(0, Number(order.total || 0)), 0),
+      adClicks: adClickSnapshot.size,
+      truncatedAdClicks: adClickSnapshot.size === 20000,
       attributedConversions: attributedOrders.length,
       attributedOrderValue: attributedOrders.reduce((sum, order) => sum + Math.max(0, Number(order.total || 0)), 0),
       visits: null,
