@@ -879,7 +879,7 @@ async function handlePlaceOrderClick() {
     });
   }
 
-  function setAppScreen(screenName) {
+  function setAppScreen(screenName, { syncHash = false } = {}) {
     if (screenName === "offers") {
       screenName = "menu";
       activeMenuTab = "combos";
@@ -890,6 +890,12 @@ async function handlePlaceOrderClick() {
       activeProfileTab = "orders";
     } else if (screenName === "profile") {
       activeProfileTab = "details";
+    }
+    if (syncHash && ["home", "menu", "game", "rewards", "profile"].includes(screenName)) {
+      const screenHash = `#screen-${screenName}`;
+      if (window.location.hash !== screenHash) {
+        window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}${screenHash}`);
+      }
     }
     if (screenName !== "rewards") {
       const orderRewardsFollowup = document.getElementById("orderRewardsFollowup");
@@ -916,7 +922,7 @@ async function handlePlaceOrderClick() {
   }
 
   const notificationDeepLinkScreen = /^#screen-(home|menu|offers|game|rewards|orders|profile)$/.exec(location.hash)?.[1];
-  if (notificationDeepLinkScreen) setAppScreen(notificationDeepLinkScreen);
+  // Apply deep links after the rest of the customer screen state is initialized.
 
   function accountSignInCard(message) {
     return `<div class="account-empty"><div class="account-empty-icon">♙</div><h2>Sign in to continue</h2><p>${esc(message)}</p><button type="button" class="account-primary-button" data-account-login>LOGIN WITH MOBILE</button></div>`;
@@ -3390,7 +3396,7 @@ document.addEventListener("click", async event => {
       openCustomerLogin();
       return;
     }
-    setAppScreen(screenButton.dataset.screen);
+    setAppScreen(screenButton.dataset.screen, { syncHash: true });
     return;
   }
 
@@ -4208,6 +4214,8 @@ setInterval(refreshOrderingAvailability, 60000);
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") refreshOrderingAvailability();
 });
+
+if (notificationDeepLinkScreen) setAppScreen(notificationDeepLinkScreen);
 
 if (window.location.pathname === "/order-confirmation") {
   const requestedTransaction = new URLSearchParams(window.location.search).get("transaction_id") || "";
