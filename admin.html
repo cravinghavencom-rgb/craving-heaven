@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow">
   <title>Admin Desk | CRAVING HEAVEN</title>
   <link rel="icon" type="image/png" href="images/logo.png">
-  <link rel="stylesheet" href="admin.css?v=20261106-push-offers-v1">
+  <link rel="stylesheet" href="admin.css?v=20261125-google-ads-v1">
 </head>
 <body>
   <header class="admin-header">
@@ -27,7 +27,7 @@
     <section id="adminApp" hidden>
       <div class="page-heading"><div><span class="eyebrow">BUSINESS OVERVIEW</span><h1>Admin Desk</h1><p class="muted">Signed in as <strong id="adminSignedInAs"></strong></p></div><span class="secure-badge">🔒 Admin-only workspace</span></div>
       <nav class="admin-tabs" role="tablist" aria-label="Admin sections">
-        <button class="admin-tab active" data-admin-tab="dashboard">Overview</button><button class="admin-tab" data-admin-tab="customers">Customers</button><button class="admin-tab" data-admin-tab="access">Access</button><button class="admin-tab" data-admin-tab="menu">Menu</button><button class="admin-tab" data-admin-tab="rewards">Rewards</button><button class="admin-tab" data-admin-tab="game">Game Rewards</button><button class="admin-tab" data-admin-tab="benefits">Customer benefits</button><button class="admin-tab" data-admin-tab="messages">WhatsApp</button><button class="admin-tab" data-admin-tab="notifications">Push offers</button>
+        <button class="admin-tab active" data-admin-tab="dashboard">Overview</button><button class="admin-tab" data-admin-tab="customers">Customers</button><button class="admin-tab" data-admin-tab="access">Access</button><button class="admin-tab" data-admin-tab="menu">Menu</button><button class="admin-tab" data-admin-tab="rewards">Rewards</button><button class="admin-tab" data-admin-tab="game">Game Rewards</button><button class="admin-tab" data-admin-tab="benefits">Customer benefits</button><button class="admin-tab" data-admin-tab="messages">WhatsApp</button><button class="admin-tab" data-admin-tab="notifications">Push offers</button><button class="admin-tab" data-admin-tab="google-ads">Google Ads</button>
       </nav>
 
       <section class="admin-section" data-admin-section="dashboard">
@@ -59,6 +59,15 @@
           </form>
         </article>
         <div class="report-grid"><article class="card report-card"><div class="section-heading compact"><div><span class="eyebrow">BEST SELLERS</span><h3>Item-wise sales</h3></div></div><div class="table-scroll"><table><thead><tr><th>Item</th><th>Qty</th><th>Menu value</th></tr></thead><tbody id="itemSalesRows"><tr><td colspan="3" class="empty-cell">No sales for this period yet.</td></tr></tbody></table></div><p class="footnote">Menu value uses listed prices; order-level discounts are shown in total sales.</p></article><article class="card report-card"><div class="section-heading compact"><div><span class="eyebrow">WEEKDAY PATTERN</span><h3>Sales by day</h3></div></div><div id="weekdayChart" class="weekday-chart"></div><p class="footnote">Shows completed and active orders placed this month, excluding cancelled orders.</p></article><article class="card report-card"><div class="section-heading compact"><div><span class="eyebrow">ORDER LOCATIONS</span><h3>Sales by area</h3></div></div><div class="table-scroll"><table><thead><tr><th>Location</th><th>Orders</th><th>Sales</th></tr></thead><tbody id="locationSalesRows"><tr><td colspan="3" class="empty-cell">No sales for this period yet.</td></tr></tbody></table></div><p class="footnote">Delivery orders use the customer’s selected area. Pickup and counter orders are listed separately.</p></article></div>
+      </section>
+
+      <section class="admin-section" data-admin-section="google-ads" hidden>
+        <div class="section-heading"><div><span class="eyebrow">PURCHASE ATTRIBUTION · MUMBAI TIME</span><h2>Google Ads performance</h2><p class="muted">See website orders tied to a Google Ads click ID. Reports update from the same secure order data as Sales overview.</p></div><div class="google-ads-actions"><div class="range-switch" role="group" aria-label="Google Ads report period"><button data-range="today" class="selected">Today</button><button data-range="week">This week</button><button data-range="month">This month</button></div><button id="refreshGoogleAds" class="button button-quiet" type="button">Refresh data</button></div></div>
+        <p id="googleAdsAnalyticsMessage" class="message" role="status">Loading Google Ads results…</p>
+        <div class="metric-grid google-ads-metrics"><article class="metric-card metric-main"><span>Google Ads attributed orders</span><strong id="adsAttributedConversions">0</strong><small>Orders carrying a Google click ID</small></article><article class="metric-card"><span>Attributed order value</span><strong id="adsAttributedValue">₹0</strong><small>Order total, including delivery/discounts</small></article><article class="metric-card"><span>Website purchase orders</span><strong id="adsWebsiteOrders">0</strong><small id="adsWebsiteValue">₹0 order value</small></article><article class="metric-card ads-unavailable"><span>Website visits</span><strong id="adsVisits">Not connected</strong><small>Connect GA4 reporting to show visit totals here.</small></article></div>
+        <article class="card"><div class="section-heading compact"><div><span class="eyebrow">DAILY RESULTS</span><h3>Orders and attributed conversions</h3></div></div><div class="table-scroll"><table><thead><tr><th>Date</th><th>Website orders</th><th>Google Ads conversions</th><th>Attributed order value</th></tr></thead><tbody id="googleAdsDailyRows"><tr><td colspan="4" class="empty-cell">No orders for this period yet.</td></tr></tbody></table></div></article>
+        <article class="card"><div class="section-heading compact"><div><span class="eyebrow">CLICK-TO-ORDER MATCHES</span><h3>Google Ads attributed orders</h3></div></div><div class="table-scroll"><table class="google-ads-order-table"><thead><tr><th>Date</th><th>Customer number</th><th>Order ID</th><th>Order value</th><th>Google click ID</th></tr></thead><tbody id="googleAdsOrderRows"><tr><td colspan="5" class="empty-cell">No attributed orders for this period yet.</td></tr></tbody></table></div><p class="footnote">GCLID, GBRAID, and WBRAID identify an ad click, not a person’s Google account. Customer numbers are visible only in this administrator-only report and are never sent to Google. Historical orders before click tracking are not attributed.</p></article>
+        <article class="card ads-setup-note"><strong>What this report includes</strong><p>Purchase conversions are confirmed website orders with an eligible Google Ads click ID. Test and cancelled orders are excluded. Order value uses the total saved with the order. This page does not yet read ad impressions, clicks, spend, or visitors from your Google Ads and GA4 reporting APIs; connect those APIs to add those figures.</p></article>
       </section>
 
       <section class="admin-section" data-admin-section="customers" hidden>
@@ -128,6 +137,6 @@
     </section>
     <dialog id="adminGameTestDialog" class="admin-game-test-dialog" aria-label="Craving Run admin test"><div class="admin-game-test-heading"><strong>ADMIN GAME TEST</strong><button id="closeAdminGameTest" type="button" class="button button-quiet">Close test</button></div><iframe id="adminGameTestFrame" title="Craving Run level test"></iframe></dialog>
   </main>
-  <script type="module" src="admin.js?v=20261106-push-offers-v1"></script>
+  <script type="module" src="admin.js?v=20261125-google-ads-v1"></script>
 </body>
 </html>

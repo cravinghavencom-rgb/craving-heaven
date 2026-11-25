@@ -1,6 +1,6 @@
 # Craving Heaven Website — Development and Infrastructure Guide
 
-**Prepared:** 23 November 2026 — persistent mobile customer sign-in strengthened with IndexedDB and localStorage fallback
+**Prepared:** 25 November 2026 — Google Ads click attribution, order confirmation URL, and GA4 purchase event added
 **Repository:** `craving-heaven` (`main`)  
 **Firebase project configured by this checkout:** `craving-heaven-e2e94`  
 **Firebase Hosting site configured by this checkout:** `craving-heaven-e2e94`
@@ -29,7 +29,7 @@ This is the project's canonical development and infrastructure guide. Update it 
 | App integrity | Firebase App Check initialized in the browser with the reCAPTCHA Enterprise provider |
 | Search discovery | `robots.txt` points to `sitemap.xml`; sitemap lists the canonical customer homepage; admin/staff pages are disallowed for crawlers |
 | Front-end performance | Customer Firebase Auth uses local persistence without the unused popup/redirect resolver; Firestore and Messaging load on demand; branded variable fonts are self-hosted; static assets use a seven-day browser/CDN cache |
-| Analytics | Google tag (`gtag.js`) in `index.html`; measurement IDs in the HTML and Firebase config differ and should be checked |
+| Analytics and Ads attribution | Google tag (`gtag.js`) in `index.html` sends a deduplicatable GA4 `purchase` event with transaction ID, INR order value, and items after live order confirmation; the success modal URL becomes `/order-confirmation?transaction_id=…`; the browser retains GCLID/GBRAID/WBRAID for the current tab session and sends valid click IDs with checkout; the admin Google Ads tab aggregates attributed website orders from Firestore |
 | Push | Firebase Cloud Messaging client setup, token registration, and a service worker; no server-side push sender was found in this repository |
 | Maps and payments | No Google Maps/Places/Geocoding SDK or online payment gateway is called by the current website code |
 
@@ -52,7 +52,7 @@ flowchart TD
   Functions -->|order status trigger| Firestore
 ```
 
-**Customer order flow:** the browser builds the cart and asks the `createOrder` callable to create the order. The server checks the authenticated customer, order availability/test mode, active catalog and reward rules, prices/quantities, delivery rules, points, and reward eligibility before writing. Website test orders are stored separately from live customer orders. The `onOrderStatusChanged` trigger updates loyalty records after relevant order status transitions.
+**Customer order flow:** the browser builds the cart and asks the `createOrder` callable to create the order. The server checks the authenticated customer, order availability/test mode, active catalog and reward rules, prices/quantities, delivery rules, points, and reward eligibility before writing. Website test orders are stored separately from live customer orders. The `onOrderStatusChanged` trigger updates loyalty records after relevant order status transitions. A confirmed live website order changes the address to `/order-confirmation?transaction_id=<order number>` while keeping the success modal visible. It sends a GA4 `purchase` event with a unique transaction ID to support duplicate protection. Test orders do not send purchase events. Closing the modal returns to `/#screen-rewards`.
 
 **Store hours display:** the customer home and cart show the live opening schedule returned by `getOrderingStatus`. Default hours are 16:30–23:45 Asia/Kolkata (4:30 PM–11:45 PM); saved Admin hours take precedence. When the schedule is closed, the page also shows the next scheduled opening time without a duplicate closed-hours banner.
 
@@ -66,23 +66,23 @@ flowchart TD
 |---|---|
 | `index.html` | Customer home, menu, cart, checkout, account, order history, and rewards page markup; also loads Google tag and FCM client setup |
 | `style.css` | Shared customer presentation and responsive layouts |
-| `script.js` | Customer interactions, Firebase account flow, cart, checkout, address selection, order/reward display, and notification opt-in; cart and rewards screen share the same completed-order milestone calculation |
+| `script.js` | Customer interactions, Firebase account flow, cart, checkout, address selection, Google click-ID capture, GA4 purchase event, order-confirmation URL, order/reward display, and notification opt-in; cart and rewards screen share the same completed-order milestone calculation |
 | `customer-language.js` | Customer-only Hinglish UI translations, English/Hinglish persisted language preference, welcome-flyer and Profile language controls, case-insensitive dynamic label translations, and localized order-success reward message; product names, configured reward titles, and customer-entered address text are preserved |
 | `menu.js` | Initial menu and combo catalog data exposed to the customer page and staff tools |
 | `rewards-config.js` | Local fallback/default reward configuration; live configuration is also fetched from Functions |
 | `craving-dash.js` | Customer game and reward interactions through callable Functions |
 | `firebase-client.js` | Firebase Web SDK initialization, App Check, Auth, Firestore, Functions, persistence, and local emulator connections |
-| `admin.html`, `admin.js` | Admin sign-in, analytics, settings, menu/reward lineup, access, customer and test-mode management |
+| `admin.html`, `admin.js` | Admin sign-in, sales and Google Ads attributed-order analytics, settings, menu/reward lineup, access, customer and test-mode management |
 | `staff.html`, `staff.js` | Staff sign-in, order queue, status actions, walk-in sales, customer lookup, and online ordering controls |
 | `team-account-setup.html`, `team-account-setup.js` | One-time team email/password account setup and account linking |
 | `firebase-messaging-sw.js` | Service worker that displays FCM background messages and handles notification clicks |
-| `functions/index.js` | Server-side authorization, order processing, config management, loyalty, test mode, and admin/staff callables |
+| `functions/index.js` | Server-side authorization, order processing, validated ad click-ID storage, config management, loyalty, test mode, and admin/staff callables |
 | `functions/rewards-config.js` | Server-side defaults and validation for the reward program |
 | `functions/menu-catalog.js` | Server-side menu catalog used to validate authoritative order pricing |
 | `functions/scripts/build-menu-catalog.js` | Build step run before Functions deployment |
 | `firestore.rules` | Firestore client access rules; default deny applies outside explicitly allowed paths |
 | `firestore.indexes.json` | Required Firestore composite indexes |
-| `firebase.json` | Hosting, Functions, Firestore, headers, rewrites, and emulator configuration |
+| `firebase.json` | Hosting, Functions, Firestore, headers, rewrites (including `/order-confirmation`), and emulator configuration |
 | `.firebaserc` | Default Firebase project alias: `craving-heaven-e2e94` |
 | `docs/` | Internal development documentation; ignored by Firebase Hosting |
 
@@ -100,6 +100,8 @@ There is no root `package.json`/bundler build. Browser code imports Firebase Web
 | Firebase App Check + reCAPTCHA Enterprise | `firebase-client.js` | Web app attestation/token validation for Firebase services | App Check is no-cost as a Firebase product; Enterprise assessments above their included tier may be billable |
 | Firebase Cloud Messaging (FCM) | `index.html`, `script.js`, `firebase-messaging-sw.js`, `functions/index.js` | Customers can opt in to browser notifications; Admin Desk can send an immediate offer/reward message to all registered browser tokens; the service worker displays background notifications | Firebase lists FCM as no-cost. Function invocation, Firestore token reads, and network usage can still have separate costs. |
 | Google Analytics 4 tag | `index.html` | Sends browser analytics through `gtag.js` | Firebase lists Analytics as no-cost for standard product use |
+| Google Ads click attribution | `script.js`, `functions/index.js`, `admin.html`, `admin.js` | Captures GCLID/GBRAID/WBRAID for the current browser tab session, stores validated IDs on live website orders, and shows date-filtered attributed conversions, order totals, mobile number, order number, and click ID in the admin-only Google Ads tab | No Google Ads API or Ads API reporting call is configured. The dashboard uses existing order records and the existing admin analytics callable; it does not incur a separate Ads API charge |
+| Google Ads click attribution | `script.js`, `functions/index.js`, `admin.html`, `admin.js` | Captures GCLID/GBRAID/WBRAID for the current browser tab session, stores validated IDs on live website orders, and shows date-filtered attributed conversions, order totals, mobile number, order number, and click ID in the admin-only Google Ads tab | No Google Ads API or Ads API reporting call is configured. The dashboard uses existing order records and the existing admin analytics callable; it does not incur a separate Ads API charge |
 | DM Sans and Montserrat font files | `assets/fonts/`, `style.css`, `index.html` | Self-hosted variable fonts; preloaded by the homepage | No Google Fonts network request or Google Maps Platform API is involved |
 | Manual delivery address | `index.html`, `script.js` | Customers enter an address and select a delivery area; saved addresses are account-backed | No location permission or geolocation service is used |
 
@@ -115,8 +117,10 @@ There is no root `package.json`/bundler build. Browser code imports Firebase Web
 ### Integration checks identified
 
 1. The Google tag in `index.html` uses measurement ID `G-GD2EPLFYZP`, while the `measurementId` in `firebase-client.js` and `firebase-messaging-sw.js` is `G-GD2EPFLYPZ`. These values differ. Confirm the intended GA4 property/stream and update the incorrect ID if they are meant to be the same. The actual billing/analytics property cannot be confirmed from source alone.
-2. Push notifications require customer consent. The website shows an optional prompt, saves an FCM token in `notificationTokens/{token}`, and the Admin Desk has a manual send action backed by `adminSendOfferNotification`. It broadcasts immediately to all subscribed browser tokens; there is no schedule, customer segmentation, or automatic reward-triggered campaign. Only select an offer that is currently available and accurate before sending.
-3. This code confirms Functions are in `asia-south1`; it does **not** prove Firestore is in that location. Firestore database location could not be retrieved during this documentation pass. Check Firebase Console → Firestore Database → data/location before making data-residency or regional-price assumptions.
+2. The site sends a GA4 `purchase` event and the admin dashboard calculates first-party click-attributed orders. The Ads API and GA4 Data API are not connected, so Google Ads spend, impressions, click totals, and GA4 visit/session counts are unavailable in the Admin Desk. The customer number is not sent to Google. Use the GA4 `purchase` event as the source for an Ads imported conversion after linking the intended GA4 property, or supply a Google Ads conversion ID/label for a direct Ads tag. The `/order-confirmation` URL is set only after a valid live order in the current browser session; importing the transaction-ID purchase event is preferred for value reporting and repeat protection.
+3. Click IDs are retained only in the current browser tab's session storage, then copied to a live website order by `createOrder`. Closing that tab before checkout or blocking browser storage can prevent click matching. Prior orders are not backfilled.
+4. Push notifications require customer consent. The website shows an optional prompt, saves an FCM token in `notificationTokens/{token}`, and the Admin Desk has a manual send action backed by `adminSendOfferNotification`. It broadcasts immediately to all subscribed browser tokens; there is no schedule, customer segmentation, or automatic reward-triggered campaign. Only select an offer that is currently available and accurate before sending.
+5. This code confirms Functions are in `asia-south1`; it does **not** prove Firestore is in that location. Firestore database location could not be retrieved during this documentation pass. Check Firebase Console → Firestore Database → data/location before making data-residency or regional-price assumptions.
 
 ## 5. Authentication and security model
 

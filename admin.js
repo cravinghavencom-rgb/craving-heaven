@@ -112,10 +112,28 @@ async function loadAnalytics() {
     const weekdays = data.weekdays || [], max = Math.max(1, ...weekdays.map(row => Number(row.sales)));
     $("weekdayChart").innerHTML = weekdays.map(row => `<div class="weekday-row"><span>${escapeHtml(row.day)}</span><div class="weekday-track"><div class="weekday-fill" style="width:${Math.max(0, Math.min(100, Number(row.sales) / max * 100))}%"></div></div><strong>${money(row.sales)}</strong></div>`).join("");
     message($("analyticsMessage"), `${data.range === "today" ? "Today" : data.range === "week" ? "This week" : "This month"} · ${data.startDate} to ${data.endDate}${data.truncated ? " · Showing the most recent 20,000 orders" : ""}`, "success");
-  } catch (error) { message($("analyticsMessage"), friendlyError(error), "error"); }
+    renderGoogleAdsAnalytics(data.googleAds, data);
+  } catch (error) { message($("analyticsMessage"), friendlyError(error), "error"); message($("googleAdsAnalyticsMessage"), friendlyError(error), "error"); }
+}
+function renderGoogleAdsAnalytics(ads, report) {
+  if (!ads) {
+    message($("googleAdsAnalyticsMessage"), "Google Ads attribution data is not available from this report.", "error");
+    return;
+  }
+  $("adsAttributedConversions").textContent = Number(ads.attributedConversions || 0).toLocaleString("en-IN");
+  $("adsAttributedValue").textContent = money(ads.attributedOrderValue);
+  $("adsWebsiteOrders").textContent = Number(ads.websiteOrders || 0).toLocaleString("en-IN");
+  $("adsWebsiteValue").textContent = `${money(ads.websiteOrderValue)} total website order value`;
+  $("adsVisits").textContent = ads.visits == null ? "Not connected" : Number(ads.visits).toLocaleString("en-IN");
+  const daily = ads.daily || [];
+  $("googleAdsDailyRows").innerHTML = daily.length ? daily.map(row => `<tr><td>${escapeHtml(row.date)}</td><td>${Number(row.websiteOrders || 0)}</td><td>${Number(row.attributedConversions || 0)}</td><td>${money(row.attributedOrderValue)}</td></tr>`).join("") : '<tr><td colspan="4" class="empty-cell">No website orders for this period yet.</td></tr>';
+  const orders = ads.orders || [];
+  $("googleAdsOrderRows").innerHTML = orders.length ? orders.map(row => `<tr><td>${escapeHtml(dateText(row.createdAt))}</td><td>${escapeHtml(row.mobile || "—")}</td><td>${escapeHtml(row.orderNumber || "—")}</td><td>${money(row.value)}</td><td class="google-click-id"><span>${escapeHtml(`${String(row.clickIdType || "").toUpperCase()}: ${row.clickId || ""}`)}</span></td></tr>`).join("") : '<tr><td colspan="5" class="empty-cell">No attributed orders for this period yet.</td></tr>';
+  const period = report.range === "today" ? "Today" : report.range === "week" ? "This week" : "This month";
+  message($("googleAdsAnalyticsMessage"), `${period} · ${report.startDate} to ${report.endDate} · refreshed ${new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}${ads.truncatedOrders ? " · Showing the latest 500 attributed orders" : ""}`, "success");
 }
 document.querySelectorAll("[data-range]").forEach(button => button.addEventListener("click", () => {
-  analyticsRange = button.dataset.range; document.querySelectorAll("[data-range]").forEach(item => item.classList.toggle("selected", item === button)); loadAnalytics();
+  analyticsRange = button.dataset.range; document.querySelectorAll("[data-range]").forEach(item => item.classList.toggle("selected", item.dataset.range === analyticsRange)); loadAnalytics();
 }));
 
 async function loadCustomers() {
@@ -409,7 +427,9 @@ $("benefitForm").addEventListener("submit", async event => {
 document.querySelectorAll("[data-admin-tab]").forEach(tab => tab.addEventListener("click", () => {
   document.querySelectorAll("[data-admin-tab]").forEach(button => button.classList.toggle("active", button === tab));
   document.querySelectorAll("[data-admin-section]").forEach(section => { section.hidden = section.dataset.adminSection !== tab.dataset.adminTab; });
+  if (tab.dataset.adminTab === "google-ads") loadAnalytics();
 }));
+$("refreshGoogleAds").addEventListener("click", () => loadAnalytics());
 
 async function loadOrdering() {
   try { orderingStatus = await call("getOrderingStatus"); renderOrdering(); }

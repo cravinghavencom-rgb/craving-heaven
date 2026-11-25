@@ -1,4 +1,20 @@
 document.addEventListener("DOMContentLoaded", async () => {
+const GOOGLE_ADS_CLICK_IDS_KEY = "cravingHeavenGoogleAdsClickIds_v1";
+const ORDER_CONFIRMATION_SESSION_KEY = "cravingHeavenOrderConfirmation_v1";
+let initialAnalyticsPageViewSent = false;
+function readGoogleAdsClickIds() {
+  try { return JSON.parse(sessionStorage.getItem(GOOGLE_ADS_CLICK_IDS_KEY) || "{}"); }
+  catch (_) { return {}; }
+}
+try {
+  const params = new URLSearchParams(location.search);
+  const clickIds = {};
+  for (const key of ["gclid", "gbraid", "wbraid"]) {
+    const value = params.get(key) || "";
+    if (/^[A-Za-z0-9._~-]{8,500}$/.test(value)) clickIds[key] = value;
+  }
+  if (Object.keys(clickIds).length) sessionStorage.setItem(GOOGLE_ADS_CLICK_IDS_KEY, JSON.stringify(clickIds));
+} catch (_) { /* Ads attribution is optional when browser storage is unavailable. */ }
 const REWARDS_CONFIG = window.CRAVING_REWARDS || { journey: [], rewardById: {} };
 const REWARD_EXCLUDED_NAMES = new Set((MENU_DATA.extras?.items || []).map(item => item.name));
 function optimizedComboImageUrl(image) {
@@ -1744,7 +1760,7 @@ function renderOrderSuccessNextReward(isTestOrder, orderData, appliedReward) {
 }
 
 
-function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false, addressLabel = "", displayOrderNumber = "", isTestOrder = false, orderData = null, appliedReward = null) {
+function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false, addressLabel = "", displayOrderNumber = "", isTestOrder = false, orderData = null, appliedReward = null, resumeConfirmation = false) {
 
   if (!orderSuccessOverlay) return;
   orderSuccessWasTest = isTestOrder;
@@ -1752,6 +1768,41 @@ function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false,
   if (orderSuccessId) {
     const prefix = orderType === "pickup" ? "PK" : "DL";
     orderSuccessId.textContent = displayOrderNumber || `${prefix}-${String(orderId).slice(-4).toUpperCase()}`;
+  }
+  if (!isTestOrder && displayOrderNumber) {
+    const confirmationUrl = new URL("/order-confirmation", window.location.origin);
+    confirmationUrl.searchParams.set("transaction_id", displayOrderNumber);
+    const alreadyAtConfirmation = window.location.pathname === "/order-confirmation" && new URLSearchParams(window.location.search).get("transaction_id") === displayOrderNumber;
+    if (!alreadyAtConfirmation) window.history.pushState({ cravingHeavenOrderConfirmation: true, transactionId: displayOrderNumber }, "", confirmationUrl);
+    if (typeof window.gtag === "function") {
+      if (!alreadyAtConfirmation) {
+        window.gtag("event", "page_view", { page_title: "Order confirmation", page_location: confirmationUrl.href });
+        initialAnalyticsPageViewSent = true;
+      }
+      const sentKey = `cravingHeavenPurchaseSent:${displayOrderNumber}`;
+      let alreadySent = false;
+      try { alreadySent = window.sessionStorage.getItem(sentKey) === "1"; } catch (_) {}
+      if (!alreadySent) {
+        const orderItems = Array.isArray(orderData?.items) ? orderData.items : [];
+        window.gtag("event", "purchase", {
+          transaction_id: displayOrderNumber,
+          value: Number(orderData?.total || 0),
+          currency: "INR",
+          items: orderItems.map(item => ({ item_name: String(item.name || "Menu item"), price: Number(item.price || 0), quantity: Number(item.qty || 0) }))
+        });
+        try { window.sessionStorage.setItem(sentKey, "1"); } catch (_) {}
+      }
+    }
+    if (!resumeConfirmation) {
+      try {
+        sessionStorage.setItem(ORDER_CONFIRMATION_SESSION_KEY, JSON.stringify({
+          orderId: String(orderId || ""), orderType, addressSaved: addressSaved === true,
+          addressLabel: String(addressLabel || ""), orderNumber: displayOrderNumber,
+          orderData: { items: Array.isArray(orderData?.items) ? orderData.items : [], total: Number(orderData?.total || 0), pointsToAward: Number(orderData?.pointsToAward || 0) },
+          appliedReward: appliedReward || null
+        }));
+      } catch (_) { /* The confirmation URL still works for the active page if storage is unavailable. */ }
+    }
   }
   if (orderSuccessNote) {
     orderSuccessNote.textContent = isTestOrder
@@ -1814,6 +1865,10 @@ function closeOrderSuccess() {
   document.body.classList.remove(
     "order-success-open"
   );
+  if (window.location.pathname === "/order-confirmation") {
+    try { sessionStorage.removeItem(ORDER_CONFIRMATION_SESSION_KEY); } catch (_) {}
+    window.history.replaceState({ cravingHeavenOrderConfirmation: false }, "", `${window.location.origin}/#screen-rewards`);
+  }
   const orderRewardsFollowup = document.getElementById("orderRewardsFollowup");
   if (orderRewardsFollowup) {
     const followupCopy = orderSuccessWasTest
@@ -2209,6 +2264,7 @@ async function continueToOrder() {
       landmark: pickup ? "" : checkoutLandmark.value.trim(),
       area: pickup ? "" : checkoutArea.value,
       paymentMethod: pickup ? "Pay on Pickup" : "Pay on Delivery",
+      googleAdsClickIds: readGoogleAdsClickIds(),
       loyaltyRewardId: selectedMilestoneRewardId || "",
       redeemPoints: selectedPointsToRedeem,
       applyFirstOrderReward: selectedWelcomeOffer,
@@ -4134,6 +4190,21 @@ setInterval(refreshOrderingAvailability, 60000);
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") refreshOrderingAvailability();
 });
+
+if (window.location.pathname === "/order-confirmation") {
+  const requestedTransaction = new URLSearchParams(window.location.search).get("transaction_id") || "";
+  let savedConfirmation = null;
+  try { savedConfirmation = JSON.parse(sessionStorage.getItem(ORDER_CONFIRMATION_SESSION_KEY) || "null"); } catch (_) {}
+  if (savedConfirmation?.orderNumber && savedConfirmation.orderNumber === requestedTransaction) {
+    openOrderSuccess(savedConfirmation.orderId, savedConfirmation.orderType, savedConfirmation.addressSaved, savedConfirmation.addressLabel, savedConfirmation.orderNumber, false, savedConfirmation.orderData, savedConfirmation.appliedReward, true);
+  } else {
+    window.history.replaceState({}, "", `${window.location.origin}/`);
+  }
+}
+if (typeof window.gtag === "function" && !initialAnalyticsPageViewSent) {
+  window.gtag("event", "page_view", { page_title: document.title, page_location: window.location.href });
+  initialAnalyticsPageViewSent = true;
+}
 
 
 });

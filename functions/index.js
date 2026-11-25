@@ -1578,7 +1578,49 @@ exports.adminGetSalesAnalytics = onCall({ region: REGION }, async request => {
   const monthStart = mumbaiMidnight(`${monthYear}-${String(monthNumber).padStart(2, "0")}-01`);
   const weekdaySnapshot = range === "month" ? null : await db.collection("orders").where("createdAt", ">=", Timestamp.fromDate(monthStart)).where("createdAt", "<", endTimestamp).limit(20000).get();
   const weekdayReport = weekdaySnapshot ? summarizeSales(weekdaySnapshot.docs.map(document => document.data())).weekdays : report.weekdays;
-  return { range, startDate: startKey, endDate: mumbaiDateKey(), timezone: "Asia/Kolkata", ...report, weekdays: weekdayReport, truncated: result.size === 20000 };
+  const eligibleOnlineOrders = result.docs.map(document => ({ id: document.id, ...document.data() }))
+    .filter(order => order.source === "website" && order.isTestOrder !== true && !["cancelled", "canceled"].includes(String(order.status || "").toLowerCase()));
+  const clickIdFor = order => {
+    const ids = order.googleAdsClickIds && typeof order.googleAdsClickIds === "object" ? order.googleAdsClickIds : {};
+    return ["gclid", "gbraid", "wbraid"].map(key => ids[key] ? { type: key, value: String(ids[key]) } : null).find(Boolean) || null;
+  };
+  const attributedOrders = eligibleOnlineOrders.filter(order => clickIdFor(order));
+  const dailyAdsMap = new Map();
+  for (const order of eligibleOnlineOrders) {
+    const created = order.createdAt?.toDate?.();
+    if (!created) continue;
+    const date = mumbaiDateKey(created);
+    const row = dailyAdsMap.get(date) || { date, websiteOrders: 0, websiteOrderValue: 0, attributedConversions: 0, attributedOrderValue: 0 };
+    const amount = Math.max(0, Number(order.total || 0));
+    row.websiteOrders += 1;
+    row.websiteOrderValue += amount;
+    if (clickIdFor(order)) { row.attributedConversions += 1; row.attributedOrderValue += amount; }
+    dailyAdsMap.set(date, row);
+  }
+  return {
+    range, startDate: startKey, endDate: mumbaiDateKey(), timezone: "Asia/Kolkata", ...report,
+    weekdays: weekdayReport, truncated: result.size === 20000,
+    googleAds: {
+      websiteOrders: eligibleOnlineOrders.length,
+      websiteOrderValue: eligibleOnlineOrders.reduce((sum, order) => sum + Math.max(0, Number(order.total || 0)), 0),
+      attributedConversions: attributedOrders.length,
+      attributedOrderValue: attributedOrders.reduce((sum, order) => sum + Math.max(0, Number(order.total || 0)), 0),
+      visits: null,
+      daily: [...dailyAdsMap.values()].sort((a, b) => b.date.localeCompare(a.date)),
+      orders: attributedOrders.slice(0, 500).map(order => {
+        const click = clickIdFor(order);
+        return {
+          orderNumber: String(order.orderNumber || order.id),
+          mobile: String(order.mobile || ""),
+          clickIdType: click?.type || "",
+          clickId: click?.value || "",
+          value: Math.max(0, Number(order.total || 0)),
+          createdAt: order.createdAt?.toDate?.().toISOString?.() || null
+        };
+      }),
+      truncatedOrders: attributedOrders.length > 500
+    }
+  };
 });
 
 exports.adminAdjustCustomerBenefits = onCall({ region: REGION }, async request => {
@@ -1637,6 +1679,12 @@ exports.createOrder = onCall({ region: REGION }, async request => {
   const authenticatedCustomer = await getAuth().getUser(activeCustomerUid);
   const customerMobile = request.auth.token.phone_number || authenticatedCustomer.phoneNumber || "";
   const data = request.data || {};
+  const googleAdsClickIds = {};
+  const suppliedClickIds = data.googleAdsClickIds && typeof data.googleAdsClickIds === "object" && !Array.isArray(data.googleAdsClickIds) ? data.googleAdsClickIds : {};
+  for (const key of ["gclid", "gbraid", "wbraid"]) {
+    const value = typeof suppliedClickIds[key] === "string" ? suppliedClickIds[key] : "";
+    if (/^[A-Za-z0-9._~-]{8,500}$/.test(value)) googleAdsClickIds[key] = value;
+  }
   const orderType = data.orderType === undefined ? "delivery" : data.orderType;
   if (!["delivery", "pickup"].includes(orderType)) {
     throw new HttpsError("invalid-argument", "Choose delivery or store pickup.");
@@ -1859,6 +1907,7 @@ exports.createOrder = onCall({ region: REGION }, async request => {
       status: "new",
       orderType,
       source: "website",
+      googleAdsClickIds: testModeEnabled || !Object.keys(googleAdsClickIds).length ? null : googleAdsClickIds,
       pointsStatus: testModeEnabled ? "test-order" : orderType === "pickup" ? "pending-completion" : "pending-delivery",
       createdAt: FieldValue.serverTimestamp()
     });
