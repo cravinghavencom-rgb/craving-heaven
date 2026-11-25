@@ -182,7 +182,7 @@ The customer rewards screen reads the completed-order total from the same authen
 
 ### Reward checkout compatibility fix (25 November 2026)
 
-The server now applies the oldest-reward rule only among rewards usable on the current order. Expired rewards, free-delivery rewards on pickup or on an order already meeting the free-delivery threshold, minimum-spend rewards below their threshold, and Buy & Get rewards without the required qualifying quantity no longer block a different eligible reward. Both customer checkout and staff walk-in reward validation use the same applicability check. The affected customer flow is `createOrder`; no Hosting/UI or reward configuration changes are required.
+The server now applies the oldest-reward rule only among rewards usable on the current order. Expired rewards, free-delivery rewards on pickup or on an order already meeting the free-delivery threshold, minimum-spend rewards below their threshold, and Buy & Get rewards without the required qualifying quantity no longer block a different eligible reward. Both customer checkout and staff walk-in reward validation use the same applicability check. Source commit `a5c4998` is pushed to `origin/main`; `createOrder` and `createWalkInOrder` were deployed to `craving-heaven-e2e94` in `asia-south1`. Hosting and reward configuration did not need changes.
 
 `firebase.json` currently configures:
 
