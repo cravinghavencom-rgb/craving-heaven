@@ -512,8 +512,17 @@ const FCM_VAPID_KEY =
     try {
       const credential = await confirmationResult.confirm(otp);
       if (!credential?.user) throw new Error("The verified customer session could not be loaded. Please try signing in again.");
-      const token = await credential.user.getIdTokenResult(true);
-      if (token.claims.admin === true || token.claims.staff === true) {
+      let token = null;
+      try {
+        // confirm() already establishes a fresh Firebase session. Avoid forcing
+        // an immediate second network token refresh on mobile connections.
+        token = await credential.user.getIdTokenResult();
+      } catch (tokenError) {
+        const isVerifiedPhoneCustomer = Boolean(credential.user.phoneNumber && credential.user.providerData?.some(provider => provider.providerId === "phone"));
+        if (!isVerifiedPhoneCustomer) throw tokenError;
+        console.warn("Customer OTP succeeded; using the verified phone session while token claims are temporarily unavailable.", tokenError);
+      }
+      if (token?.claims.admin === true || token?.claims.staff === true) {
         setCustomerSession(credential.user, "team");
         otpLoginMessage.textContent = "This is a team account. Use the Staff or Admin Desk email sign-in.";
         updatePlaceOrderButton();
@@ -798,7 +807,9 @@ async function handlePlaceOrderClick() {
           } catch (error) {
             if (resolutionId !== customerAuthResolutionId) return;
             console.error("Could not classify the signed-in session:", error);
-            customerSessionType = "unknown";
+            const verifiedPhoneCustomer = Boolean(user.phoneNumber && user.providerData?.some(provider => provider.providerId === "phone"));
+            customerSessionType = verifiedPhoneCustomer ? "customer" : "unknown";
+            customerSessionUid = verifiedPhoneCustomer ? user.uid : "";
           }
         }
         if (resolutionId !== customerAuthResolutionId) return;
