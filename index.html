@@ -11,7 +11,7 @@
   <link rel="preload" href="assets/fonts/dm-sans/latin-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/montserrat/latin-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" as="image" href="images/burgers/classic-crunchy-burger.webp" type="image/webp" fetchpriority="high">
-  <link rel="stylesheet" href="style.css?v=20261124-reward-layout-v3">
+  <link rel="stylesheet" href="style.css?v=20261126-clear-reward-text-v1">
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GD2EPFLYPZ">
 </script>
@@ -674,13 +674,9 @@
       Your order has been received successfully.
     </p>
 
-    <article class="order-success-scratch-card" id="orderSuccessScratch" hidden>
-      <div class="order-success-scratch-content">
-        <span class="order-success-scratch-label">YOUR ORDER REWARD</span>
-        <div class="order-success-reward" id="orderSuccessReward" role="status"></div>
-      </div>
-      <canvas class="order-success-scratch-surface" id="orderSuccessScratchSurface" aria-hidden="true"></canvas>
-      <button class="order-success-scratch-reveal" id="orderSuccessScratchReveal" type="button">TAP TO REVEAL</button>
+    <article class="order-success-reward-card" id="orderSuccessRewardCard" hidden>
+      <span class="order-success-reward-label">YOUR ORDER REWARD</span>
+      <strong id="orderSuccessReward" role="status"></strong>
     </article>
 
     <article class="order-success-next-reward" id="orderSuccessNextReward" aria-live="polite" hidden></article>
@@ -757,7 +753,7 @@
 <script src="rewards-config.js?v=20261021-first-order-gift" defer></script>
 <script src="menu.js?v=20261027-combo-webp" defer></script>
 <script src="customer-language.js?v=20261124-reward-layout-v3" defer></script>
-<script src="script.js?v=20261125-google-ad-click-count-v1" defer></script>
+<script src="script.js?v=20261126-clear-reward-text-v1" defer></script>
 <script src="craving-dash.js?v=20261118-customer-ui-localization-v2" defer></script>
 </body>
 </html>

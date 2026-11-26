@@ -1695,18 +1695,22 @@ body.checkout-open {
   font-size: 14px;
 }
 
-.order-success-reward {
-  margin: 0 0 18px;
-  padding: 15px 16px;
+.order-success-reward-card {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 16px;
   border: 1px solid #e9bf68;
   border-radius: 16px;
   background: linear-gradient(135deg, #fff4d5, #fffaf0 56%, #f7e1b0);
   color: #61271f;
-  font: 900 16px/1.5 "Montserrat", sans-serif;
+  text-align: center;
   box-shadow: 0 10px 26px rgba(160, 100, 23, .12);
 }
 
-.order-success-reward[hidden] { display: none; }
+.order-success-reward-card[hidden] { display: none; }
+.order-success-reward-label { color:#8b6429; font:900 10px/1.3 "Montserrat",sans-serif; letter-spacing:.12em; }
+.order-success-reward-card > strong { font:900 17px/1.45 "Montserrat",sans-serif; }
 
 .order-success-next-reward {
   margin: 0 0 16px;
@@ -1773,79 +1777,6 @@ body.checkout-open {
   font-size: 11px;
   line-height: 1.4;
 }
-
-.order-success-scratch-card {
-  position: relative;
-  min-height: 118px;
-  overflow: hidden;
-  margin: 0 0 16px;
-  border: 1px solid #d8b66f;
-  border-radius: 18px;
-  background: radial-gradient(circle at 90% 10%, rgba(242, 191, 100, .28), transparent 34%), linear-gradient(135deg, #592019, #8d2b1d 68%, #642019);
-  color: #fff8e9;
-  box-shadow: 0 12px 27px rgba(103, 43, 23, .18);
-}
-
-.order-success-scratch-card[hidden] { display: none; }
-
-.order-success-scratch-content {
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: 8px;
-  min-height: 118px;
-  padding: 18px 20px;
-  text-align: center;
-}
-
-.order-success-scratch-label {
-  color: #f4d795;
-  font: 900 9px/1.3 "Montserrat", sans-serif;
-  letter-spacing: .14em;
-}
-
-.order-success-scratch-card .order-success-reward {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  color: #fff;
-  font-size: 17px;
-  line-height: 1.4;
-}
-
-.order-success-scratch-surface {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  cursor: grab;
-  touch-action: none;
-  transition: opacity .28s ease;
-}
-
-.order-success-scratch-surface:active { cursor: grabbing; }
-.order-success-scratch-surface.is-scratched { opacity: 0; pointer-events: none; }
-.order-success-scratch-surface[hidden] { display: none; }
-
-.order-success-scratch-reveal {
-  position: absolute;
-  z-index: 2;
-  bottom: 9px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 6px 11px;
-  border: 1px solid rgba(255,255,255,.65);
-  border-radius: 999px;
-  background: rgba(73, 35, 24, .78);
-  color: #fff;
-  font: 800 8px/1.3 "Montserrat", sans-serif;
-  letter-spacing: .08em;
-}
-
-.order-success-scratch-reveal[hidden] { display: none; }
 
 .order-success-id {
   padding: 15px;
@@ -3734,7 +3665,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .checkout-submit { min-height:49px; margin-top:11px; border-radius:12px; }
 .checkout-message { min-height:0; margin:6px 0 0; }
 
-/* Rewards stay fully visible on the Rewards page; only the success card is scratchable. */
+/* Rewards stay fully visible on the Rewards page and order-success popup. */
 .journey-card-ready { position:relative; overflow:hidden; border-color:#e8c98f; background:radial-gradient(circle at 96% 4%,rgba(224,177,96,.17),transparent 26%),linear-gradient(140deg,#fff5dd,#fffdf9 70%); }
 .journey-card-ready::before { position:absolute; inset:0 0 auto; height:3px; background:linear-gradient(90deg,#c28b36,#f0d390,#a90d19); content:""; }
 .journey-card-ready .journey-card-status { display:inline-flex; width:max-content; align-items:center; padding:5px 8px; border-radius:999px; background:#f8e9c9; }
@@ -3838,4 +3769,41 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   .journey-ready-grid .journey-card,.journey-upcoming-grid .journey-card { gap:4px; padding:8px; }
   .journey-ready-grid .journey-card > strong,.journey-upcoming-grid .journey-card > strong { font-size:9px; }
   .journey-ready-grid .journey-card > p,.journey-upcoming-grid .journey-card > p { font-size:7px; }
+}
+
+/* Rewards page readability: keep the square card layout while making copy comfortable on phones. */
+#screen-rewards .account-heading h1 { font-size:clamp(28px,7vw,36px); line-height:1.15; }
+#screen-rewards .account-heading > p { font-size:15px; line-height:1.55; }
+#screen-rewards .loyalty-card-top h2 { font-size:22px; }
+#screen-rewards .loyalty-copy { font-size:15px; line-height:1.5; }
+#screen-rewards .loyalty-points > strong { font-size:38px; }
+#screen-rewards .loyalty-points > span { font-size:10px; }
+#screen-rewards .loyalty-value-line { font-size:13px; }
+#screen-rewards .rewards-rules > h2 { font-size:18px; }
+#screen-rewards .rewards-rule-row strong { font-size:14px; }
+#screen-rewards .rewards-rule-row p { font-size:14px; line-height:1.55; }
+#screen-rewards .rewards-journey-heading h2 { font-size:24px; line-height:1.2; }
+#screen-rewards .rewards-order-count { font-size:12px; }
+#screen-rewards .rewards-journey-note { font-size:14px; line-height:1.55; }
+#screen-rewards .journey-upcoming-heading strong { font-size:16px; }
+#screen-rewards .journey-upcoming-heading small { font-size:12px; }
+#screen-rewards .journey-upcoming-heading > span { font-size:10px; }
+#screen-rewards .journey-ready-grid .journey-card-status,
+#screen-rewards .journey-upcoming-grid .journey-card-status { font-size:9px; line-height:1.3; letter-spacing:.045em; }
+#screen-rewards .journey-ready-grid .journey-card > strong,
+#screen-rewards .journey-upcoming-grid .journey-card > strong { font-size:13px; line-height:1.35; }
+#screen-rewards .journey-ready-grid .journey-card > p,
+#screen-rewards .journey-upcoming-grid .journey-card > p { max-height:4.2em; font-size:11px; line-height:1.4; }
+#screen-rewards .journey-ready-grid .journey-card > small,
+#screen-rewards .journey-upcoming-grid .journey-card > small { font-size:10px; line-height:1.35; }
+#screen-rewards .journey-ready-grid .journey-card .journey-use-button { min-height:30px; padding:7px 9px; font-size:9px; }
+#screen-rewards .journey-upcoming-grid .journey-next-distance { font-size:9px; }
+#screen-rewards .journey-upcoming-grid .journey-lock-icon { font-size:11px; }
+@media(max-width:380px) {
+  #screen-rewards .journey-ready-grid .journey-card,
+  #screen-rewards .journey-upcoming-grid .journey-card { gap:5px; padding:9px; }
+  #screen-rewards .journey-ready-grid .journey-card > strong,
+  #screen-rewards .journey-upcoming-grid .journey-card > strong { font-size:12px; }
+  #screen-rewards .journey-ready-grid .journey-card > p,
+  #screen-rewards .journey-upcoming-grid .journey-card > p { font-size:10px; }
 }

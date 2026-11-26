@@ -1,6 +1,6 @@
 # Craving Heaven Website — Development and Infrastructure Guide
 
-**Prepared:** 25 November 2026 — Google Ads click counting and attribution, order confirmation URL, GA4 purchase event, and verified-phone session fallback added
+**Prepared:** 26 November 2026 — Direct reward display on order confirmation and improved Rewards page mobile text sizing
 **Repository:** `craving-heaven` (`main`)  
 **Firebase project configured by this checkout:** `craving-heaven-e2e94`  
 **Firebase Hosting site configured by this checkout:** `craving-heaven-e2e94`
@@ -100,6 +100,7 @@ There is no root `package.json`/bundler build. Browser code imports Firebase Web
 | Firebase App Check + reCAPTCHA Enterprise | `firebase-client.js` | Web app attestation/token validation for Firebase services | App Check is no-cost as a Firebase product; Enterprise assessments above their included tier may be billable |
 | Firebase Cloud Messaging (FCM) | `index.html`, `script.js`, `firebase-messaging-sw.js`, `functions/index.js` | Customers can opt in to browser notifications; Admin Desk can send an immediate offer/reward message to all registered browser tokens; the service worker displays background notifications | Firebase lists FCM as no-cost. Function invocation, Firestore token reads, and network usage can still have separate costs. |
 | Google Analytics 4 tag | `index.html` | Sends browser analytics through `gtag.js` | Firebase lists Analytics as no-cost for standard product use |
+| Customer rewards and order confirmation | `index.html`, `script.js`, `style.css` | Displays earned order rewards directly in the order-success popup without a scratch interaction; uses larger text on the Rewards page while keeping the reward-card layout | No additional API or service is used |
 | Google Ads click attribution | `script.js`, `functions/index.js`, `admin.html`, `admin.js` | Captures GCLID/GBRAID/WBRAID from an ad landing, records one hashed click ID per unique ad click with Firebase App Check protection, and shows date-filtered first-party click counts beside attributed conversions in the admin-only Google Ads tab | Counts are unique ad click IDs received by the site, not Google's full Ads reporting totals. Impression, spend, and GA4 visit reporting APIs are not configured. No Google Ads API is used or charged for this first-party count |
 | DM Sans and Montserrat font files | `assets/fonts/`, `style.css`, `index.html` | Self-hosted variable fonts; preloaded by the homepage | No Google Fonts network request or Google Maps Platform API is involved |
 | Manual delivery address | `index.html`, `script.js` | Customers enter an address and select a delivery area; saved addresses are account-backed | No location permission or geolocation service is used |

@@ -1670,86 +1670,12 @@ const orderSuccessClose =
 const orderSuccessId =
   document.getElementById("orderSuccessId");
 const orderSuccessNote = document.getElementById("orderSuccessNote");
+const orderSuccessRewardCard = document.getElementById("orderSuccessRewardCard");
 const orderSuccessReward = document.getElementById("orderSuccessReward");
 const orderSuccessNextReward = document.getElementById("orderSuccessNextReward");
-const orderSuccessScratch = document.getElementById("orderSuccessScratch");
-const orderSuccessScratchSurface = document.getElementById("orderSuccessScratchSurface");
-const orderSuccessScratchReveal = document.getElementById("orderSuccessScratchReveal");
 let orderSuccessWasTest = false;
 let orderSuccessOrderData = null;
 let orderSuccessAppliedReward = null;
-
-function revealOrderSuccessScratch() {
-  if (!orderSuccessScratch || orderSuccessScratch.dataset.revealed === "true") return;
-  orderSuccessScratch.dataset.revealed = "true";
-  if (orderSuccessScratchSurface) {
-    orderSuccessScratchSurface.classList.add("is-scratched");
-    window.setTimeout(() => {
-      orderSuccessScratchSurface.hidden = true;
-    }, 280);
-  }
-  if (orderSuccessScratchReveal) orderSuccessScratchReveal.hidden = true;
-}
-
-function resetOrderSuccessScratch() {
-  if (!orderSuccessScratch || !orderSuccessScratchSurface) return;
-  orderSuccessScratch.dataset.revealed = "false";
-  orderSuccessScratchSurface.hidden = false;
-  orderSuccessScratchSurface.classList.remove("is-scratched");
-  if (orderSuccessScratchReveal) orderSuccessScratchReveal.hidden = false;
-  const bounds = orderSuccessScratchSurface.getBoundingClientRect();
-  if (!bounds.width || !bounds.height) return;
-  const scale = Math.min(2, window.devicePixelRatio || 1);
-  orderSuccessScratchSurface.width = Math.round(bounds.width * scale);
-  orderSuccessScratchSurface.height = Math.round(bounds.height * scale);
-  const context = orderSuccessScratchSurface.getContext("2d");
-  if (!context) return;
-  context.scale(scale, scale);
-  const foil = context.createLinearGradient(0, 0, bounds.width, bounds.height);
-  foil.addColorStop(0, "#e2c382");
-  foil.addColorStop(.48, "#fff0c7");
-  foil.addColorStop(1, "#c99a4a");
-  context.fillStyle = foil;
-  context.fillRect(0, 0, bounds.width, bounds.height);
-  context.fillStyle = "rgba(117, 74, 32, .24)";
-  const scratchLabel = window.CustomerLanguage?.t("SCRATCH TO REVEAL") || "SCRATCH TO REVEAL";
-  const fontSize = Math.max(8, Math.min(12, (bounds.width - 32) / Math.max(1, scratchLabel.length * .62)));
-  context.font = `800 ${fontSize}px Montserrat, sans-serif`;
-  context.textAlign = "center";
-  context.fillText(`✦  ${scratchLabel}  ✦`, bounds.width / 2, bounds.height / 2 + 4);
-}
-
-if (orderSuccessScratchReveal) orderSuccessScratchReveal.addEventListener("click", revealOrderSuccessScratch);
-if (orderSuccessScratchSurface) {
-  let scratching = false;
-  let scratchMoves = 0;
-  const scratchAt = event => {
-    if (!scratching || orderSuccessScratch?.dataset.revealed === "true") return;
-    const context = orderSuccessScratchSurface.getContext("2d");
-    const bounds = orderSuccessScratchSurface.getBoundingClientRect();
-    if (!context || !bounds.width) return;
-    context.globalCompositeOperation = "destination-out";
-    context.beginPath();
-    context.arc(event.clientX - bounds.left, event.clientY - bounds.top, 19, 0, Math.PI * 2);
-    context.fill();
-    context.globalCompositeOperation = "source-over";
-    scratchMoves += 1;
-    if (scratchMoves % 10 !== 0) return;
-    const pixels = context.getImageData(0, 0, orderSuccessScratchSurface.width, orderSuccessScratchSurface.height).data;
-    let cleared = 0;
-    for (let index = 3; index < pixels.length; index += 4) if (pixels[index] < 32) cleared += 1;
-    if (cleared / (pixels.length / 4) > .38) revealOrderSuccessScratch();
-  };
-  orderSuccessScratchSurface.addEventListener("pointerdown", event => {
-    if (orderSuccessScratch?.dataset.revealed === "true") return;
-    scratching = true;
-    scratchMoves = 0;
-    orderSuccessScratchSurface.setPointerCapture?.(event.pointerId);
-    scratchAt(event);
-  });
-  orderSuccessScratchSurface.addEventListener("pointermove", scratchAt);
-  ["pointerup", "pointercancel", "lostpointercapture"].forEach(type => orderSuccessScratchSurface.addEventListener(type, () => { scratching = false; }));
-}
 
 
 function renderOrderSuccessNextReward(isTestOrder, orderData, appliedReward) {
@@ -1855,7 +1781,7 @@ function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false,
       { points: Number(orderData.pointsToAward).toLocaleString("en-IN") }
     ) || `This order will add ${Number(orderData.pointsToAward).toLocaleString("en-IN")} Craving Points after delivery or pickup.`;
   }
-  if (orderSuccessScratch) orderSuccessScratch.hidden = !rewardMessage;
+  if (orderSuccessRewardCard) orderSuccessRewardCard.hidden = !rewardMessage;
   if (orderSuccessReward) {
     orderSuccessReward.textContent = rewardMessage;
   }
@@ -1875,8 +1801,6 @@ function openOrderSuccess(orderId, orderType = "delivery", addressSaved = false,
     "aria-hidden",
     "false"
   );
-
-  if (rewardMessage) window.requestAnimationFrame(resetOrderSuccessScratch);
 
   document.body.classList.add(
     "order-success-open"
